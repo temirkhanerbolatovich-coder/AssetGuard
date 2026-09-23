@@ -41,16 +41,16 @@ RawInventory and audit history are retained indefinitely in v0.1 because they ar
 
 Vision images are operational artifacts rather than immutable hardware evidence. The demo keeps them in a named volume without automatic deletion; define an organisation retention policy before collecting real room photographs.
 
-Create an SQL backup:
+Create an AES-256-GCM encrypted SQL backup. The script prompts for a passphrase unless `ASSETGUARD_BACKUP_PASSPHRASE` is present in the process environment:
 
 ```powershell
 pwsh -File scripts/windows/backup-database.ps1
 ```
 
-Backups are written under `.local/backups`, outside Git. Copy them to encrypted storage and test restoration periodically. Restore requires explicit PowerShell confirmation:
+Backups are written as `.sql.agbackup` under `.local/backups`, outside Git. `-OffsiteTarget` can copy the encrypted file to an external directory or an already configured `rclone` remote. Test restoration periodically. Restore requires the passphrase and explicit PowerShell confirmation:
 
 ```powershell
-pwsh -File scripts/windows/restore-database.ps1 -BackupFile .local/backups/<file>.sql
+pwsh -File scripts/windows/restore-database.ps1 -BackupFile .local/backups/<file>.sql.agbackup
 ```
 
 Stop API writes before a restore. After restoration, run migrations, verify `/health`, compare entity counts and perform one read-only dashboard check.

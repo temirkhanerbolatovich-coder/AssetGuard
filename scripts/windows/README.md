@@ -7,7 +7,8 @@ Upstream GLPI Agent устанавливается отдельно: AssetGuard 
 - `collect-minimal-inventory.ps1` — собирает privacy-limited JSON;
 - `send-minimal-inventory.ps1` — отправляет его в authenticated gateway;
 - `install-background-demo.ps1` / `uninstall-background-demo.ps1` — управляют demo Scheduled Tasks;
-- `backup-database.ps1` / `restore-database.ps1` — создают и восстанавливают SQL backup.
+- `start-free-public-demo.ps1` — поднимает контейнерный demo и временный публичный Cloudflare HTTPS URL;
+- `backup-database.ps1` / `restore-database.ps1` — создают AES-256-GCM encrypted backup, опционально копируют его на внешний диск или `rclone` remote и восстанавливают БД.
 
 Скрипты не отключают TLS, не записывают secrets в исходники и не меняют baseline автоматически.
 

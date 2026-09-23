@@ -27,7 +27,9 @@
 | Background demo | Готово | User-level demo tasks и production Compose deployment с restart policy. |
 | Local package | Готово | ZIP без secret/database/log data, startup scripts и documentation. |
 | GitHub | Готово | Public repository: `temirkhanerbolatovich-coder/AssetGuard`. |
-| Automated tests | Готово | Disposable PostgreSQL, JSON/native inventory, Vision E2E, auth lifecycle и identity conflict; 14 tests + GitHub Actions workflow. |
+| Automated tests | Готово | Disposable PostgreSQL, JSON/native inventory, Vision workflow, auth lifecycle, identity conflict и Playwright browser E2E; GitHub Actions workflow. |
+| Бесплатный demo deployment | Готово | Docker Compose + Cloudflare Quick Tunnel, временный публичный HTTPS URL без домена. |
+| Encrypted backup | Готово | AES-256-GCM backup, restore и optional off-site copy на диск или `rclone` remote. |
 
 ## Оставшаяся работа
 
@@ -51,9 +53,10 @@
 - [x] Rate limiting, security headers, request logging, immutable evidence retention и backup/restore runbook.
 - [x] Endpoint last-seen policy: `REQUIRES_VERIFICATION`, без автоматического вывода о пропаже или краже.
 - [x] Managed production deployment: Docker restart policy, независимо от интерактивной Windows-сессии.
-- [ ] Deployment acceptance на целевом сервере: DNS, публичный/корпоративный сертификат, encrypted off-host backup и restore rehearsal.
+- [ ] Deployment acceptance на целевом сервере: постоянный DNS, публичный/корпоративный сертификат и выполненный restore rehearsal на выбранном off-site storage.
 - [x] Native GLPI Agent 1.19 protocol spike и `DirectGlpiAgentAdapter`.
-- [ ] Browser E2E и optional real Grounding DINO CI smoke job.
+- [x] Browser E2E через Playwright/Chromium в GitHub Actions.
+- [ ] Optional real Grounding DINO CI smoke job.
 
 ### За пределами текущего demo
 

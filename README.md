@@ -23,6 +23,20 @@ GitHub Actions проверяет migrations/tests на PostgreSQL, зависи
 
 Production Compose также включает Vision dependencies, persistent image storage и model cache; ограничения и настройки описаны в `docs/operations/production-deployment.md`.
 
+## Бесплатная публичная демонстрация
+
+После создания `.env` весь контейнерный стек можно открыть через временный Cloudflare Quick Tunnel:
+
+```powershell
+pwsh -File .\scripts\windows\start-free-public-demo.ps1
+```
+
+Скрипт выводит локальный и публичный HTTPS URL. Домен и аккаунт Cloudflare не требуются. Quick Tunnel предназначен только для короткой демонстрации: URL меняется после пересоздания, гарантий доступности нет. Остановить стек:
+
+```powershell
+docker compose --env-file .env -f infra/containers/docker-compose.free-demo.yml down
+```
+
 ## Демонстрация Vision
 
 В блоке **AssetGuard Vision** укажите помещение и загрузите `demo/vision/room-305-baseline.png`. После обработки нажмите **Сохранить baseline**, затем загрузите `demo/vision/room-305-warning.png`: на втором кадре удалён принтер, поэтому сравнение показывает расхождение и `WARNING`. Первый запуск загружает/инициализирует модель и на CPU может занять больше времени; следующие scans выполняются уже на прогретой модели.
@@ -40,6 +54,7 @@ Production Compose также включает Vision dependencies, persistent i
 - [Чек-лист завершения MVP](docs/product/mvp-completion-checklist.md)
 - [Локальная demo-поставка](docs/operations/local-demo-guide.md)
 - [Production deployment и recovery](docs/operations/production-deployment.md)
+- [Бесплатный deployment](docs/operations/free-deployment.md)
 - [GLPI minimal profile spike](docs/integration/glpi-agent-minimal-profile-spike.md)
 - [Требования AssetGuard Vision](docs/product/assetguard-vision-requirements.md)
 - [Минимальная интеграция AssetGuard Vision](docs/architecture/assetguard-vision-integration-analysis.md)
