@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "codex/**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: assetguard
+          POSTGRES_USER: assetguard
+          POSTGRES_PASSWORD: assetguard-ci-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U assetguard -d assetguard"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      ASSETGUARD_DATABASE_URL: postgresql+psycopg://assetguard:assetguard-ci-password@127.0.0.1:5432/assetguard
+      ASSETGUARD_INVENTORY_SHARED_SECRET: ci-inventory-secret
+      ASSETGUARD_ADMIN_SHARED_SECRET: ci-admin-secret
+      ASSETGUARD_VIEWER_SHARED_SECRET: ci-viewer-secret
+      ASSETGUARD_POSTGRES_DB: assetguard
+      ASSETGUARD_POSTGRES_USER: assetguard
+      ASSETGUARD_POSTGRES_PASSWORD: assetguard-ci-password
+      ASSETGUARD_PUBLIC_HOST: assetguard.example.org
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+      - name: Install backend
+        run: python -m pip install -e 'backend[dev]'
+      - name: Validate Python dependencies
+        run: python -m pip check
+      - name: Run migrations and tests
+        working-directory: backend
+        run: python -m pytest -q
+      - name: Validate frontend JavaScript
+        run: node --check frontend/app.js
+      - name: Validate PowerShell scripts
+        shell: pwsh
+        run: |
+          $failed = $false
+          Get-ChildItem scripts/windows -Filter *.ps1 | ForEach-Object {
+            $tokens = $null
+            $parseErrors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$parseErrors) | Out-Null
+            if ($parseErrors) { $failed = $true; $parseErrors | Write-Error }
+          }
+          if ($failed) { exit 1 }
+      - name: Validate production Compose
+        run: docker compose -f infra/containers/docker-compose.production.yml config --quiet

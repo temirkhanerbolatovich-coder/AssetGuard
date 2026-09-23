@@ -8,12 +8,12 @@
 - diff, event и incident creation;
 - baseline acceptance/supersede;
 - incident decision и resolve.
+- Vision model load, scan start/completion, detection count и runtime errors без содержимого изображения.
 
 ## Не является диагностикой
 
-Отсутствие telemetry по `LastSeenAt` может переводить endpoint в `REQUIRES_VERIFICATION` согласно будущей policy. Оно не доказывает кражу, пропажу устройства или отсутствие железа.
+Отсутствие telemetry по `LastSeenAt` может переводить endpoint в `REQUIRES_VERIFICATION` согласно настроенной policy. Оно не доказывает кражу, пропажу устройства или отсутствие железа. Аналогично Vision `WARNING` означает только расхождение counts с baseline.
 
-## Будущие операционные документы
+## Операционные документы
 
-До первого развёртывания потребуются политика backup/restore, retention, incident response и описание локальной/development среды.
-
+Локальный запуск описан в `local-demo-guide.md`, а HTTPS deployment, backup и restore — в `production-deployment.md`. До публичного запуска остаются deployment acceptance на целевом хосте, off-host encrypted backup и restore rehearsal.

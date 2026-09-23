@@ -1,6 +1,8 @@
 # AssetGuard Vision — сохранённые требования
 
-Источник: ТЗ пользователя от 2026-09-23. Статус: **изучено, не реализовано**.
+Источник: ТЗ пользователя от 2026-09-23. Статус: **демонстрационный vertical slice реализован**.
+
+Реализован согласованный сценарий `Upload → Detection → Bounding Boxes → Object count → Baseline → повторный Scan → Comparison → WARNING`. Иерархия Institution/Building/Floor, RTSP, `ANOMALY`, связь detection с endpoint и production object storage намеренно оставлены за пределами сегодняшнего MVP.
 
 ## Цель и границы
 
@@ -47,3 +49,5 @@ MVP: загрузка фотографии через Dashboard, обработ�
 ## MVP success demonstration
 
 Room 305: photo 1 показывает 12 monitors, 12 computers и 1 printer → Save baseline. На photo 2 — 11 monitors при остальных неизменных counts → Dashboard показывает inventory change (expected 12, detected 11, difference −1), initial WARNING и history.
+
+В репозитории находится воспроизводимая demo-пара `demo/vision/room-305-baseline.png` и `demo/vision/room-305-warning.png`. Вторая фотография не содержит принтер; реальный detector фиксирует `printer: 1 → 0`, а Dashboard показывает `WARNING`. Количество других объектов зависит от zero-shot модели и качества кадра, поэтому demo доказывает workflow, а не метрическую точность production-модели.

@@ -19,7 +19,10 @@ ASSETGUARD_POSTGRES_PORT=5433
 ASSETGUARD_DATABASE_URL=postgresql+psycopg://assetguard:$databasePassword@127.0.0.1:5433/assetguard
 ASSETGUARD_INVENTORY_SHARED_SECRET=$(New-Secret)
 ASSETGUARD_ADMIN_SHARED_SECRET=$(New-Secret)
+ASSETGUARD_VIEWER_SHARED_SECRET=$(New-Secret)
 ASSETGUARD_MAX_INVENTORY_PAYLOAD_BYTES=2097152
+ASSETGUARD_RATE_LIMIT_PER_MINUTE=120
+ASSETGUARD_ENDPOINT_STALE_AFTER_HOURS=24
 "@
 Set-Content -LiteralPath $envPath -Value $content -Encoding utf8NoBOM -NoNewline
 Write-Host "Created $envPath. Keep it private; it is excluded from Git."

@@ -1,10 +1,104 @@
 <!doctype html>
-<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>AssetGuard</title><link rel="stylesheet" href="/styles.css"></head>
-<body><main>
-<header><div><h1>AssetGuard</h1><p>Continuous Asset Control</p></div><form id="token-form"><input id="token" type="password" placeholder="Admin token" required><button>Подключиться</button></form></header>
-<p id="status">Введите admin token для локального dashboard.</p>
-<section class="cards"><article><span>Assets</span><strong id="assets-count">—</strong></article><article><span>Changes</span><strong id="changes-count">—</strong></article><article><span>Open incidents</span><strong id="incidents-count">—</strong></article></section>
-<section><h2>Активы</h2><table><thead><tr><th>Инв. №</th><th>Название</th><th>Тип</th><th>Статус</th><th>Endpoint</th></tr></thead><tbody id="assets"></tbody></table></section>
-<section id="detail" hidden><h2 id="detail-title">Карточка актива</h2><p id="detail-meta"></p><div id="detail-actions"></div><div class="detail-grid"><article><h3>Current hardware</h3><div id="current-hardware"></div></article><article><h3>Baseline hardware</h3><div id="baseline-hardware"></div></article></div><h3>Changes / evidence</h3><div id="detail-changes"></div><h3>Incidents</h3><div id="detail-incidents"></div><h3>History</h3><div id="detail-history"></div></section>
-<section><h2>Последние изменения</h2><div id="changes"></div></section><section><h2>Incidents</h2><div id="incidents"></div></section>
-</main><script src="/app.js"></script></body></html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>AssetGuard</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<main>
+  <header class="topbar">
+    <div><span class="eyebrow">Continuous Asset Control</span><h1>AssetGuard</h1></div>
+    <form id="token-form" class="token-form">
+      <input id="username" autocomplete="username" placeholder="Username (optional)">
+      <input id="token" type="password" autocomplete="current-password" placeholder="Password or shared token" required>
+      <button>Войти</button>
+      <button id="logout" type="button" class="secondary">Выйти</button>
+    </form>
+  </header>
+  <p id="status" class="status">Войдите по username/password или используйте bootstrap shared token.</p>
+
+  <section class="cards" aria-label="Сводка">
+    <article><span>Активы</span><strong id="assets-count">—</strong></article>
+    <article><span>Endpoints</span><strong id="endpoints-count">—</strong></article>
+    <article><span>Изменения</span><strong id="changes-count">—</strong></article>
+    <article><span>Открытые incidents</span><strong id="incidents-count">—</strong></article>
+  </section>
+
+  <section id="vision">
+    <div class="section-heading">
+      <div><span class="eyebrow">Physical inventory · Grounding DINO</span><h2>AssetGuard Vision</h2><p>Загрузите фото помещения, сохраните первый результат как baseline и повторите scan.</p></div>
+      <span id="vision-status-badge" class="badge">NOT_CHECKED</span>
+    </div>
+    <form id="vision-upload" class="vision-upload">
+      <input id="vision-room-name" name="room_name" value="Room 305" placeholder="Помещение, например Room 305" maxlength="255" required>
+      <input id="vision-file" name="image" type="file" accept="image/jpeg,image/png" required>
+      <button id="vision-run">Upload & Run detection</button>
+    </form>
+    <p id="vision-progress" class="meta">Модель загружается при первом scan; последующие проверки выполняются быстрее.</p>
+    <div id="vision-result" class="vision-result" hidden>
+      <div class="vision-image-panel"><img id="vision-image" alt="Annotated Vision scan"></div>
+      <div>
+        <div class="section-heading"><h3 id="vision-room-title">Room</h3><button id="vision-baseline" class="secondary">Save as baseline</button></div>
+        <div class="detail-grid compact"><div><h4>Detected</h4><div id="vision-counts"></div></div><div><h4>Baseline comparison</h4><div id="vision-comparison"></div></div></div>
+      </div>
+    </div>
+    <div class="section-heading vision-history-heading"><h3>Scan history</h3><select id="vision-room-select"><option value="">Помещения пока не проверялись</option></select></div>
+    <div id="vision-history" class="vision-history"></div>
+  </section>
+
+  <div class="layout">
+    <section>
+      <div class="section-heading"><div><span class="eyebrow">Registry</span><h2>Активы</h2></div><button id="show-create">Добавить актив</button></div>
+      <form id="create-asset" class="inline-form" hidden>
+        <input name="inventory_number" placeholder="Инвентарный №" required>
+        <input name="name" placeholder="Название" required>
+        <select name="asset_type"><option>Desktop</option><option>Laptop</option><option>Other</option></select>
+        <input name="room" placeholder="Кабинет">
+        <button>Создать</button>
+      </form>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Инв. №</th><th>Название</th><th>Тип</th><th>Статус</th><th>Endpoint</th></tr></thead>
+        <tbody id="assets"></tbody>
+      </table></div>
+    </section>
+
+    <section>
+      <div class="section-heading"><div><span class="eyebrow">Telemetry</span><h2>Endpoints</h2></div></div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Hostname</th><th>Статус</th><th>Last seen</th><th>Asset</th></tr></thead>
+        <tbody id="endpoints"></tbody>
+      </table></div>
+    </section>
+  </div>
+
+  <section id="detail" hidden>
+    <div class="section-heading"><div><span class="eyebrow">Asset details</span><h2 id="detail-title">Карточка актива</h2><p id="detail-meta"></p></div><div id="detail-actions" class="actions"></div></div>
+    <div class="detail-grid">
+      <article><h3>Current hardware</h3><div id="current-hardware"></div></article>
+      <article><h3>Baseline hardware</h3><div id="baseline-hardware"></div></article>
+    </div>
+    <div class="detail-grid lower">
+      <div><h3>Изменения и evidence</h3><div id="detail-changes"></div></div>
+      <div><h3>Incidents</h3><div id="detail-incidents"></div></div>
+    </div>
+    <h3>Timeline</h3><div id="detail-history" class="timeline"></div>
+  </section>
+
+  <div class="layout">
+    <section><div class="section-heading"><div><span class="eyebrow">Detection</span><h2>Последние изменения</h2></div></div><div id="changes"></div></section>
+    <section><div class="section-heading"><div><span class="eyebrow">Workflow</span><h2>Incidents</h2></div></div><div id="incidents"></div></section>
+  </div>
+</main>
+<dialog id="link-dialog">
+  <form id="link-form" method="dialog">
+    <h2>Связать endpoint</h2>
+    <p id="link-target"></p>
+    <select id="link-asset" required></select>
+    <div class="actions"><button id="link-cancel" type="button" class="secondary">Отмена</button><button id="link-confirm" value="default">Связать</button></div>
+  </form>
+</dialog>
+<script src="/app.js"></script>
+</body>
+</html>

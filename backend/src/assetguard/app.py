@@ -8,6 +8,10 @@ from assetguard.interfaces.http.health import router as health_router
 from assetguard.interfaces.http.inventories import router as inventories_router
 from assetguard.interfaces.http.admin_assets import router as admin_assets_router
 from assetguard.interfaces.http.admin_workflows import router as admin_workflows_router
+from assetguard.interfaces.http.admin_inventories import router as admin_inventories_router
+from assetguard.interfaces.http.auth import router as auth_router
+from assetguard.interfaces.http.vision import router as vision_router
+from assetguard.infrastructure.http_middleware import SecurityAndRateLimitMiddleware
 
 
 app = FastAPI(
@@ -16,8 +20,12 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url=None,
 )
+app.add_middleware(SecurityAndRateLimitMiddleware)
 app.include_router(health_router)
 app.include_router(inventories_router)
 app.include_router(admin_assets_router)
 app.include_router(admin_workflows_router)
+app.include_router(admin_inventories_router)
+app.include_router(auth_router)
+app.include_router(vision_router)
 app.mount("/", StaticFiles(directory=Path(__file__).resolve().parents[3] / "frontend", html=True), name="frontend")

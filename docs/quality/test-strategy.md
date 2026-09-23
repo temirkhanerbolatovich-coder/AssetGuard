@@ -7,7 +7,7 @@
 | Unit | canonicalization, placeholders, identity confidence, matching, diff, dedup keys |
 | Integration | raw → snapshot → baseline → event → incident → history в PostgreSQL |
 | Contract | наблюдаемый GLPI Agent ingest контракт после spike |
-| End-to-end | обязательный demo-сценарий через API/UI |
+| End-to-end | обязательные inventory и Vision demo-сценарии через API |
 
 ## Обязательные sanitized fixtures
 
@@ -20,4 +20,4 @@
 
 Фикстуры хранятся без secrets и персональных данных в `backend/tests/fixtures/`.
 
-Статус на 2026-09-23: все шесть сценариев представлены отдельными sanitized JSON fixtures. Для минимального privacy-профиля добавлен unit-check: запрещённые top-level категории не должны попасть в `content`. Следующий тестовый шаг — изолировать PostgreSQL fixture database и автоматизировать полную цепочку для каждого сценария без использования локальной demo-базы.
+Статус на 2026-09-23: 13 pytest tests проходят на disposable PostgreSQL database. Проверяются все шесть fixture-сценариев, полная inventory цепочка, RBAC, revoke/logout/disable user, authenticated audit actor, version-tolerant envelope schema, endpoint identity change/conflict и Vision workflow. GitHub Actions поднимает PostgreSQL, запускает tests, `pip check`, JavaScript syntax check и production Compose validation. Vision integration test использует детерминированный detector; реальный Grounding DINO остаётся отдельным ручным smoke-сценарием. Следующий уровень — browser E2E и optional real-model CI job.
