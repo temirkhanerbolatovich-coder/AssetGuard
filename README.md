@@ -4,7 +4,7 @@ AssetGuard — MVP системы непрерывного контроля ко
 
 ## Статус
 
-Готов демонстрационный MVP v0.1: FastAPI backend, PostgreSQL migrations, browser dashboard, baseline/change/incident workflow, GLPI Agent minimal privacy profile и AssetGuard Vision. Vision поддерживает загрузку JPEG/PNG, Grounding DINO object detection, bounding boxes, подсчёт объектов, room baseline, повторное сравнение и начальный статус `WARNING`.
+Готов демонстрационный MVP v0.1: FastAPI backend, PostgreSQL migrations, browser dashboard, baseline/change/incident workflow, GLPI Agent minimal privacy profile и AssetGuard Vision. Dashboard показывает состояние инфраструктуры, поиск и фильтры устройств, полную читаемую карточку оборудования, сравнение «Было → Стало», историю и приоритетные проблемы. Vision поддерживает загрузку JPEG/PNG, Grounding DINO object detection, bounding boxes, подсчёт объектов, room baseline и повторное сравнение.
 
 ## Быстрый запуск на Windows
 
@@ -52,6 +52,7 @@ docker compose --env-file .env -f infra/containers/docker-compose.free-demo.yml 
 - [Исследование open-source основы](ASSETGUARD_TECHNICAL_RESEARCH.md)
 - [Карта документации](docs/README.md)
 - [Чек-лист завершения MVP](docs/product/mvp-completion-checklist.md)
+- [Аудит данных и UX Dashboard](docs/product/dashboard-data-audit.md)
 - [Локальная demo-поставка](docs/operations/local-demo-guide.md)
 - [Production deployment и recovery](docs/operations/production-deployment.md)
 - [Бесплатный deployment](docs/operations/free-deployment.md)

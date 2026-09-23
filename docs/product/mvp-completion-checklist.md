@@ -22,7 +22,7 @@
 | RAM/storage diff | Готово | Added/removed, completeness guard, deterministic deduplication. |
 | Incidents/history | Готово | Create/classify/resolve incident и append-only audit history. |
 | PARTIAL safety | Готово | Partial inventory не создаёт ложное удаление RAM/SSD. |
-| Dashboard | Готово | Assets/endpoints, last seen/status, linking, baseline/current hardware, evidence, incidents и timeline. |
+| Dashboard | Готово | Attention-first обзор, поиск/фильтры, связанные и непривязанные устройства, полная карточка Agent-данных, baseline, читаемое «Было → Стало», incidents и timeline. |
 | AssetGuard Vision | Готово для demo | Image upload, Grounding DINO, bounding boxes, counts, explicit room baseline, comparison, `WARNING` и history. |
 | Background demo | Готово | User-level demo tasks и production Compose deployment с restart policy. |
 | Local package | Готово | ZIP без secret/database/log data, startup scripts и documentation. |
@@ -36,7 +36,7 @@
 ### P0 — demo MVP
 
 - [x] Admin API: endpoint list/detail, snapshot list/detail, raw inventory list/detail, Asset update.
-- [x] Dashboard: last seen, endpoint status, capacity presentation, evidence и читаемый timeline.
+- [x] Dashboard: last seen/status, поиск и фильтры, полные Agent-данные, адаптивная карточка, capacity presentation, evidence «Было → Стало» и читаемый timeline.
 - [x] Identity: SMBIOS/BIOS/chassis/motherboard serial, MAC, agent ID и hostname history.
 - [x] Identity conflicts: разные endpoint matches переводятся в `IDENTITY_CONFLICT`, ambiguous payload получает processing error.
 - [x] Events: `HOSTNAME_CHANGED`, evidence-aware `COMPONENT_CHANGED` и `COMPONENT_REPLACED`.

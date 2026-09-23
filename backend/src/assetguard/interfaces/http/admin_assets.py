@@ -7,7 +7,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from assetguard.infrastructure.config import get_settings
@@ -18,6 +18,7 @@ from assetguard.modules.changes.models import ChangeEventRecord
 from assetguard.modules.history.service import append_asset_history
 from assetguard.modules.endpoints.service import evaluate_last_seen
 from assetguard.modules.incidents.models import AssetHistoryEntryRecord, IncidentRecord
+from assetguard.modules.inventory.models import RawInventoryRecord
 from assetguard.modules.identity.auth import AuthPrincipal, session_principal
 from assetguard.modules.snapshots.models import (
     ComponentObservationRecord, EndpointIdentifierRecord,
@@ -75,21 +76,107 @@ class AssetUpdate(BaseModel):
     notes: str | None = None
 
 
-def _asset_view(asset: AssetRecord, endpoint_id: UUID | None) -> dict:
+def _asset_view(asset: AssetRecord, endpoint_id: UUID | None, organization: str | None = None) -> dict:
     return {
         "id": str(asset.id), "inventory_number": asset.inventory_number,
         "name": asset.name, "asset_type": asset.asset_type, "status": asset.status,
-        "room": asset.room, "notes": asset.notes,
+        "room": asset.room, "notes": asset.notes, "organization": organization,
         "endpoint_id": str(endpoint_id) if endpoint_id else None,
+    }
+
+
+def _latest_snapshot(session: Session, endpoint_id: UUID) -> HardwareSnapshotRecord | None:
+    return session.scalar(select(HardwareSnapshotRecord).where(
+        HardwareSnapshotRecord.managed_endpoint_id == endpoint_id,
+    ).order_by(HardwareSnapshotRecord.captured_at.desc()))
+
+
+def _latest_observed_snapshot(session: Session, endpoint_id: UUID) -> HardwareSnapshotRecord | None:
+    snapshots = session.scalars(select(HardwareSnapshotRecord).where(
+        HardwareSnapshotRecord.managed_endpoint_id == endpoint_id,
+    ).order_by(HardwareSnapshotRecord.captured_at.desc()).limit(50))
+    return next((snapshot for snapshot in snapshots if session.scalar(
+        select(func.count()).select_from(ComponentObservationRecord).where(
+            ComponentObservationRecord.hardware_snapshot_id == snapshot.id,
+        )
+    )), None)
+
+
+def _latest_components(session: Session, endpoint_id: UUID) -> list[ComponentObservationRecord]:
+    result: list[ComponentObservationRecord] = []
+    observed_types: set[str] = set()
+    snapshots = session.scalars(select(HardwareSnapshotRecord).where(
+        HardwareSnapshotRecord.managed_endpoint_id == endpoint_id,
+    ).order_by(HardwareSnapshotRecord.captured_at.desc()).limit(50))
+    for snapshot in snapshots:
+        observations = list(session.scalars(select(ComponentObservationRecord).where(
+            ComponentObservationRecord.hardware_snapshot_id == snapshot.id,
+        )))
+        for component_type in {item.component_type for item in observations} - observed_types:
+            result.extend(item for item in observations if item.component_type == component_type)
+            observed_types.add(component_type)
+    return result
+
+
+def _ram_capacity_bytes(value: int | None) -> int | None:
+    """Accept both GLPI's legacy MiB values and byte-based inventory payloads."""
+    if value is None:
+        return None
+    return value * 1024 * 1024 if value < 1024 * 1024 else value
+
+
+def _component_view(item: ComponentObservationRecord) -> dict:
+    return {
+        "type": item.component_type, "model": item.model, "serial": item.serial_number,
+        "manufacturer": item.manufacturer, "part_number": item.part_number,
+        "capacity": _ram_capacity_bytes(item.capacity) if item.component_type == "RAM" else item.capacity,
+        "slot": item.slot, "confidence": item.confidence,
+        "raw_data": item.raw_data,
+    }
+
+
+def _endpoint_summary(session: Session, endpoint: ManagedEndpointRecord) -> dict:
+    snapshot = _latest_snapshot(session, endpoint.id)
+    observations = _latest_components(session, endpoint.id)
+    open_changes = session.scalar(select(func.count()).select_from(ChangeEventRecord).where(
+        ChangeEventRecord.managed_endpoint_id == endpoint.id,
+        ChangeEventRecord.status == "OPEN",
+    )) or 0
+    open_incidents = session.scalar(select(func.count()).select_from(IncidentRecord).where(
+        IncidentRecord.managed_endpoint_id == endpoint.id,
+        IncidentRecord.status.in_(("OPEN", "UNDER_REVIEW")),
+    )) or 0
+    ram = [item for item in observations if item.component_type == "RAM"]
+    storage = [item for item in observations if item.component_type == "STORAGE"]
+    cpu = next((item for item in observations if item.component_type == "CPU"), None)
+    return {
+        "id": str(endpoint.id), "asset_id": str(endpoint.asset_id) if endpoint.asset_id else None,
+        "source": endpoint.source, "source_agent_id": endpoint.source_agent_id,
+        "hostname": endpoint.hostname, "last_seen_at": endpoint.last_seen_at,
+        "status": endpoint.status, "open_changes": open_changes,
+        "open_incidents": open_incidents,
+        "current_snapshot": None if not snapshot else {
+            "id": str(snapshot.id), "captured_at": snapshot.captured_at,
+            "type": snapshot.snapshot_type, "completeness": snapshot.completeness,
+        },
+        "hardware_summary": {
+            "ram_bytes": sum(_ram_capacity_bytes(item.capacity) or 0 for item in ram),
+            "ram_modules": len(ram), "storage_devices": len(storage),
+            "cpu": cpu.model if cpu else None,
+        },
     }
 
 
 @router.get("/assets", dependencies=[Depends(require_viewer)])
 def list_assets(session: Annotated[Session, Depends(get_session)]):
-    return [
-        _asset_view(asset, session.scalar(select(ManagedEndpointRecord.id).where(ManagedEndpointRecord.asset_id == asset.id)))
-        for asset in session.scalars(select(AssetRecord).order_by(AssetRecord.inventory_number))
-    ]
+    result = []
+    for asset in session.scalars(select(AssetRecord).order_by(AssetRecord.inventory_number)):
+        endpoint = session.scalar(select(ManagedEndpointRecord).where(ManagedEndpointRecord.asset_id == asset.id))
+        organization = session.get(OrganizationRecord, asset.organization_id)
+        view = _asset_view(asset, endpoint.id if endpoint else None, organization.name if organization else None)
+        view["endpoint"] = _endpoint_summary(session, endpoint) if endpoint else None
+        result.append(view)
+    return result
 
 
 @router.post("/assets", dependencies=[Depends(require_admin)], status_code=status.HTTP_201_CREATED)
@@ -119,7 +206,7 @@ def create_asset(body: AssetCreate, session: Annotated[Session, Depends(get_sess
     )
     session.commit()
     session.refresh(asset)
-    return _asset_view(asset, None)
+    return _asset_view(asset, None, organization.name)
 
 
 @router.patch("/assets/{asset_id}", dependencies=[Depends(require_admin)])
@@ -146,19 +233,19 @@ def update_asset(asset_id: UUID, body: AssetUpdate, session: Annotated[Session, 
     )
     session.commit()
     endpoint_id = session.scalar(select(ManagedEndpointRecord.id).where(ManagedEndpointRecord.asset_id == asset.id))
-    return _asset_view(asset, endpoint_id)
+    organization = session.get(OrganizationRecord, asset.organization_id)
+    return _asset_view(asset, endpoint_id, organization.name if organization else None)
 
 
 @router.get("/endpoints", dependencies=[Depends(require_viewer)])
 def list_endpoints(session: Annotated[Session, Depends(get_session)]):
     result = []
     for endpoint in session.scalars(select(ManagedEndpointRecord).order_by(ManagedEndpointRecord.last_seen_at.desc())):
-        result.append({
-            "id": str(endpoint.id), "asset_id": str(endpoint.asset_id) if endpoint.asset_id else None,
-            "source": endpoint.source, "source_agent_id": endpoint.source_agent_id,
-            "hostname": endpoint.hostname, "last_seen_at": endpoint.last_seen_at,
-            "status": endpoint.status,
-        })
+        item = _endpoint_summary(session, endpoint)
+        asset = session.get(AssetRecord, endpoint.asset_id) if endpoint.asset_id else None
+        organization = session.get(OrganizationRecord, asset.organization_id) if asset else None
+        item["asset"] = None if not asset else _asset_view(asset, endpoint.id, organization.name if organization else None)
+        result.append(item)
     return result
 
 
@@ -231,12 +318,55 @@ def link_endpoint(endpoint_id: UUID, asset_id: UUID, session: Annotated[Session,
 def _components(session: Session, snapshot: HardwareSnapshotRecord | None) -> list[dict]:
     if not snapshot:
         return []
-    return [{
-        "type": item.component_type, "model": item.model, "serial": item.serial_number,
-        "capacity": item.capacity, "slot": item.slot, "confidence": item.confidence,
-    } for item in session.scalars(select(ComponentObservationRecord).where(
+    return [_component_view(item) for item in session.scalars(select(ComponentObservationRecord).where(
         ComponentObservationRecord.hardware_snapshot_id == snapshot.id,
     ))]
+
+
+def _system_sections(
+    session: Session, endpoint: ManagedEndpointRecord, snapshot: HardwareSnapshotRecord | None,
+) -> tuple[dict, dict | None]:
+    if not snapshot:
+        return {}, None
+    latest_raw = session.get(RawInventoryRecord, snapshot.raw_inventory_id)
+    if not latest_raw:
+        return {}, None
+    inventories = list(session.scalars(select(RawInventoryRecord).where(
+        RawInventoryRecord.managed_endpoint_id == endpoint.id,
+        RawInventoryRecord.processing_status == "PROCESSED",
+    ).order_by(RawInventoryRecord.received_at.desc()).limit(50)))
+    merged_objects = {"hardware": {}, "bios": {}, "operatingsystem": {}}
+    latest_lists = {"drives": [], "controllers": []}
+    for inventory in inventories:
+        content = inventory.payload.get("content") if isinstance(inventory.payload, dict) else None
+        if not isinstance(content, dict):
+            continue
+        for section in merged_objects:
+            value = content.get(section)
+            if isinstance(value, dict):
+                for key, item in value.items():
+                    if key not in merged_objects[section] and item not in (None, ""):
+                        merged_objects[section][key] = item
+        for section in latest_lists:
+            value = content.get(section)
+            if not latest_lists[section] and isinstance(value, list) and value:
+                latest_lists[section] = value
+    hardware = merged_objects["hardware"]
+    # Windows product keys/owner fields remain evidence-only and are never exposed to the dashboard.
+    safe_hardware = {key: hardware.get(key) for key in (
+        "name", "uuid", "chassis_type", "memory", "workgroup", "winlang", "vmsystem",
+    ) if hardware.get(key) not in (None, "")}
+    return {
+        "hardware": safe_hardware,
+        "bios": merged_objects["bios"],
+        "operating_system": merged_objects["operatingsystem"],
+        "drives": latest_lists["drives"],
+        "controllers": latest_lists["controllers"],
+    }, {
+        "id": str(latest_raw.id), "received_at": latest_raw.received_at, "source": latest_raw.source,
+        "source_version": latest_raw.source_version, "type": latest_raw.inventory_type,
+        "processing_status": latest_raw.processing_status,
+    }
 
 
 @router.get("/assets/{asset_id}", dependencies=[Depends(require_viewer)])
@@ -245,10 +375,12 @@ def asset_detail(asset_id: UUID, session: Annotated[Session, Depends(get_session
     if not asset:
         raise HTTPException(404, "Asset was not found.")
     endpoint = session.scalar(select(ManagedEndpointRecord).where(ManagedEndpointRecord.asset_id == asset.id))
-    result = _asset_view(asset, endpoint.id if endpoint else None)
+    organization = session.get(OrganizationRecord, asset.organization_id)
+    result = _asset_view(asset, endpoint.id if endpoint else None, organization.name if organization else None)
     result.update({
         "endpoint": None, "current_snapshot_id": None, "baseline_snapshot_id": None,
         "current_hardware": [], "baseline_hardware": [], "changes": [], "incidents": [],
+        "system": {}, "latest_inventory": None,
         "history": [{
             "id": str(item.id), "type": item.event_type, "occurred_at": item.occurred_at,
             "message": item.message, "metadata": item.metadata_json,
@@ -266,15 +398,34 @@ def asset_detail(asset_id: UUID, session: Annotated[Session, Depends(get_session
         BaselineRecord.managed_endpoint_id == endpoint.id, BaselineRecord.status == "ACTIVE",
     ))
     baseline_snapshot = session.get(HardwareSnapshotRecord, baseline.hardware_snapshot_id) if baseline else None
+    identifiers = list(session.scalars(select(EndpointIdentifierRecord).where(
+        EndpointIdentifierRecord.managed_endpoint_id == endpoint.id,
+        EndpointIdentifierRecord.is_active.is_(True),
+    ).order_by(EndpointIdentifierRecord.identifier_type)))
+    observed_snapshot = _latest_observed_snapshot(session, endpoint.id)
+    system, latest_inventory = _system_sections(session, endpoint, current)
     result.update({
         "endpoint": {
-            "id": str(endpoint.id), "hostname": endpoint.hostname,
-            "status": endpoint.status, "last_seen_at": endpoint.last_seen_at,
+            **_endpoint_summary(session, endpoint),
+            "identifiers": [{
+                "type": item.identifier_type, "value": item.raw_value,
+                "confidence": item.confidence,
+            } for item in identifiers],
         },
         "current_snapshot_id": str(current.id) if current else None,
+        "recommended_baseline_snapshot_id": str(observed_snapshot.id) if observed_snapshot else None,
         "baseline_snapshot_id": str(baseline_snapshot.id) if baseline_snapshot else None,
-        "current_hardware": _components(session, current),
+        "current_snapshot": None if not current else {
+            "id": str(current.id), "captured_at": current.captured_at,
+            "type": current.snapshot_type, "completeness": current.completeness,
+        },
+        "baseline": None if not baseline else {
+            "id": str(baseline.id), "snapshot_id": str(baseline.hardware_snapshot_id),
+            "accepted_at": baseline.accepted_at, "reason": baseline.reason,
+        },
+        "current_hardware": [_component_view(item) for item in _latest_components(session, endpoint.id)],
         "baseline_hardware": _components(session, baseline_snapshot),
+        "system": system, "latest_inventory": latest_inventory,
         "changes": [{
             "id": str(item.id), "type": item.event_type,
             "component_type": item.component_type, "confidence": item.confidence,

@@ -103,8 +103,16 @@ async def _complete_mvp_workflow() -> None:
         assert len(changes_after_partial) == len(changes)
 
         asset = (await client.get(f"/admin/assets/{asset_id}", headers=admin_headers())).json()
+        assert asset["organization"] == "Default Organization"
+        assert asset["endpoint"]["current_snapshot"]["type"] == "PARTIAL"
+        assert asset["endpoint"]["hardware_summary"]["ram_bytes"] == 8 * 1024**3
+        assert asset["endpoint"]["identifiers"]
+        assert asset["latest_inventory"]["processing_status"] == "PROCESSED"
+        assert asset["system"]["hardware"]["uuid"] == "fixture-smbios-uuid"
+        assert any(component["type"] == "CPU" and "raw_data" in component for component in asset["current_hardware"])
+        assert next(component for component in asset["current_hardware"] if component["type"] == "RAM")["capacity"] == 8 * 1024**3
         history_types = {entry["type"] for entry in asset["history"]}
-        assert {"ASSET_CREATED", "ENDPOINT_LINKED", "BASELINE_ACCEPTED", "HARDWARE_CHANGE_DETECTED", "INCIDENT_RESOLVED"} <= history_types
+        assert {"ASSET_CREATED", "ENDPOINT_LINKED", "BASELINE_ACCEPTED", "HARDWARE_CHANGE_DETECTED", "INCIDENT_RESOLVED", "INVENTORY_COMPLETED"} <= history_types
 
         user_response = await client.post("/admin/users", headers=admin_headers(), json={
             "username": "e2e-viewer", "password": "fixture-password-123", "role": "VIEWER",

@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from assetguard.modules.inventory.models import RawInventoryRecord
 from assetguard.modules.inventory.schema import validate_inventory_envelope
+from assetguard.modules.history.service import append_history
 from assetguard.modules.snapshots.models import (
     ComponentIdentityRecord,
     ComponentObservationRecord,
@@ -213,6 +214,13 @@ def normalize_raw_inventory(session: Session, raw: RawInventoryRecord) -> Hardwa
     raw.managed_endpoint_id = endpoint.id
     raw.processing_status = "PROCESSED"
     raw.processing_error = None
+    append_history(
+        session, endpoint=endpoint, event_type="INVENTORY_COMPLETED",
+        related_entity_type="RawInventory", related_entity_id=raw.id,
+        message="Inventory completed successfully.",
+        metadata={"snapshot_id": str(snapshot.id), "inventory_type": snapshot.snapshot_type},
+        occurred_at=raw.received_at,
+    )
     session.commit()
     session.refresh(snapshot)
     if previous_hostname and observed_hostname and previous_hostname.casefold() != observed_hostname.casefold():

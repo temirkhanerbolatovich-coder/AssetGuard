@@ -3,102 +3,92 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>AssetGuard</title>
+  <meta name="theme-color" content="#f5f7fa">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%23183153'/><path d='M19 47 30 16h5l11 31h-7l-2-7H27l-2 7Zm10-13h6l-3-10Z' fill='white'/></svg>">
+  <title>AssetGuard — контроль оборудования</title>
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-<main>
-  <header class="topbar">
-    <div><span class="eyebrow">Continuous Asset Control</span><h1>AssetGuard</h1></div>
-    <form id="token-form" class="token-form">
-      <input id="username" autocomplete="username" placeholder="Username (optional)">
-      <input id="token" type="password" autocomplete="current-password" placeholder="Password or shared token" required>
-      <button>Войти</button>
-      <button id="logout" type="button" class="secondary">Выйти</button>
-    </form>
-  </header>
-  <p id="status" class="status">Войдите по username/password или используйте bootstrap shared token.</p>
-
-  <section class="cards" aria-label="Сводка">
-    <article><span>Активы</span><strong id="assets-count">—</strong></article>
-    <article><span>Endpoints</span><strong id="endpoints-count">—</strong></article>
-    <article><span>Изменения</span><strong id="changes-count">—</strong></article>
-    <article><span>Открытые incidents</span><strong id="incidents-count">—</strong></article>
-  </section>
-
-  <section id="vision">
-    <div class="section-heading">
-      <div><span class="eyebrow">Physical inventory · Grounding DINO</span><h2>AssetGuard Vision</h2><p>Загрузите фото помещения, сохраните первый результат как baseline и повторите scan.</p></div>
-      <span id="vision-status-badge" class="badge">NOT_CHECKED</span>
-    </div>
-    <form id="vision-upload" class="vision-upload">
-      <input id="vision-room-name" name="room_name" value="Room 305" placeholder="Помещение, например Room 305" maxlength="255" required>
-      <input id="vision-file" name="image" type="file" accept="image/jpeg,image/png" required>
-      <button id="vision-run">Upload & Run detection</button>
-    </form>
-    <p id="vision-progress" class="meta">Модель загружается при первом scan; последующие проверки выполняются быстрее.</p>
-    <div id="vision-result" class="vision-result" hidden>
-      <div class="vision-image-panel"><img id="vision-image" alt="Annotated Vision scan"></div>
-      <div>
-        <div class="section-heading"><h3 id="vision-room-title">Room</h3><button id="vision-baseline" class="secondary">Save as baseline</button></div>
-        <div class="detail-grid compact"><div><h4>Detected</h4><div id="vision-counts"></div></div><div><h4>Baseline comparison</h4><div id="vision-comparison"></div></div></div>
-      </div>
-    </div>
-    <div class="section-heading vision-history-heading"><h3>Scan history</h3><select id="vision-room-select"><option value="">Помещения пока не проверялись</option></select></div>
-    <div id="vision-history" class="vision-history"></div>
-  </section>
-
-  <div class="layout">
-    <section>
-      <div class="section-heading"><div><span class="eyebrow">Registry</span><h2>Активы</h2></div><button id="show-create">Добавить актив</button></div>
-      <form id="create-asset" class="inline-form" hidden>
-        <input name="inventory_number" placeholder="Инвентарный №" required>
-        <input name="name" placeholder="Название" required>
-        <select name="asset_type"><option>Desktop</option><option>Laptop</option><option>Other</option></select>
-        <input name="room" placeholder="Кабинет">
-        <button>Создать</button>
-      </form>
-      <div class="table-wrap"><table>
-        <thead><tr><th>Инв. №</th><th>Название</th><th>Тип</th><th>Статус</th><th>Endpoint</th></tr></thead>
-        <tbody id="assets"></tbody>
-      </table></div>
-    </section>
-
-    <section>
-      <div class="section-heading"><div><span class="eyebrow">Telemetry</span><h2>Endpoints</h2></div></div>
-      <div class="table-wrap"><table>
-        <thead><tr><th>Hostname</th><th>Статус</th><th>Last seen</th><th>Asset</th></tr></thead>
-        <tbody id="endpoints"></tbody>
-      </table></div>
-    </section>
-  </div>
-
-  <section id="detail" hidden>
-    <div class="section-heading"><div><span class="eyebrow">Asset details</span><h2 id="detail-title">Карточка актива</h2><p id="detail-meta"></p></div><div id="detail-actions" class="actions"></div></div>
-    <div class="detail-grid">
-      <article><h3>Current hardware</h3><div id="current-hardware"></div></article>
-      <article><h3>Baseline hardware</h3><div id="baseline-hardware"></div></article>
-    </div>
-    <div class="detail-grid lower">
-      <div><h3>Изменения и evidence</h3><div id="detail-changes"></div></div>
-      <div><h3>Incidents</h3><div id="detail-incidents"></div></div>
-    </div>
-    <h3>Timeline</h3><div id="detail-history" class="timeline"></div>
-  </section>
-
-  <div class="layout">
-    <section><div class="section-heading"><div><span class="eyebrow">Detection</span><h2>Последние изменения</h2></div></div><div id="changes"></div></section>
-    <section><div class="section-heading"><div><span class="eyebrow">Workflow</span><h2>Incidents</h2></div></div><div id="incidents"></div></section>
-  </div>
-</main>
-<dialog id="link-dialog">
-  <form id="link-form" method="dialog">
-    <h2>Связать endpoint</h2>
-    <p id="link-target"></p>
-    <select id="link-asset" required></select>
-    <div class="actions"><button id="link-cancel" type="button" class="secondary">Отмена</button><button id="link-confirm" value="default">Связать</button></div>
+<header class="app-header">
+  <a class="brand" href="#overview" aria-label="AssetGuard, на главную"><span class="brand-mark" aria-hidden="true">A</span><span><strong>AssetGuard</strong><small>Контроль IT-активов</small></span></a>
+  <nav class="main-nav" aria-label="Основная навигация"><a href="#overview">Обзор</a><a href="#devices">Устройства</a><a href="#vision">Vision</a></nav>
+  <form id="token-form" class="token-form">
+    <input id="username" autocomplete="username" placeholder="Логин">
+    <input id="token" type="password" autocomplete="current-password" placeholder="Пароль или токен" required>
+    <button>Войти</button><button id="logout" type="button" class="button-quiet">Выйти</button>
   </form>
-</dialog>
+</header>
+
+<main>
+  <div class="page-intro"><div><span class="eyebrow">Состояние инфраструктуры</span><h1>Центр контроля</h1></div><p id="status" class="status" role="status">Войдите, чтобы загрузить актуальные данные.</p></div>
+
+  <section id="overview" class="page-section overview-section">
+    <div id="attention-banner" class="attention-banner is-loading"><span class="attention-icon" aria-hidden="true">…</span><div><strong>Загружаем состояние устройств</strong><p>Проверяем последнюю инвентаризацию и открытые изменения.</p></div></div>
+    <div class="metrics" aria-label="Ключевые показатели">
+      <article><span>Под контролем</span><strong id="devices-count">—</strong><small>устройств</small></article>
+      <article><span>В норме</span><strong id="online-count">—</strong><small>актуальная связь</small></article>
+      <article><span>Требуют внимания</span><strong id="attention-count">—</strong><small>изменения или обращения</small></article>
+      <article><span>Не проверено</span><strong id="unchecked-count">—</strong><small>нет связи или эталона</small></article>
+    </div>
+    <div class="overview-grid">
+      <article class="panel attention-panel"><div class="section-heading"><div><span class="eyebrow">Приоритет</span><h2>Что требует внимания</h2></div><span id="attention-badge" class="status-pill neutral">—</span></div><div id="attention-list" class="stack-list"><div class="skeleton"></div><div class="skeleton short"></div></div></article>
+      <article class="panel"><div class="section-heading"><div><span class="eyebrow">Активность</span><h2>Последние события</h2></div><span id="last-activity" class="meta">—</span></div><div id="activity-list" class="timeline compact-timeline"><div class="skeleton"></div></div></article>
+    </div>
+    <div class="overview-grid secondary-grid">
+      <article class="panel"><span class="eyebrow">Размещение</span><h3>Кабинеты и организации</h3><div id="location-summary" class="tag-list"><span class="skeleton short"></span></div></article>
+      <article class="panel"><span class="eyebrow">Инвентаризация</span><h3>Качество данных</h3><div id="inventory-summary" class="summary-lines"></div></article>
+    </div>
+  </section>
+
+  <section id="devices" class="page-section">
+    <div class="section-heading page-heading"><div><span class="eyebrow">Реестр</span><h2>Устройства</h2><p>Поиск по имени, hostname, инвентарному номеру и кабинету.</p></div><button id="show-create">Добавить актив</button></div>
+    <form id="create-asset" class="create-form panel" hidden>
+      <label>Инвентарный номер<input name="inventory_number" required></label><label>Название<input name="name" required></label>
+      <label>Тип<select name="asset_type"><option value="Desktop">Стационарный ПК</option><option value="Laptop">Ноутбук</option><option value="Other">Другое</option></select></label>
+      <label>Кабинет<input name="room"></label><button>Создать</button>
+    </form>
+    <div class="device-toolbar panel">
+      <label class="search-field"><span class="sr-only">Поиск устройств</span><input id="device-search" type="search" placeholder="Поиск устройств…"></label>
+      <label><span>Статус</span><select id="device-status-filter"><option value="">Все статусы</option><option value="OK">В норме</option><option value="ATTENTION">Требует внимания</option><option value="UNCHECKED">Не проверено</option></select></label>
+      <label><span>Кабинет</span><select id="device-room-filter"><option value="">Все кабинеты</option></select></label>
+      <label class="checkbox-filter"><input id="device-change-filter" type="checkbox"> Только с изменениями</label>
+      <label><span>Сортировка</span><select id="device-sort"><option value="recent">Сначала активные</option><option value="attention">Сначала проблемные</option><option value="name">По названию</option></select></label>
+    </div>
+    <div class="panel table-panel"><div class="table-wrap"><table><thead><tr><th>Устройство</th><th>Расположение</th><th>Состояние</th><th>Последняя проверка</th><th>Оборудование</th><th></th></tr></thead><tbody id="assets"><tr><td colspan="6"><div class="skeleton"></div></td></tr></tbody></table></div><p id="device-result-count" class="table-footer"></p></div>
+  </section>
+
+  <section id="detail" class="page-section detail-section" hidden>
+    <button id="detail-back" class="button-link">← Ко всем устройствам</button>
+    <div class="device-hero panel"><div><span class="eyebrow">Карточка устройства</span><div class="title-line"><h2 id="detail-title">Устройство</h2><span id="detail-status"></span></div><p id="detail-meta"></p></div><div id="detail-actions" class="actions"></div></div>
+    <div class="detail-overview-grid">
+      <article class="panel"><span class="eyebrow">Общая информация</span><h3>Устройство</h3><dl id="device-general" class="facts"></dl></article>
+      <article class="panel"><span class="eyebrow">Система</span><h3>Windows и BIOS</h3><dl id="device-system" class="facts"></dl></article>
+      <article class="panel"><span class="eyebrow">Идентификация</span><h3>Надёжные идентификаторы</h3><dl id="device-identifiers" class="facts"></dl></article>
+    </div>
+    <div class="section-heading subsection-heading"><div><span class="eyebrow">Последняя инвентаризация</span><h2>Состав оборудования</h2></div><span id="snapshot-meta" class="meta"></span></div>
+    <div id="current-hardware" class="hardware-grid"></div>
+    <article class="panel baseline-panel">
+      <div class="section-heading"><div><span class="eyebrow">Контроль изменений</span><h2>Эталон и изменения</h2><p id="baseline-summary"></p></div><div id="baseline-action"></div></div>
+      <div id="detail-changes" class="change-list"></div>
+      <details class="baseline-details"><summary>Показать эталонный состав</summary><div id="baseline-hardware" class="hardware-grid"></div></details>
+    </article>
+    <div class="detail-lower-grid"><article class="panel"><span class="eyebrow">Решения</span><h2>Обращения</h2><div id="detail-incidents"></div></article><article class="panel"><span class="eyebrow">Хронология</span><h2>История устройства</h2><div id="detail-history" class="timeline"></div></article></div>
+  </section>
+
+  <section id="vision" class="page-section">
+    <div class="section-heading page-heading"><div><span class="eyebrow">Физическая инвентаризация</span><h2>AssetGuard Vision</h2><p>AI показывает расхождения с эталоном. Итоговое решение принимает человек.</p></div><span id="vision-status-badge" class="status-pill neutral">Не проверено</span></div>
+    <div class="panel">
+      <ol class="stepper" aria-label="Этапы инвентаризации"><li class="active">Выберите кабинет</li><li>Загрузите фото</li><li>Проверьте результат</li><li>Подтвердите эталон</li></ol>
+      <form id="vision-upload" class="vision-upload"><label>Кабинет<input id="vision-room-name" name="room_name" value="Room 305" maxlength="255" required></label><label>Фото помещения<input id="vision-file" name="image" type="file" accept="image/jpeg,image/png" required></label><button id="vision-run">Провести анализ</button></form>
+      <p id="vision-progress" class="meta" role="status">Первый анализ может занять больше времени: модель загружается и инициализируется.</p>
+      <div id="vision-result" class="vision-result" hidden><div class="vision-image-panel"><img id="vision-image" alt="Результат анализа помещения"></div><div><div class="section-heading"><div><span class="eyebrow">Результат</span><h3 id="vision-room-title">Кабинет</h3></div><button id="vision-baseline" class="button-secondary">Подтвердить как эталон</button></div><div class="vision-detail-grid"><div><h4>Обнаружено</h4><div id="vision-counts"></div></div><div><h4>Сравнение с эталоном</h4><div id="vision-comparison"></div></div></div></div></div>
+      <div class="section-heading vision-history-heading"><h3>История проверок</h3><select id="vision-room-select"><option value="">Проверок пока нет</option></select></div><div id="vision-history" class="vision-history"></div>
+    </div>
+  </section>
+</main>
+
+<dialog id="link-dialog"><form id="link-form" method="dialog"><span class="eyebrow">Привязка</span><h2>Связать устройство с активом</h2><p id="link-target"></p><select id="link-asset" required></select><div class="actions"><button id="link-cancel" type="button" class="button-secondary">Отмена</button><button id="link-confirm" value="default">Связать</button></div></form></dialog>
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 <script src="/app.js"></script>
 </body>
 </html>
