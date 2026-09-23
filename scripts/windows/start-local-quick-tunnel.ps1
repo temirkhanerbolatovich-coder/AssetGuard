@@ -20,7 +20,7 @@ do {
         $match = [regex]::Match($logs, 'https://[a-z0-9-]+\.trycloudflare\.com')
         if ($match.Success) {
             Write-Host "Public URL: $($match.Value)"
-            Write-Host "Tunnel PID: $($process.Id). Keep this PowerShell process running until the pitch is finished."
+            Write-Host "Tunnel PID: $($process.Id). Keep this tunnel process running until the pitch is finished."
             Write-Host 'When AssetGuard asks for the public URL while making a QR code, paste this address.'
             exit 0
         }
