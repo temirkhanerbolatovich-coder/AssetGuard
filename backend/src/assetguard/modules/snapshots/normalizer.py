@@ -1,4 +1,4 @@
-"""GLPI-shaped inventory normalization for RAM and storage."""
+"""GLPI-shaped inventory normalization for the MVP device card and hardware diff."""
 from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
@@ -40,16 +40,20 @@ def normalize_raw_inventory(session: Session, raw: RawInventoryRecord) -> Hardwa
         endpoint.hostname = text(hardware.get("name")) or endpoint.hostname; endpoint.last_seen_at = raw.received_at; endpoint.updated_at = now
     memories = content.get("memories") if isinstance(content.get("memories"), list) else []
     storages = content.get("storages") if isinstance(content.get("storages"), list) else []
-    snapshot = HardwareSnapshotRecord(managed_endpoint_id=endpoint.id, raw_inventory_id=raw.id, captured_at=raw.received_at, created_at=now, snapshot_type="FULL" if raw.inventory_type == "FULL" else "PARTIAL", completeness={"RAM": "COMPLETE" if isinstance(content.get("memories"), list) else "UNOBSERVED", "STORAGE": "COMPLETE" if isinstance(content.get("storages"), list) else "UNOBSERVED"}, normalizer_version=NORMALIZER_VERSION); session.add(snapshot); session.flush()
+    cpus = content.get("cpus") if isinstance(content.get("cpus"), list) else []
+    videos = content.get("videos") if isinstance(content.get("videos"), list) else []
+    snapshot = HardwareSnapshotRecord(managed_endpoint_id=endpoint.id, raw_inventory_id=raw.id, captured_at=raw.received_at, created_at=now, snapshot_type="FULL" if raw.inventory_type == "FULL" else "PARTIAL", completeness={"RAM": "COMPLETE" if isinstance(content.get("memories"), list) else "UNOBSERVED", "STORAGE": "COMPLETE" if isinstance(content.get("storages"), list) else "UNOBSERVED", "CPU": "OBSERVED" if isinstance(content.get("cpus"), list) else "UNOBSERVED", "GPU": "OBSERVED" if isinstance(content.get("videos"), list) else "UNOBSERVED"}, normalizer_version=NORMALIZER_VERSION); session.add(snapshot); session.flush()
     _add_observations(session, snapshot, "RAM", [x for x in memories if isinstance(x, dict)])
     _add_observations(session, snapshot, "STORAGE", [x for x in storages if isinstance(x, dict)])
+    _add_observations(session, snapshot, "CPU", [x for x in cpus if isinstance(x, dict)])
+    _add_observations(session, snapshot, "GPU", [x for x in videos if isinstance(x, dict)])
     raw.managed_endpoint_id, raw.processing_status, raw.processing_error = endpoint.id, "PROCESSED", None; session.commit(); session.refresh(snapshot); return snapshot
 
 def _add_observations(session: Session, snapshot: HardwareSnapshotRecord, component_type: str, items: list[dict[str, Any]]) -> None:
     for item in items:
         raw_serial = text(item.get("serialnumber") if component_type == "RAM" else item.get("serial")); serial = normalize_identifier(raw_serial)
-        model = text(item.get("description")) or text(item.get("caption")) or text(item.get("model")); slot = text(item.get("numslots")) if component_type == "RAM" else None
-        capacity = integer(item.get("capacity") if component_type == "RAM" else item.get("disksize")); identity = None
+        model = text(item.get("description")) or text(item.get("caption")) or text(item.get("model")) or text(item.get("name")); slot = text(item.get("numslots")) if component_type == "RAM" else None
+        capacity = integer(item.get("capacity") if component_type == "RAM" else item.get("disksize") if component_type == "STORAGE" else item.get("memory") if component_type == "GPU" else None); identity = None
         if serial:
             identity = session.scalar(select(ComponentIdentityRecord).where(ComponentIdentityRecord.component_type == component_type, ComponentIdentityRecord.canonical_serial == serial))
             if identity is None:

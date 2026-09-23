@@ -4,6 +4,7 @@
     "bios": {"bversion": "FIXTURE-BIOS-1"},
     "hardware": {"uuid": "fixture-smbios-uuid", "chassis_type": "Desktop"},
     "cpus": [{"name": "Fixture CPU"}],
+    "videos": [{"name": "Fixture GPU", "memory": 4294967296}],
     "memories": [
       {"serialnumber": "RAM-FIXTURE-A", "numslots": "DIMM 0", "capacity": 8589934592},
       {"serialnumber": "RAM-FIXTURE-B", "numslots": "DIMM 1", "capacity": 8589934592}

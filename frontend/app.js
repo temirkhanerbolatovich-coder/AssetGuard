@@ -3,7 +3,9 @@ let token = sessionStorage.getItem("assetguard-admin-token") || "";
 $("token").value = token;
 const escapeHtml = (value) => String(value ?? "—").replace(/[&<>"']/g, (character) => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[character]));
 async function api(path, options = {}) { const response = await fetch(path, {...options, headers: {...options.headers, "X-AssetGuard-Admin-Token": token}}); if (!response.ok) throw new Error(response.status === 401 ? "Неверный admin token" : `Ошибка API: ${response.status}`); return response.json(); }
-const hardware = (items) => items.length ? items.map((item) => `<div class="row"><b>${escapeHtml(item.type)} ${escapeHtml(item.model)}</b><span>${escapeHtml(item.serial)} · ${escapeHtml(item.slot)} · ${escapeHtml(item.confidence)}</span></div>`).join("") : "<p>Нет данных.</p>";
+const labels = {RAM:"Оперативная память", STORAGE:"Накопители", CPU:"Процессор", GPU:"Видеокарта"};
+const capacity = (value) => value == null ? "" : value >= 1073741824 ? `${(value / 1073741824).toFixed(1)} ГБ` : value >= 1048576 ? `${(value / 1048576).toFixed(1)} МБ` : `${value} Б`;
+const hardware = (items) => items.length ? Object.entries(items.reduce((groups, item) => { (groups[item.type] ||= []).push(item); return groups; }, {})).map(([type, group]) => `<article class="hardware-group"><h4>${labels[type] || escapeHtml(type)}</h4>${group.map((item) => `<div class="hardware-row"><b>${escapeHtml(item.model || "Модель не определена")}</b><span>${[capacity(item.capacity), item.slot, item.serial, item.confidence].filter(Boolean).map(escapeHtml).join(" · ") || "Нет дополнительных данных"}</span></div>`).join("")}</article>`).join("") : "<p>Нет данных.</p>";
 async function sendAction(path, payload) { await api(path, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(payload)}); $("status").textContent = "Действие сохранено."; await load(); }
 async function detail(assetId) {
   try {
