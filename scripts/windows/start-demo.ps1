@@ -10,17 +10,14 @@ foreach ($line in Get-Content -LiteralPath $envPath) {
 }
 $backendPath = Join-Path $RepositoryRoot 'backend'
 $python = Join-Path $backendPath '.venv\Scripts\python.exe'
-if (-not (Test-Path -LiteralPath $python)) {
-    # Development fallback for the current Windows workspace: Python package paths
-    # containing Cyrillic characters can break editable installs on some hosts.
-    $fallbackPython = 'C:\AssetGuardDev\backend-venv\Scripts\python.exe'
-    $fallbackBackend = 'C:\AssetGuardWorkspace'
-    if ((Test-Path -LiteralPath $fallbackPython) -and (Test-Path -LiteralPath $fallbackBackend)) {
-        $python = $fallbackPython
-        $backendPath = $fallbackBackend
-    } else {
-        throw "Missing $python. Create the Python 3.12 environment and install backend[dev] first."
-    }
+$fallbackPython = 'C:\AssetGuardDev\backend-venv\Scripts\python.exe'
+$fallbackBackend = 'C:\AssetGuardWorkspace'
+$requiresAsciiFallback = $RepositoryRoot -match '[^\x00-\x7F]'
+if ($requiresAsciiFallback -and (Test-Path -LiteralPath $fallbackPython) -and (Test-Path -LiteralPath $fallbackBackend)) {
+    $python = $fallbackPython
+    $backendPath = $fallbackBackend
+} elseif (-not (Test-Path -LiteralPath $python)) {
+    throw "Missing $python. Create the Python 3.12 environment and install backend[dev,vision] first."
 }
 docker compose --env-file $envPath -f (Join-Path $RepositoryRoot 'infra\containers\docker-compose.yml') up -d postgres
 Push-Location $backendPath

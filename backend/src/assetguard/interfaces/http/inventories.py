@@ -31,9 +31,9 @@ def require_ingest_secret(
     ] = None,
 ) -> None:
     """Reject unauthenticated inventory sources without leaking the expected token."""
-    if not supplied_secret or not secrets.compare_digest(
-        supplied_secret, get_settings().inventory_shared_secret
-    ):
+    settings = get_settings()
+    valid = [settings.inventory_shared_secret, settings.previous_inventory_shared_secret]
+    if not supplied_secret or not any(candidate and secrets.compare_digest(supplied_secret, candidate) for candidate in valid):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid inventory source credentials.",

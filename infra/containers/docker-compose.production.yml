@@ -1,0 +1,68 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${ASSETGUARD_POSTGRES_DB:?set in .env}
+      POSTGRES_USER: ${ASSETGUARD_POSTGRES_USER:?set in .env}
+      POSTGRES_PASSWORD: ${ASSETGUARD_POSTGRES_PASSWORD:?set in .env}
+    volumes:
+      - assetguard-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [internal]
+
+  api:
+    build:
+      context: ../..
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    environment:
+      ASSETGUARD_DATABASE_URL: postgresql+psycopg://${ASSETGUARD_POSTGRES_USER}:${ASSETGUARD_POSTGRES_PASSWORD}@postgres:5432/${ASSETGUARD_POSTGRES_DB}
+      ASSETGUARD_INVENTORY_SHARED_SECRET: ${ASSETGUARD_INVENTORY_SHARED_SECRET:?set in .env}
+      ASSETGUARD_ADMIN_SHARED_SECRET: ${ASSETGUARD_ADMIN_SHARED_SECRET:?set in .env}
+      ASSETGUARD_VIEWER_SHARED_SECRET: ${ASSETGUARD_VIEWER_SHARED_SECRET:-}
+      ASSETGUARD_PREVIOUS_INVENTORY_SHARED_SECRET: ${ASSETGUARD_PREVIOUS_INVENTORY_SHARED_SECRET:-}
+      ASSETGUARD_PREVIOUS_ADMIN_SHARED_SECRET: ${ASSETGUARD_PREVIOUS_ADMIN_SHARED_SECRET:-}
+      ASSETGUARD_MAX_INVENTORY_PAYLOAD_BYTES: ${ASSETGUARD_MAX_INVENTORY_PAYLOAD_BYTES:-2097152}
+      ASSETGUARD_RATE_LIMIT_PER_MINUTE: ${ASSETGUARD_RATE_LIMIT_PER_MINUTE:-120}
+      ASSETGUARD_ENDPOINT_STALE_AFTER_HOURS: ${ASSETGUARD_ENDPOINT_STALE_AFTER_HOURS:-24}
+      ASSETGUARD_VISION_MODEL_ID: ${ASSETGUARD_VISION_MODEL_ID:-IDEA-Research/grounding-dino-tiny}
+      ASSETGUARD_VISION_CONFIDENCE_THRESHOLD: ${ASSETGUARD_VISION_CONFIDENCE_THRESHOLD:-0.35}
+      ASSETGUARD_VISION_CLASSES: ${ASSETGUARD_VISION_CLASSES:-monitor,computer,printer,projector,television,keyboard,laptop,chair,table}
+      ASSETGUARD_VISION_MAX_IMAGE_BYTES: ${ASSETGUARD_VISION_MAX_IMAGE_BYTES:-10485760}
+      ASSETGUARD_VISION_STORAGE_ROOT: /var/lib/assetguard/vision
+      HF_HOME: /var/cache/huggingface
+    volumes:
+      - assetguard-vision-data:/var/lib/assetguard/vision
+      - assetguard-model-cache:/var/cache/huggingface
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [internal]
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      ASSETGUARD_PUBLIC_HOST: ${ASSETGUARD_PUBLIC_HOST:?set in .env}
+    ports: ["80:80", "443:443", "443:443/udp"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on: [api]
+    networks: [internal]
+
+networks:
+  internal:
+
+volumes:
+  assetguard-postgres-data:
+  assetguard-vision-data:
+  assetguard-model-cache:
+  caddy-data:
+  caddy-config:
