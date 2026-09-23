@@ -1,0 +1,13 @@
+{
+  "action": "inventory",
+  "content": {
+    "hardware": {"uuid": "fixture-smbios-uuid", "name": "fixture-pc-renamed"},
+    "memories": [
+      {"serialnumber": "RAM-FIXTURE-A", "numslots": "DIMM 0", "capacity": 8589934592},
+      {"serialnumber": "RAM-FIXTURE-B", "numslots": "DIMM 1", "capacity": 8589934592}
+    ],
+    "storages": [{"serial": "STORAGE-FIXTURE-X", "model": "Fixture SSD X", "disksize": 512000}]
+  },
+  "deviceid": "fixture-pc-renamed",
+  "itemtype": "Computer"
+}

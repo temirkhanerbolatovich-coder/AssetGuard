@@ -1,0 +1,25 @@
+{
+  "action": "inventory",
+  "content": {
+    "hardware": {
+      "uuid": "fixture-smbios-uuid",
+      "chassis_type": "Desktop"
+    },
+    "memories": [
+      {
+        "serialnumber": "RAM-FIXTURE-A",
+        "numslots": "DIMM 0",
+        "capacity": 8589934592
+      }
+    ],
+    "storages": [
+      {
+        "serial": "STORAGE-FIXTURE-X",
+        "model": "Fixture SSD",
+        "disksize": 512000
+      }
+    ]
+  },
+  "deviceid": "fixture-pc-001",
+  "itemtype": "Computer"
+}

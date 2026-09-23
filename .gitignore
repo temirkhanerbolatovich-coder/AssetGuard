@@ -1,0 +1,30 @@
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+secrets/
+
+# Runtime data and logs
+data/
+logs/
+*.log
+.local/
+tools/glpi-agent-portable/
+
+# Editor and OS files
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+Desktop.ini
+
+# Build and dependency output (technology-neutral until stack is selected)
+node_modules/
+.venv/
+dist/
+build/
+coverage/
+bin/
+obj/
+__pycache__/
+.pytest_cache/

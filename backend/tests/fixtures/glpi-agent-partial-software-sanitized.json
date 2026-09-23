@@ -1,0 +1,6 @@
+{
+  "action": "inventory",
+  "content": {"softwares": [{"name": "Fixture application", "version": "1.0"}]},
+  "deviceid": "fixture-pc-001",
+  "itemtype": "Computer"
+}

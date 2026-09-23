@@ -1,0 +1,2 @@
+"""AssetGuard modular-monolith backend."""
+

@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>AssetGuard</title><link rel="stylesheet" href="/styles.css"></head>
+<body><main>
+<header><div><h1>AssetGuard</h1><p>Continuous Asset Control</p></div><form id="token-form"><input id="token" type="password" placeholder="Admin token" required><button>Подключиться</button></form></header>
+<p id="status">Введите admin token для локального dashboard.</p>
+<section class="cards"><article><span>Assets</span><strong id="assets-count">—</strong></article><article><span>Changes</span><strong id="changes-count">—</strong></article><article><span>Open incidents</span><strong id="incidents-count">—</strong></article></section>
+<section><h2>Активы</h2><table><thead><tr><th>Инв. №</th><th>Название</th><th>Тип</th><th>Статус</th><th>Endpoint</th></tr></thead><tbody id="assets"></tbody></table></section>
+<section id="detail" hidden><h2 id="detail-title">Карточка актива</h2><p id="detail-meta"></p><div id="detail-actions"></div><div class="detail-grid"><article><h3>Current hardware</h3><div id="current-hardware"></div></article><article><h3>Baseline hardware</h3><div id="baseline-hardware"></div></article></div><h3>Changes / evidence</h3><div id="detail-changes"></div><h3>Incidents</h3><div id="detail-incidents"></div><h3>History</h3><div id="detail-history"></div></section>
+<section><h2>Последние изменения</h2><div id="changes"></div></section><section><h2>Incidents</h2><div id="incidents"></div></section>
+</main><script src="/app.js"></script></body></html>

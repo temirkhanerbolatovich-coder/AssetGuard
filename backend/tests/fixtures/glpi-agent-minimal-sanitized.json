@@ -1,0 +1,16 @@
+{
+  "action": "inventory",
+  "content": {
+    "bios": {"bversion": "FIXTURE-BIOS-1"},
+    "hardware": {"uuid": "fixture-smbios-uuid", "chassis_type": "Desktop"},
+    "cpus": [{"name": "Fixture CPU"}],
+    "memories": [
+      {"serialnumber": "RAM-FIXTURE-A", "numslots": "DIMM 0", "capacity": 8589934592},
+      {"serialnumber": "RAM-FIXTURE-B", "numslots": "DIMM 1", "capacity": 8589934592}
+    ],
+    "storages": [{"serial": "STORAGE-FIXTURE-X", "model": "Fixture SSD X", "disksize": 512000}],
+    "networks": [{"macaddr": "02:00:00:00:00:01"}]
+  },
+  "deviceid": "fixture-pc-001",
+  "itemtype": "Computer"
+}
