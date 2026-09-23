@@ -67,6 +67,9 @@ async def _complete_mvp_workflow() -> None:
         export = await client.get("/admin/assets/export.xlsx", headers=admin_headers())
         assert export.status_code == 200
         assert export.headers["content-type"].startswith("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        qr = await client.get(f"/admin/assets/{asset_id}/qr.svg?public_url=https://demo.trycloudflare.com", headers=admin_headers())
+        assert qr.status_code == 200
+        assert qr.headers["content-type"].startswith("image/svg+xml")
         workbook = Workbook()
         worksheet = workbook.active
         worksheet.append(["inventory_number", "name", "asset_type", "organization", "building", "floor", "room"])

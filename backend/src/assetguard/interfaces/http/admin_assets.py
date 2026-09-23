@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import secrets
-from io import BytesIO, StringIO
+from io import BytesIO
 from datetime import UTC, datetime
 from typing import Annotated, Literal
+from urllib.parse import urlsplit
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, UploadFile, status
@@ -306,13 +307,23 @@ def import_assets_xlsx(
 
 
 @router.get("/assets/{asset_id}/qr.svg", dependencies=[Depends(require_viewer)])
-def asset_qr_svg(asset_id: UUID, session: Annotated[Session, Depends(get_session)]):
+def asset_qr_svg(
+    asset_id: UUID,
+    session: Annotated[Session, Depends(get_session)],
+    public_url: str | None = Query(default=None, max_length=2048),
+):
     asset = session.get(AssetRecord, asset_id)
     if not asset:
         raise HTTPException(404, "Asset was not found.")
-    payload = f"{get_settings().public_url}/#asset={asset.id}"
+    base_url = get_settings().public_url
+    if public_url:
+        parsed = urlsplit(public_url)
+        if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:
+            raise HTTPException(422, "QR public_url must be an HTTPS origin without credentials, query or fragment.")
+        base_url = f"https://{parsed.netloc}{parsed.path.rstrip('/')}"
+    payload = f"{base_url}/#asset={asset.id}"
     qr = segno.make(payload, error="m")
-    output = StringIO()
+    output = BytesIO()
     qr.save(output, kind="svg", scale=4, border=2, title=f"AssetGuard {asset.inventory_number}")
     return Response(output.getvalue(), media_type="image/svg+xml")
 

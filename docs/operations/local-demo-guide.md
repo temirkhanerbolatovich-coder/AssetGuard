@@ -15,9 +15,9 @@
 
 ## Временный публичный доступ без VPS
 
-Запустите `pwsh -File .\scripts\windows\start-free-public-demo.ps1`. Скрипт выведет временный HTTPS URL Cloudflare Quick Tunnel. Он подходит для показа 25 сентября, но URL меняется после перезапуска и не заменяет постоянный домен.
+Если запускаете весь Docker demo stack, используйте `pwsh -File .\scripts\windows\start-free-public-demo.ps1`. Если уже работает ваш локальный API с реальными данными, используйте `pwsh -File .\scripts\windows\start-local-quick-tunnel.ps1`: он не создаёт вторую БД и публикует именно текущий локальный контур. Оба варианта выведут временный HTTPS URL Cloudflare Quick Tunnel. Он подходит для показа 25 сентября, но URL меняется после перезапуска и не заменяет постоянный домен.
 
-Для QR-кодов внесите полученный URL в `.env` как `ASSETGUARD_PUBLIC_URL=https://…trycloudflare.com`, затем перезапустите `api` через Compose. QR будет открывать карточку через этот адрес после входа пользователя.
+При нажатии **«QR для обхода»** Dashboard попросит вставить полученный HTTPS URL и запомнит его только в браузере. Поэтому не нужно перезапускать API и менять `.env`; QR будет открывать карточку через этот адрес после входа пользователя. `ASSETGUARD_PUBLIC_URL` остаётся fallback для постоянного домена.
 
 Для Vision загрузите `demo/vision/room-305-baseline.png`, сохраните scan как baseline и затем загрузите `demo/vision/room-305-warning.png`. Первый scan может быть медленнее: Grounding DINO weights скачиваются в локальный Hugging Face cache и модель инициализируется на CPU/GPU. Подробности находятся в `demo/vision/README.md`.
 
