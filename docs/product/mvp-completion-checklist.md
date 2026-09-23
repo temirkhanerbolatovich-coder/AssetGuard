@@ -56,7 +56,7 @@
 - [ ] Deployment acceptance на целевом сервере: постоянный DNS, публичный/корпоративный сертификат и выполненный restore rehearsal на выбранном off-site storage.
 - [x] Native GLPI Agent 1.19 protocol spike и `DirectGlpiAgentAdapter`.
 - [x] Browser E2E через Playwright/Chromium в GitHub Actions.
-- [ ] Optional real Grounding DINO CI smoke job.
+- [x] Optional real Grounding DINO CI smoke job: ручной и еженедельный workflow с настоящей моделью и demo-кадром.
 
 ### За пределами текущего demo
 
