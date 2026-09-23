@@ -29,6 +29,7 @@ pwsh -File .\scripts\windows\start-demo.ps1
 - [Анализ требований](ASSETGUARD_MVP_v0.1_ANALYSIS.md)
 - [Исследование open-source основы](ASSETGUARD_TECHNICAL_RESEARCH.md)
 - [Карта документации](docs/README.md)
+- [Чек-лист завершения MVP](docs/product/mvp-completion-checklist.md)
 - [Локальная demo-поставка](docs/operations/local-demo-guide.md)
 - [GLPI minimal profile spike](docs/integration/glpi-agent-minimal-profile-spike.md)
 

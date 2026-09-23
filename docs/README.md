@@ -11,9 +11,8 @@
 | [api](api/) | Границы будущего REST API |
 | [data](data/) | Владение данными, хранение и retention |
 | [security](security/) | Минимальная модель безопасности и privacy |
-| [product](product/) | Demo-сценарий и границы MVP |
+| [product](product/) | Demo-сценарий, границы MVP и [чек-лист завершения](product/mvp-completion-checklist.md) |
 | [quality](quality/) | Фикстуры и стратегия проверки |
 | [operations](operations/) | Среда, наблюдаемость и журналирование |
 
 Ни один документ здесь не заменяет фактические результаты будущего technical spike: наблюдения реального GLPI Agent имеют приоритет над предположениями.
-
