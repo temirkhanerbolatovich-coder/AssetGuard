@@ -34,6 +34,8 @@ def create_asset(body:AssetCreate,session:Annotated[Session,Depends(get_session)
 def link_endpoint(endpoint_id:UUID,asset_id:UUID,session:Annotated[Session,Depends(get_session)]):
  e=session.get(ManagedEndpointRecord,endpoint_id);a=session.get(AssetRecord,asset_id)
  if not e or not a:raise HTTPException(404,"Asset or endpoint was not found.")
+ for prior in session.scalars(select(ManagedEndpointRecord).where(ManagedEndpointRecord.asset_id==a.id,ManagedEndpointRecord.id!=e.id)):
+  prior.asset_id=None;prior.updated_at=datetime.now(UTC)
  e.asset_id=a.id;e.updated_at=datetime.now(UTC);session.commit();return {"status":"linked"}
 @router.get("/assets/{asset_id}",dependencies=[Depends(require_admin)])
 def asset_detail(asset_id:UUID,session:Annotated[Session,Depends(get_session)]):
