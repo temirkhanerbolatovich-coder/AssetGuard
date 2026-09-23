@@ -59,15 +59,20 @@ def test_vision_upload_baseline_comparison_warning(tmp_path, monkeypatch) -> Non
 async def _exercise_vision_workflow() -> None:
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        asset = await client.post("/admin/assets", headers=admin_headers(), json={
+            "inventory_number": "VISION-001", "name": "Vision linked workstation", "asset_type": "Desktop",
+        })
+        assert asset.status_code == 201
         first = await client.post(
             "/admin/vision/scans", headers=admin_headers(),
-            data={"room_name": "Room 305"},
+            data={"room_name": "Room 305", "asset_id": asset.json()["id"]},
             files={"image": ("room-305-first.jpg", jpeg_bytes(), "image/jpeg")},
         )
         assert first.status_code == 201, first.text
         first_scan = first.json()
         assert first_scan["status"] == "NOT_CHECKED"
         assert first_scan["counts"] == {"computer": 1, "monitor": 2}
+        assert first_scan["asset"]["id"] == asset.json()["id"]
         assert len(first_scan["detections"]) == 3
 
         baseline = await client.post(

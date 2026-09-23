@@ -31,6 +31,7 @@ class Settings:
     vision_classes: tuple[str, ...]
     vision_storage_root: Path
     vision_max_image_bytes: int
+    public_url: str
 
 
 @lru_cache
@@ -68,4 +69,5 @@ def get_settings() -> Settings:
             str(Path(__file__).resolve().parents[4] / ".local" / "vision"),
         )),
         vision_max_image_bytes=int(os.environ.get("ASSETGUARD_VISION_MAX_IMAGE_BYTES", "10485760")),
+        public_url=os.environ.get("ASSETGUARD_PUBLIC_URL", "http://127.0.0.1:8000").rstrip("/"),
     )

@@ -18,6 +18,7 @@ from assetguard.modules.vision.models import (
     VisionBaselineRecord, VisionDetectionRecord, VisionRoomRecord, VisionScanRecord,
 )
 from assetguard.modules.vision.service import accept_baseline, create_scan, image_path
+from assetguard.modules.assets.models import AssetRecord
 
 logger = logging.getLogger("assetguard.vision")
 router = APIRouter(prefix="/admin/vision", tags=["vision"])
@@ -31,8 +32,12 @@ def scan_view(session: Session, scan: VisionScanRecord) -> dict:
     detections = list(session.scalars(select(VisionDetectionRecord).where(
         VisionDetectionRecord.scan_id == scan.id,
     ).order_by(VisionDetectionRecord.class_name, VisionDetectionRecord.confidence.desc())))
+    asset = session.get(AssetRecord, scan.asset_id) if scan.asset_id else None
     return {
         "id": str(scan.id), "room_id": str(scan.room_id), "created_at": scan.created_at,
+        "asset": None if asset is None else {
+            "id": str(asset.id), "inventory_number": asset.inventory_number, "name": asset.name,
+        },
         "status": scan.status, "counts": scan.counts, "comparison": scan.comparison,
         "model_id": scan.model_id, "confidence_threshold": scan.confidence_threshold,
         "annotated_image_url": f"/admin/vision/scans/{scan.id}/image?kind=annotated",
@@ -49,6 +54,7 @@ def upload_scan(
     room_name: Annotated[str, Form(min_length=1, max_length=255)],
     image: Annotated[UploadFile, File()],
     session: Annotated[Session, Depends(get_session)],
+    asset_id: Annotated[UUID | None, Form()] = None,
 ):
     settings = get_settings()
     if image.content_type not in {"image/jpeg", "image/png"}:
@@ -57,7 +63,9 @@ def upload_scan(
     if len(payload) > settings.vision_max_image_bytes:
         raise HTTPException(413, "Vision image is too large.")
     try:
-        scan = create_scan(session, room_name=room_name, payload=payload, detector=get_detector())
+        if asset_id and not session.get(AssetRecord, asset_id):
+            raise HTTPException(404, "Asset was not found.")
+        scan = create_scan(session, room_name=room_name, payload=payload, detector=get_detector(), asset_id=asset_id)
     except ValueError as error:
         raise HTTPException(422, str(error)) from error
     except RuntimeError as error:

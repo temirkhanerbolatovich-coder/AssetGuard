@@ -22,6 +22,7 @@ class VisionScanRecord(Base):
     __tablename__ = "vision_scans"
     id: Mapped[UUID] = mapped_column(PostgreSQLUUID(as_uuid=True), primary_key=True, default=uuid4)
     room_id: Mapped[UUID] = mapped_column(ForeignKey("vision_rooms.id"))
+    asset_id: Mapped[UUID | None] = mapped_column(ForeignKey("assets.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     status: Mapped[str] = mapped_column(String(16))
     original_image_path: Mapped[str] = mapped_column(Text)

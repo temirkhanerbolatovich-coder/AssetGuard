@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import secrets
+from io import BytesIO, StringIO
 from datetime import UTC, datetime
 from typing import Annotated, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, UploadFile, status
+from fastapi.responses import Response, StreamingResponse
+from openpyxl import Workbook, load_workbook
+import segno
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -63,6 +67,8 @@ class AssetCreate(BaseModel):
     name: str = Field(min_length=1, max_length=255)
     asset_type: Literal["Desktop", "Laptop", "Other"]
     status: str = Field(default="ACTIVE", max_length=32)
+    building: str | None = Field(default=None, max_length=255)
+    floor: str | None = Field(default=None, max_length=64)
     room: str | None = Field(default=None, max_length=255)
     notes: str | None = None
 
@@ -72,6 +78,8 @@ class AssetUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=255)
     asset_type: Literal["Desktop", "Laptop", "Other"] | None = None
     status: str | None = Field(default=None, max_length=32)
+    building: str | None = Field(default=None, max_length=255)
+    floor: str | None = Field(default=None, max_length=64)
     room: str | None = Field(default=None, max_length=255)
     notes: str | None = None
 
@@ -80,9 +88,20 @@ def _asset_view(asset: AssetRecord, endpoint_id: UUID | None, organization: str 
     return {
         "id": str(asset.id), "inventory_number": asset.inventory_number,
         "name": asset.name, "asset_type": asset.asset_type, "status": asset.status,
-        "room": asset.room, "notes": asset.notes, "organization": organization,
+        "building": asset.building, "floor": asset.floor, "room": asset.room,
+        "notes": asset.notes, "organization": organization,
         "endpoint_id": str(endpoint_id) if endpoint_id else None,
     }
+
+
+def _organization_for_name(session: Session, name: str) -> OrganizationRecord:
+    organization = session.scalar(select(OrganizationRecord).where(OrganizationRecord.name == name))
+    if organization:
+        return organization
+    organization = OrganizationRecord(name=name, created_at=datetime.now(UTC))
+    session.add(organization)
+    session.flush()
+    return organization
 
 
 def _latest_snapshot(session: Session, endpoint_id: UUID) -> HardwareSnapshotRecord | None:
@@ -179,6 +198,125 @@ def list_assets(session: Annotated[Session, Depends(get_session)]):
     return result
 
 
+@router.get("/assets/export.xlsx", dependencies=[Depends(require_viewer)])
+def export_assets_xlsx(session: Annotated[Session, Depends(get_session)]):
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Assets"
+    headers = ["inventory_number", "name", "asset_type", "status", "organization", "building", "floor", "room", "notes"]
+    sheet.append(headers)
+    for asset in session.scalars(select(AssetRecord).order_by(AssetRecord.inventory_number)):
+        organization = session.get(OrganizationRecord, asset.organization_id)
+        sheet.append([
+            asset.inventory_number, asset.name, asset.asset_type, asset.status,
+            organization.name if organization else "", asset.building or "", asset.floor or "",
+            asset.room or "", asset.notes or "",
+        ])
+    sheet.freeze_panes = "A2"
+    for column in sheet.columns:
+        letter = column[0].column_letter
+        sheet.column_dimensions[letter].width = min(48, max(14, max(len(str(cell.value or "")) for cell in column) + 2))
+    output = BytesIO()
+    workbook.save(output)
+    output.seek(0)
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="assetguard-assets.xlsx"'},
+    )
+
+
+def _import_row_values(row: dict[str, object], row_number: int) -> dict[str, str | None]:
+    required = ("inventory_number", "name", "asset_type")
+    result = {key: (str(row.get(key)).strip() if row.get(key) is not None else None) for key in (
+        "inventory_number", "name", "asset_type", "status", "organization", "building", "floor", "room", "notes",
+    )}
+    if any(not result[key] for key in required):
+        raise ValueError(f"Row {row_number}: inventory_number, name and asset_type are required.")
+    if result["asset_type"] not in {"Desktop", "Laptop", "Other"}:
+        raise ValueError(f"Row {row_number}: asset_type must be Desktop, Laptop or Other.")
+    if len(result["inventory_number"] or "") > 128 or len(result["name"] or "") > 255:
+        raise ValueError(f"Row {row_number}: inventory_number or name is too long.")
+    return result
+
+
+@router.post("/assets/import.xlsx", dependencies=[Depends(require_admin)])
+def import_assets_xlsx(
+    file: Annotated[UploadFile, File()],
+    session: Annotated[Session, Depends(get_session)],
+    apply: bool = Query(default=False),
+):
+    if file.content_type not in {
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/octet-stream",
+    } and not (file.filename or "").lower().endswith(".xlsx"):
+        raise HTTPException(415, "Upload an .xlsx file.")
+    try:
+        workbook = load_workbook(BytesIO(file.file.read(5 * 1024 * 1024 + 1)), read_only=True, data_only=True)
+    except Exception as error:
+        raise HTTPException(422, "The uploaded file is not a valid .xlsx workbook.") from error
+    sheet = workbook.active
+    rows = sheet.iter_rows(values_only=True)
+    header = next(rows, None)
+    if not header:
+        raise HTTPException(422, "The workbook is empty.")
+    columns = {str(value).strip(): index for index, value in enumerate(header) if value is not None}
+    required_columns = {"inventory_number", "name", "asset_type"}
+    if not required_columns <= columns.keys():
+        raise HTTPException(422, "Required columns: inventory_number, name, asset_type.")
+    parsed: list[dict[str, str | None]] = []
+    try:
+        for row_number, values in enumerate(rows, start=2):
+            if not any(value not in (None, "") for value in values):
+                continue
+            parsed.append(_import_row_values({name: values[index] if index < len(values) else None for name, index in columns.items()}, row_number))
+    except ValueError as error:
+        raise HTTPException(422, str(error)) from error
+    existing = {(organization.name, asset.inventory_number): asset for asset in session.scalars(select(AssetRecord).join(OrganizationRecord)) for organization in [session.get(OrganizationRecord, asset.organization_id)] if organization}
+    creates = updates = 0
+    for item in parsed:
+        organization_name = item["organization"] or "Default Organization"
+        if (organization_name, item["inventory_number"]) in existing:
+            updates += 1
+        else:
+            creates += 1
+    if not apply:
+        return {"rows": len(parsed), "creates": creates, "updates": updates, "applied": False}
+    now = datetime.now(UTC)
+    for item in parsed:
+        organization = _organization_for_name(session, item["organization"] or "Default Organization")
+        asset = existing.get((organization.name, item["inventory_number"]))
+        if asset is None:
+            asset = AssetRecord(
+                organization_id=organization.id, inventory_number=item["inventory_number"] or "",
+                name=item["name"] or "", asset_type=item["asset_type"] or "Other",
+                status=item["status"] or "ACTIVE", building=item["building"], floor=item["floor"],
+                room=item["room"], notes=item["notes"], created_at=now, updated_at=now,
+            )
+            session.add(asset)
+            session.flush()
+            append_asset_history(session, asset_id=asset.id, event_type="ASSET_CREATED", related_entity_type="Asset", related_entity_id=asset.id, message="Asset imported from workbook.", metadata={"inventory_number": asset.inventory_number})
+        else:
+            for key in ("name", "asset_type", "status", "building", "floor", "room", "notes"):
+                setattr(asset, key, item[key])
+            asset.updated_at = now
+            append_asset_history(session, asset_id=asset.id, event_type="ASSET_UPDATED", related_entity_type="Asset", related_entity_id=asset.id, message="Asset imported from workbook.", metadata={"source": "xlsx"})
+    session.commit()
+    return {"rows": len(parsed), "creates": creates, "updates": updates, "applied": True}
+
+
+@router.get("/assets/{asset_id}/qr.svg", dependencies=[Depends(require_viewer)])
+def asset_qr_svg(asset_id: UUID, session: Annotated[Session, Depends(get_session)]):
+    asset = session.get(AssetRecord, asset_id)
+    if not asset:
+        raise HTTPException(404, "Asset was not found.")
+    payload = f"{get_settings().public_url}/#asset={asset.id}"
+    qr = segno.make(payload, error="m")
+    output = StringIO()
+    qr.save(output, kind="svg", scale=4, border=2, title=f"AssetGuard {asset.inventory_number}")
+    return Response(output.getvalue(), media_type="image/svg+xml")
+
+
 @router.post("/assets", dependencies=[Depends(require_admin)], status_code=status.HTTP_201_CREATED)
 def create_asset(body: AssetCreate, session: Annotated[Session, Depends(get_session)]):
     organization = session.scalar(select(OrganizationRecord).order_by(OrganizationRecord.created_at))
@@ -195,7 +333,8 @@ def create_asset(body: AssetCreate, session: Annotated[Session, Depends(get_sess
     asset = AssetRecord(
         organization_id=organization.id, inventory_number=body.inventory_number,
         name=body.name, asset_type=body.asset_type, status=body.status,
-        room=body.room, notes=body.notes, created_at=now, updated_at=now,
+        building=body.building, floor=body.floor, room=body.room, notes=body.notes,
+        created_at=now, updated_at=now,
     )
     session.add(asset)
     session.flush()
@@ -335,7 +474,7 @@ def _system_sections(
         RawInventoryRecord.managed_endpoint_id == endpoint.id,
         RawInventoryRecord.processing_status == "PROCESSED",
     ).order_by(RawInventoryRecord.received_at.desc()).limit(50)))
-    merged_objects = {"hardware": {}, "bios": {}, "operatingsystem": {}}
+    merged_objects = {"hardware": {}, "bios": {}, "operatingsystem": {}, "assetguard_network": {}}
     latest_lists = {"drives": [], "controllers": []}
     for inventory in inventories:
         content = inventory.payload.get("content") if isinstance(inventory.payload, dict) else None
@@ -360,6 +499,7 @@ def _system_sections(
         "hardware": safe_hardware,
         "bios": merged_objects["bios"],
         "operating_system": merged_objects["operatingsystem"],
+        "network_quality": merged_objects["assetguard_network"],
         "drives": latest_lists["drives"],
         "controllers": latest_lists["controllers"],
     }, {

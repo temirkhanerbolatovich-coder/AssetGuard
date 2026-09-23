@@ -33,7 +33,7 @@ def read_image(payload: bytes) -> Image.Image:
 
 
 def create_scan(
-    session: Session, *, room_name: str, payload: bytes, detector: Detector,
+    session: Session, *, room_name: str, payload: bytes, detector: Detector, asset_id: UUID | None = None,
 ) -> VisionScanRecord:
     settings = get_settings()
     image = read_image(payload)
@@ -60,7 +60,7 @@ def create_scan(
     image.save(original_path, format="JPEG", quality=92, optimize=True)
     annotated.save(annotated_path, format="JPEG", quality=92, optimize=True)
     scan = VisionScanRecord(
-        id=scan_id, room_id=room.id, created_at=datetime.now(UTC), status=status,
+        id=scan_id, room_id=room.id, asset_id=asset_id, created_at=datetime.now(UTC), status=status,
         original_image_path=str(original_path), annotated_image_path=str(annotated_path),
         counts=counts, comparison=comparison, model_id=detector.model_id,
         confidence_threshold=settings.vision_confidence_threshold,

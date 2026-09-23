@@ -13,6 +13,12 @@
 
 Для полностью воспроизводимого pitch-инцидента выполните `scripts/windows/prepare-pitch-incident.ps1`. Он создаст связанный актив, baseline из двух модулей RAM и второй полный снимок без одного модуля через рабочие API. Готовый порядок показа и текст выступления находятся в `docs/product/pitch-guide.md`.
 
+## Временный публичный доступ без VPS
+
+Запустите `pwsh -File .\scripts\windows\start-free-public-demo.ps1`. Скрипт выведет временный HTTPS URL Cloudflare Quick Tunnel. Он подходит для показа 25 сентября, но URL меняется после перезапуска и не заменяет постоянный домен.
+
+Для QR-кодов внесите полученный URL в `.env` как `ASSETGUARD_PUBLIC_URL=https://…trycloudflare.com`, затем перезапустите `api` через Compose. QR будет открывать карточку через этот адрес после входа пользователя.
+
 Для Vision загрузите `demo/vision/room-305-baseline.png`, сохраните scan как baseline и затем загрузите `demo/vision/room-305-warning.png`. Первый scan может быть медленнее: Grounding DINO weights скачиваются в локальный Hugging Face cache и модель инициализируется на CPU/GPU. Подробности находятся в `demo/vision/README.md`.
 
 ## Границы поставки

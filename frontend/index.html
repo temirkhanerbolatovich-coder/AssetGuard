@@ -45,11 +45,11 @@
   </section>
 
   <section id="devices" class="page-section">
-    <div class="section-heading page-heading"><div><span class="eyebrow">Реестр</span><h2>Устройства</h2><p>Нажмите на название устройства или кнопку «Открыть карточку», чтобы увидеть данные Agent, оборудование и историю изменений.</p></div><button id="show-create">Добавить актив</button></div>
+    <div class="section-heading page-heading"><div><span class="eyebrow">Реестр</span><h2>Устройства</h2><p>Нажмите на название устройства или кнопку «Открыть карточку», чтобы увидеть данные Agent, оборудование и историю изменений.</p></div><div class="actions"><button id="export-assets" class="button-secondary">Экспорт Excel</button><button id="import-assets" class="button-secondary">Импорт Excel</button><input id="import-assets-file" type="file" accept=".xlsx" hidden><button id="show-create">Добавить актив</button></div></div>
     <form id="create-asset" class="create-form panel" hidden>
       <label>Инвентарный номер<input name="inventory_number" required></label><label>Название<input name="name" required></label>
       <label>Тип<select name="asset_type"><option value="Desktop">Стационарный ПК</option><option value="Laptop">Ноутбук</option><option value="Other">Другое</option></select></label>
-      <label>Кабинет<input name="room"></label><button>Создать</button>
+      <label>Корпус<input name="building" placeholder="Корпус А"></label><label>Этаж<input name="floor" placeholder="2"></label><label>Кабинет<input name="room" placeholder="205"></label><button>Создать</button>
     </form>
     <div class="device-toolbar panel">
       <label class="search-field"><span class="sr-only">Поиск устройств</span><input id="device-search" type="search" placeholder="Поиск устройств…"></label>
@@ -94,7 +94,7 @@
     <div class="section-heading page-heading"><div><span class="eyebrow">Физическая инвентаризация</span><h2>AssetGuard Vision</h2><p>AI показывает расхождения с эталоном. Итоговое решение принимает человек.</p></div><span id="vision-status-badge" class="status-pill neutral">Не проверено</span></div>
     <div class="panel">
       <ol class="stepper" aria-label="Этапы инвентаризации"><li class="active">Выберите кабинет</li><li>Загрузите фото</li><li>Проверьте результат</li><li>Подтвердите эталон</li></ol>
-      <form id="vision-upload" class="vision-upload"><label>Кабинет<input id="vision-room-name" name="room_name" value="Room 305" maxlength="255" required></label><label>Фото помещения<input id="vision-file" name="image" type="file" accept="image/jpeg,image/png" required></label><button id="vision-run">Провести анализ</button></form>
+      <form id="vision-upload" class="vision-upload"><label>Кабинет<input id="vision-room-name" name="room_name" value="Room 305" maxlength="255" required></label><label>Связанный актив <select id="vision-asset-id" name="asset_id"><option value="">Не привязывать к устройству</option></select></label><label>Фото помещения<input id="vision-file" name="image" type="file" accept="image/jpeg,image/png" required></label><button id="vision-run">Провести анализ</button></form>
       <p id="vision-progress" class="meta" role="status">Первый анализ может занять больше времени: модель загружается и инициализируется.</p>
       <div id="vision-result" class="vision-result" hidden><div class="vision-image-panel"><img id="vision-image" alt="Результат анализа помещения"></div><div><div class="section-heading"><div><span class="eyebrow">Результат</span><h3 id="vision-room-title">Кабинет</h3></div><button id="vision-baseline" class="button-secondary">Подтвердить как эталон</button></div><div class="vision-detail-grid"><div><h4>Обнаружено</h4><div id="vision-counts"></div></div><div><h4>Сравнение с эталоном</h4><div id="vision-comparison"></div></div></div></div></div>
       <div class="section-heading vision-history-heading"><h3>История проверок</h3><select id="vision-room-select"><option value="">Проверок пока нет</option></select></div><div id="vision-history" class="vision-history"></div>

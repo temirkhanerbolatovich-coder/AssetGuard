@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import asyncio
 import json
+from io import BytesIO
 from copy import deepcopy
 from pathlib import Path
 from uuid import uuid4
 
 import httpx
+from openpyxl import Workbook
 from assetguard.app import app
 from assetguard.infrastructure.config import get_settings
 
@@ -40,6 +42,11 @@ async def _complete_mvp_workflow() -> None:
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
         initial = fixture("glpi-agent-minimal-sanitized.json")
+        initial["content"]["assetguard_network"] = {
+            "target": "1.1.1.1", "probes": 4, "replies": 4,
+            "packet_loss_percent": 0, "average_latency_ms": 22.5,
+            "measured_at": "2026-09-23T12:00:00Z",
+        }
         response = await client.post("/internal/inventories", headers=ingest_headers(uuid4().hex), json=initial)
         assert response.status_code == 202
         first_snapshot_id = response.json()["snapshot_id"]
@@ -51,7 +58,28 @@ async def _complete_mvp_workflow() -> None:
         })
         assert asset_response.status_code == 201
         asset_id = asset_response.json()["id"]
+        location_update = await client.patch(f"/admin/assets/{asset_id}", headers=admin_headers(), json={
+            "building": "Корпус А", "floor": "2", "room": "205",
+        })
+        assert location_update.status_code == 200
+        assert location_update.json()["building"] == "Корпус А"
+        assert location_update.json()["floor"] == "2"
+        export = await client.get("/admin/assets/export.xlsx", headers=admin_headers())
+        assert export.status_code == 200
+        assert export.headers["content-type"].startswith("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        workbook = Workbook()
+        worksheet = workbook.active
+        worksheet.append(["inventory_number", "name", "asset_type", "organization", "building", "floor", "room"])
+        worksheet.append(["XLSX-001", "Imported workstation", "Desktop", "Imported Organization", "Корпус Б", "3", "301"])
+        stream = BytesIO(); workbook.save(stream)
+        imported = await client.post("/admin/assets/import.xlsx?apply=true", headers=admin_headers(), files={
+            "file": ("assets.xlsx", stream.getvalue(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+        })
+        assert imported.status_code == 200
+        assert imported.json()["creates"] == 1
         assert (await client.post(f"/admin/endpoints/{endpoint_id}/asset/{asset_id}", headers=admin_headers())).status_code == 200
+        asset_detail = await client.get(f"/admin/assets/{asset_id}", headers=admin_headers())
+        assert asset_detail.json()["system"]["network_quality"]["average_latency_ms"] == 22.5
         assert (await client.post(f"/admin/snapshots/{first_snapshot_id}/baseline", headers=admin_headers(), json={"reason": "E2E baseline"})).status_code == 200
 
         renamed = fixture("glpi-agent-hostname-changed.json")

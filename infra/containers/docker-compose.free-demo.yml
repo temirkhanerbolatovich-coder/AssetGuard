@@ -33,6 +33,7 @@ services:
       ASSETGUARD_VISION_CLASSES: ${ASSETGUARD_VISION_CLASSES:-monitor,computer,printer,projector,television,keyboard,laptop,chair,table}
       ASSETGUARD_VISION_MAX_IMAGE_BYTES: ${ASSETGUARD_VISION_MAX_IMAGE_BYTES:-10485760}
       ASSETGUARD_VISION_STORAGE_ROOT: /var/lib/assetguard/vision
+      ASSETGUARD_PUBLIC_URL: ${ASSETGUARD_PUBLIC_URL:-http://127.0.0.1:8000}
       HF_HOME: /var/cache/huggingface
     ports:
       - "127.0.0.1:${ASSETGUARD_DEMO_PORT:-8000}:8000"

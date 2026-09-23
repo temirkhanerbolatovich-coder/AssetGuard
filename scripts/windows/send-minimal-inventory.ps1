@@ -12,7 +12,8 @@ param(
     [string]$OutputRoot = 'C:\AssetGuardPhase0',
     [string]$IngestToken = $env:ASSETGUARD_INVENTORY_SHARED_SECRET,
     [string]$SourceVersion = '1.19',
-    [string]$SchemaVersion = 'glpi-agent-minimal-v1'
+    [string]$SchemaVersion = 'glpi-agent-minimal-v1',
+    [string]$NetworkTarget
 )
 
 $ErrorActionPreference = 'Stop'
@@ -27,7 +28,22 @@ if ($GatewayUri.Scheme -ne 'https' -and -not ($GatewayUri.Scheme -eq 'http' -and
 
 $collector = Join-Path $PSScriptRoot 'collect-minimal-inventory.ps1'
 $collection = & $collector -OutputRoot $OutputRoot
-$payload = Get-Content -LiteralPath $collection.File -Raw
+$payloadObject = Get-Content -LiteralPath $collection.File -Raw | ConvertFrom-Json -Depth 64
+if (-not [string]::IsNullOrWhiteSpace($NetworkTarget)) {
+    $samples = @(Test-Connection -TargetName $NetworkTarget -Count 4 -ErrorAction SilentlyContinue)
+    $latencies = @($samples | ForEach-Object { [math]::Round([double]$_.Latency, 1) })
+    $loss = [math]::Round((100 * (4 - $samples.Count) / 4), 1)
+    $measurement = [ordered]@{
+        target = $NetworkTarget
+        probes = 4
+        replies = $samples.Count
+        packet_loss_percent = $loss
+        average_latency_ms = if ($latencies.Count) { [math]::Round((($latencies | Measure-Object -Average).Average), 1) } else { $null }
+        measured_at = (Get-Date).ToUniversalTime().ToString('o')
+    }
+    $payloadObject.content | Add-Member -NotePropertyName 'assetguard_network' -NotePropertyValue $measurement -Force
+}
+$payload = $payloadObject | ConvertTo-Json -Depth 64 -Compress
 $idempotencyKey = [guid]::NewGuid().ToString()
 
 $headers = @{
