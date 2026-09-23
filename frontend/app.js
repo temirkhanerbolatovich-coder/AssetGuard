@@ -29,7 +29,7 @@ async function apiBlob(path) {
   if (!response.ok) throw new Error(`Ошибка загрузки изображения: ${response.status}`);
   return response.blob();
 }
-const labels = {RAM:"Оперативная память", STORAGE:"Накопители", CPU:"Процессор", GPU:"Видеокарта", ENDPOINT:"Endpoint"};
+const labels = {RAM:"Оперативная память", STORAGE:"Накопители", CPU:"Процессор", GPU:"Видеокарта", MOTHERBOARD:"Материнская плата", NETWORK:"Сетевые интерфейсы", MONITOR:"Мониторы", ENDPOINT:"Endpoint"};
 const badge = (value) => `<span class="badge badge-${String(value).toLowerCase()}">${escapeHtml(value)}</span>`;
 function hardware(items) {
   if (!items.length) return '<p class="empty">Нет наблюдаемых данных.</p>';
@@ -160,7 +160,34 @@ async function load() {
     $("status").textContent = `Данные обновлены · ${dateTime(new Date())}`;
   } catch (error) { $("status").textContent = error.message; }
 }
-$("token-form").addEventListener("submit", (event) => { event.preventDefault(); token = $("token").value; sessionStorage.setItem("assetguard-admin-token", token); load(); });
+$("token-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const username = $("username").value.trim();
+  const secret = $("token").value;
+  try {
+    if (username) {
+      const response = await fetch("/auth/login", {
+        method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({username, password: secret}),
+      });
+      if (!response.ok) throw new Error("Неверный username или password");
+      token = (await response.json()).access_token;
+    } else {
+      token = secret;
+    }
+    sessionStorage.setItem("assetguard-admin-token", token);
+    $("token").value = "";
+    await load();
+  } catch (error) {
+    $("status").textContent = error.message;
+  }
+});
+$("logout").onclick = async () => {
+  if (token) await fetch("/auth/logout", {method: "POST", headers: {"X-AssetGuard-Admin-Token": token}}).catch(() => {});
+  token = "";
+  sessionStorage.removeItem("assetguard-admin-token");
+  $("status").textContent = "Сессия завершена.";
+};
 $("show-create").onclick = () => $("create-asset").hidden = !$("create-asset").hidden;
 $("create-asset").addEventListener("submit", async (event) => {
   event.preventDefault();

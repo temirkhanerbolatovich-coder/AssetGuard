@@ -4,19 +4,20 @@
 
 ## Текущая оценка
 
-- Демонстрационный MVP: **100% по зафиксированному v0.1 scope**.
-- Production hardening foundation: **75–80%**; реальное публичное развёртывание и recovery rehearsal требуют целевого домена/хоста.
+- Демонстрационный MVP через explicit bridge: **готов**.
+- Исходный native GLPI transport Definition of Done: **не закрыт** до protocol spike и выбора direct receiver/GLPI sidecar.
+- Production hardening foundation реализован в коде; публичное развёртывание и recovery rehearsal требуют целевого домена/хоста.
 
 ## Реализовано
 
 | Область | Статус | Результат |
 | --- | --- | --- |
 | GLPI Agent | Готово | GLPI Agent 1.19 проверен на реальном Windows-PC; есть version lock и minimal privacy profile. |
-| Collection/transport | Готово | Локальный collection и explicit bridge в AssetGuard ingest API. |
+| Collection/transport | Частично | Локальный collection и explicit bridge готовы; нативный GLPI HTTP protocol ещё не подтверждён. |
 | Raw evidence | Готово | Append-only JSONB payload, hash, idempotency и processing status. |
 | PostgreSQL | Готово | Migrations для raw inventory, snapshots, baseline, change events, incidents, assets, users и Vision. |
 | Asset / endpoint | Готово | Assets связаны с актуальным endpoint; один asset имеет только один текущий endpoint. |
-| Snapshots | Готово | Нормализуются RAM, storage, CPU и GPU. |
+| Snapshots | Готово | Нормализуются RAM, storage, CPU, GPU, motherboard, network и monitor observations. |
 | Baseline | Готово | Принятие только явным действием; automatic baseline update отсутствует. |
 | RAM/storage diff | Готово | Added/removed, completeness guard, deterministic deduplication. |
 | Incidents/history | Готово | Create/classify/resolve incident и append-only audit history. |
@@ -26,7 +27,7 @@
 | Background demo | Готово | User-level demo tasks и production Compose deployment с restart policy. |
 | Local package | Готово | ZIP без secret/database/log data, startup scripts и documentation. |
 | GitHub | Готово | Public repository: `temirkhanerbolatovich-coder/AssetGuard`. |
-| Automated tests | Готово | Disposable PostgreSQL database, полный inventory fixture E2E и Vision workflow; 9 tests. |
+| Automated tests | Готово | Disposable PostgreSQL, inventory/Vision E2E, auth lifecycle и identity conflict; 13 tests + GitHub Actions workflow. |
 
 ## Оставшаяся работа
 
@@ -35,7 +36,9 @@
 - [x] Admin API: endpoint list/detail, snapshot list/detail, raw inventory list/detail, Asset update.
 - [x] Dashboard: last seen, endpoint status, capacity presentation, evidence и читаемый timeline.
 - [x] Identity: SMBIOS/BIOS/chassis/motherboard serial, MAC, agent ID и hostname history.
+- [x] Identity conflicts: разные endpoint matches переводятся в `IDENTITY_CONFLICT`, ambiguous payload получает processing error.
 - [x] Events: `HOSTNAME_CHANGED`, evidence-aware `COMPONENT_CHANGED` и `COMPONENT_REPLACED`.
+- [x] Event: `DEVICE_IDENTITY_CHANGED` при смене strong identifier и сохранении другой стабильной identity.
 - [x] Tests: disposable PostgreSQL и обязательные RAM/SSD/identical/PARTIAL/hostname/dedup fixtures.
 - [x] Automated end-to-end: baseline → change → one incident → decision → new baseline → identical rescan.
 - [x] Vision end-to-end: upload → detections/counts → annotated image → baseline → repeat scan → `WARNING` → history.
@@ -44,10 +47,13 @@
 
 - [x] HTTPS reverse proxy: production Compose + Caddy; certificate validation не отключается.
 - [x] Named ADMIN/VIEWER users, revocable sessions, role checks и staged secret rotation.
+- [x] Login/logout, session revoke, user disable/password rotation и authenticated audit actor.
 - [x] Rate limiting, security headers, request logging, immutable evidence retention и backup/restore runbook.
 - [x] Endpoint last-seen policy: `REQUIRES_VERIFICATION`, без автоматического вывода о пропаже или краже.
 - [x] Managed production deployment: Docker restart policy, независимо от интерактивной Windows-сессии.
 - [ ] Deployment acceptance на целевом сервере: DNS, публичный/корпоративный сертификат, encrypted off-host backup и restore rehearsal.
+- [ ] Native GLPI protocol spike и реализация `DirectGlpiAgentAdapter` либо `GlpiApiAdapter`.
+- [ ] Browser E2E и optional real Grounding DINO CI smoke job.
 
 ### За пределами текущего demo
 

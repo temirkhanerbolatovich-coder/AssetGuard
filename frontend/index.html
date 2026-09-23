@@ -11,11 +11,13 @@
   <header class="topbar">
     <div><span class="eyebrow">Continuous Asset Control</span><h1>AssetGuard</h1></div>
     <form id="token-form" class="token-form">
-      <input id="token" type="password" autocomplete="current-password" placeholder="Admin token" required>
-      <button>Подключиться</button>
+      <input id="username" autocomplete="username" placeholder="Username (optional)">
+      <input id="token" type="password" autocomplete="current-password" placeholder="Password or shared token" required>
+      <button>Войти</button>
+      <button id="logout" type="button" class="secondary">Выйти</button>
     </form>
   </header>
-  <p id="status" class="status">Введите admin token для локального dashboard.</p>
+  <p id="status" class="status">Войдите по username/password или используйте bootstrap shared token.</p>
 
   <section class="cards" aria-label="Сводка">
     <article><span>Активы</span><strong id="assets-count">—</strong></article>

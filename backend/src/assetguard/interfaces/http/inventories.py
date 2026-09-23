@@ -14,8 +14,11 @@ from assetguard.infrastructure.config import get_settings
 from assetguard.infrastructure.database import get_session
 from assetguard.modules.inventory.service import (
     IdempotencyConflictError,
-    RawInventoryIngestCommand,
     ingest_raw_inventory,
+)
+from assetguard.modules.inventory.adapters import (
+    InventorySourceMetadata,
+    get_source_adapter,
 )
 from assetguard.modules.snapshots.normalizer import normalize_raw_inventory
 from assetguard.modules.changes.detector import detect_changes
@@ -78,21 +81,20 @@ async def receive_inventory(
         ) from error
     if not isinstance(payload, dict):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Inventory root must be a JSON object.",
         )
 
     try:
         result = ingest_raw_inventory(
             session,
-            RawInventoryIngestCommand(
+            get_source_adapter().to_ingest_command(payload, InventorySourceMetadata(
                 source=source,
                 source_version=source_version,
                 schema_version=schema_version,
                 inventory_type=inventory_type,
                 idempotency_key=idempotency_key,
-                payload=payload,
-            ),
+            )),
         )
     except IdempotencyConflictError as error:
         raise HTTPException(
@@ -107,7 +109,7 @@ async def receive_inventory(
             events = detect_changes(session, snapshot)
             create_incidents_for_events(session, events)
         except ValueError as error:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(error)) from error
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(error)) from error
     return JSONResponse(
         status_code=(status.HTTP_200_OK if result.duplicate else status.HTTP_202_ACCEPTED),
         content={

@@ -44,6 +44,29 @@ def detect_changes(session: Session, current: HardwareSnapshotRecord) -> list[Ch
         if event:
             created.append(event)
 
+    for identity_change in getattr(current, "_identity_changes", []):
+        event = _create_event(
+            session, baseline, base, current, "ENDPOINT", "DEVICE_IDENTITY_CHANGED",
+            None, None, "HIGH",
+            {
+                "previous": {
+                    "identifier_type": identity_change["identifier_type"],
+                    "value": identity_change["previous"],
+                },
+                "current": {
+                    "identifier_type": identity_change["identifier_type"],
+                    "value": identity_change["current"],
+                },
+                "matching": "another stable endpoint identifier resolved the same endpoint",
+            },
+            stable_suffix=(
+                f"{identity_change['identifier_type']}|"
+                f"{identity_change['previous']}|{identity_change['current']}"
+            ),
+        )
+        if event:
+            created.append(event)
+
     for component_type in ("RAM", "STORAGE"):
         if current.completeness.get(component_type) != "COMPLETE":
             continue

@@ -85,6 +85,8 @@ async def _complete_mvp_workflow() -> None:
         assert (await client.post(f"/admin/incidents/{incident_id}/resolve", headers=admin_headers(), json={
             "classification": "AUTHORIZED_CHANGE", "actor": "pytest", "comment": "Approved",
         })).status_code == 200
+        incident_detail = (await client.get(f"/admin/incidents/{incident_id}", headers=admin_headers())).json()
+        assert {item["actor"] for item in incident_detail["decisions"]} == {"bootstrap-admin"}
         await client.post(f"/admin/snapshots/{removed_response.json()['snapshot_id']}/baseline", headers=admin_headers(), json={"reason": "Approved RAM state"})
 
         replaced = fixture("glpi-agent-hardware-ssd-replaced.json")

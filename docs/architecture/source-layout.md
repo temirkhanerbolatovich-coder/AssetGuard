@@ -12,7 +12,7 @@ backend/
     modules/
       assets/                 # Asset и связь Asset—Endpoint
       endpoints/              # endpoint status/identity operations
-      inventory/              # RawInventory и ingestion workflow
+      inventory/              # RawInventory, envelope schema, source adapter boundary и ingestion workflow
       snapshots/              # hardware normalization
       baselines/              # explicit hardware baseline
       changes/                # evidence-aware diff и deduplication

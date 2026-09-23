@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from assetguard.modules.inventory.models import RawInventoryRecord
+from assetguard.modules.inventory.schema import validate_inventory_envelope
 from assetguard.modules.snapshots.models import (
     ComponentIdentityRecord,
     ComponentObservationRecord,
@@ -81,25 +82,39 @@ def normalize_raw_inventory(session: Session, raw: RawInventoryRecord) -> Hardwa
     existing = session.scalar(select(HardwareSnapshotRecord).where(HardwareSnapshotRecord.raw_inventory_id == raw.id))
     if existing:
         return existing
-    content = raw.payload.get("content") if isinstance(raw.payload, dict) else None
-    if not isinstance(content, dict):
+    try:
+        envelope = validate_inventory_envelope(raw.payload, raw.source)
+        content = envelope.content
+    except ValueError as error:
         raw.processing_status = "FAILED"
-        raw.processing_error = "Inventory content is not a JSON object."
+        raw.processing_error = str(error)
         session.commit()
-        raise ValueError(raw.processing_error)
+        raise
 
     now = datetime.now(UTC)
     hardware = content.get("hardware") if isinstance(content.get("hardware"), dict) else {}
     candidates = _identifier_candidates(raw.payload, content)
     endpoint: ManagedEndpointRecord | None = None
+    matched_endpoint_ids: set = set()
     for kind, _, normalized, _ in candidates:
         identifier = session.scalar(select(EndpointIdentifierRecord).where(
             EndpointIdentifierRecord.identifier_type == kind,
             EndpointIdentifierRecord.normalized_value == normalized,
         ))
         if identifier:
-            endpoint = session.get(ManagedEndpointRecord, identifier.managed_endpoint_id)
-            break
+            matched_endpoint_ids.add(identifier.managed_endpoint_id)
+    if len(matched_endpoint_ids) > 1:
+        for endpoint_id in matched_endpoint_ids:
+            conflicted = session.get(ManagedEndpointRecord, endpoint_id)
+            if conflicted:
+                conflicted.status = "IDENTITY_CONFLICT"
+                conflicted.updated_at = now
+        raw.processing_status = "FAILED"
+        raw.processing_error = "Observed identifiers resolve to multiple managed endpoints."
+        session.commit()
+        raise ValueError(raw.processing_error)
+    if matched_endpoint_ids:
+        endpoint = session.get(ManagedEndpointRecord, next(iter(matched_endpoint_ids)))
 
     observed_hostname = text(hardware.get("name"))
     current_hostname = observed_hostname or text(raw.payload.get("deviceid"))
@@ -124,6 +139,8 @@ def normalize_raw_inventory(session: Session, raw: RawInventoryRecord) -> Hardwa
         endpoint.status = "ONLINE"
         endpoint.updated_at = now
 
+    identity_changes: list[dict[str, str]] = []
+    strong_identity_types = {"SMBIOS_UUID", "BIOS_SERIAL", "CHASSIS_SERIAL", "MOTHERBOARD_SERIAL"}
     for kind, raw_value, normalized, confidence in candidates:
         identifier = session.scalar(select(EndpointIdentifierRecord).where(
             EndpointIdentifierRecord.identifier_type == kind,
@@ -133,6 +150,19 @@ def normalize_raw_inventory(session: Session, raw: RawInventoryRecord) -> Hardwa
             identifier.last_seen_at = now
             identifier.is_active = True
         else:
+            previous_identifiers = list(session.scalars(select(EndpointIdentifierRecord).where(
+                EndpointIdentifierRecord.managed_endpoint_id == endpoint.id,
+                EndpointIdentifierRecord.identifier_type == kind,
+                EndpointIdentifierRecord.is_active.is_(True),
+            )))
+            if kind in strong_identity_types:
+                for previous in previous_identifiers:
+                    previous.is_active = False
+                    identity_changes.append({
+                        "identifier_type": kind,
+                        "previous": previous.normalized_value,
+                        "current": normalized,
+                    })
             session.add(EndpointIdentifierRecord(
                 managed_endpoint_id=endpoint.id,
                 identifier_type=kind,
@@ -148,6 +178,9 @@ def normalize_raw_inventory(session: Session, raw: RawInventoryRecord) -> Hardwa
     storages = content.get("storages") if isinstance(content.get("storages"), list) else []
     cpus = content.get("cpus") if isinstance(content.get("cpus"), list) else []
     videos = content.get("videos") if isinstance(content.get("videos"), list) else []
+    motherboards = content.get("motherboards") if isinstance(content.get("motherboards"), list) else []
+    networks = content.get("networks") if isinstance(content.get("networks"), list) else []
+    monitors = content.get("monitors") if isinstance(content.get("monitors"), list) else []
     full = raw.inventory_type == "FULL"
     snapshot = HardwareSnapshotRecord(
         managed_endpoint_id=endpoint.id,
@@ -160,6 +193,9 @@ def normalize_raw_inventory(session: Session, raw: RawInventoryRecord) -> Hardwa
             "STORAGE": "COMPLETE" if full and isinstance(content.get("storages"), list) else "UNOBSERVED",
             "CPU": "OBSERVED" if isinstance(content.get("cpus"), list) else "UNOBSERVED",
             "GPU": "OBSERVED" if isinstance(content.get("videos"), list) else "UNOBSERVED",
+            "MOTHERBOARD": "OBSERVED" if isinstance(content.get("motherboards"), list) else "UNOBSERVED",
+            "NETWORK": "OBSERVED" if isinstance(content.get("networks"), list) else "UNOBSERVED",
+            "MONITOR": "OBSERVED" if isinstance(content.get("monitors"), list) else "UNOBSERVED",
         },
         normalizer_version=NORMALIZER_VERSION,
     )
@@ -169,6 +205,9 @@ def normalize_raw_inventory(session: Session, raw: RawInventoryRecord) -> Hardwa
     _add_observations(session, snapshot, "STORAGE", [x for x in storages if isinstance(x, dict)])
     _add_observations(session, snapshot, "CPU", [x for x in cpus if isinstance(x, dict)])
     _add_observations(session, snapshot, "GPU", [x for x in videos if isinstance(x, dict)])
+    _add_observations(session, snapshot, "MOTHERBOARD", [x for x in motherboards if isinstance(x, dict)])
+    _add_observations(session, snapshot, "NETWORK", [x for x in networks if isinstance(x, dict)])
+    _add_observations(session, snapshot, "MONITOR", [x for x in monitors if isinstance(x, dict)])
     raw.managed_endpoint_id = endpoint.id
     raw.processing_status = "PROCESSED"
     raw.processing_error = None
@@ -176,6 +215,8 @@ def normalize_raw_inventory(session: Session, raw: RawInventoryRecord) -> Hardwa
     session.refresh(snapshot)
     if previous_hostname and observed_hostname and previous_hostname.casefold() != observed_hostname.casefold():
         snapshot._hostname_change = (previous_hostname, observed_hostname)  # type: ignore[attr-defined]
+    if identity_changes:
+        snapshot._identity_changes = identity_changes  # type: ignore[attr-defined]
     return snapshot
 
 
@@ -183,7 +224,14 @@ def _add_observations(
     session: Session, snapshot: HardwareSnapshotRecord, component_type: str, items: list[dict[str, Any]],
 ) -> None:
     for item in items:
-        raw_serial = text(item.get("serialnumber") if component_type == "RAM" else item.get("serial"))
+        serial_fields = {
+            "RAM": ("serialnumber", "serial"),
+            "MOTHERBOARD": ("serial", "serialnumber"),
+            "NETWORK": ("macaddr", "mac"),
+            "MONITOR": ("serial", "serialnumber"),
+        }
+        fields = serial_fields.get(component_type, ("serial", "serialnumber"))
+        raw_serial = next((text(item.get(field)) for field in fields if text(item.get(field))), None)
         serial = normalize_identifier(raw_serial)
         model = text(item.get("description")) or text(item.get("caption")) or text(item.get("model")) or text(item.get("name"))
         slot = text(item.get("numslots")) if component_type == "RAM" else text(item.get("slot"))

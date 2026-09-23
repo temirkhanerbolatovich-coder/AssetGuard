@@ -18,7 +18,7 @@ from assetguard.modules.changes.models import ChangeEventRecord
 from assetguard.modules.history.service import append_asset_history
 from assetguard.modules.endpoints.service import evaluate_last_seen
 from assetguard.modules.incidents.models import AssetHistoryEntryRecord, IncidentRecord
-from assetguard.modules.identity.auth import session_role
+from assetguard.modules.identity.auth import AuthPrincipal, session_principal
 from assetguard.modules.snapshots.models import (
     ComponentObservationRecord, EndpointIdentifierRecord,
     HardwareSnapshotRecord, ManagedEndpointRecord,
@@ -30,23 +30,31 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 def require_admin(
     token: Annotated[str | None, Header(alias="X-AssetGuard-Admin-Token")] = None,
     session: Session = Depends(get_session),
-) -> None:
+) -> AuthPrincipal:
     settings = get_settings()
     valid = [settings.admin_shared_secret, settings.previous_admin_shared_secret]
     shared = bool(token and any(candidate and secrets.compare_digest(token, candidate) for candidate in valid))
-    if not shared and (not token or session_role(session, token) != "ADMIN"):
+    if shared:
+        return AuthPrincipal(username="bootstrap-admin", role="ADMIN", session_id=None)
+    principal = session_principal(session, token) if token else None
+    if not principal or principal.role != "ADMIN":
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid administrator credentials.")
+    return principal
 
 
 def require_viewer(
     token: Annotated[str | None, Header(alias="X-AssetGuard-Admin-Token")] = None,
     session: Session = Depends(get_session),
-) -> None:
+) -> AuthPrincipal:
     settings = get_settings()
     valid = [settings.admin_shared_secret, settings.previous_admin_shared_secret, settings.viewer_shared_secret]
-    shared = bool(token and any(candidate and secrets.compare_digest(token, candidate) for candidate in valid))
-    if not shared and (not token or session_role(session, token) not in {"ADMIN", "VIEWER"}):
+    if token and any(candidate and secrets.compare_digest(token, candidate) for candidate in valid):
+        role = "VIEWER" if settings.viewer_shared_secret and secrets.compare_digest(token, settings.viewer_shared_secret) else "ADMIN"
+        return AuthPrincipal(username=f"shared-{role.lower()}", role=role, session_id=None)
+    principal = session_principal(session, token) if token else None
+    if not principal or principal.role not in {"ADMIN", "VIEWER"}:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid AssetGuard credentials.")
+    return principal
 
 
 class AssetCreate(BaseModel):

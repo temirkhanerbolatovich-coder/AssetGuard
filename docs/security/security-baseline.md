@@ -15,7 +15,13 @@
 - логирование секретов, токенов и полных чувствительных payload без необходимости;
 - использование внутренней БД GLPI как базы AssetGuard.
 
-## До реализации
+## Реализовано
 
-Нужно отдельно определить trust boundary для ingest endpoint, ротацию ключей/секретов, роли администратора и retention raw payload.
+- ingest отделён в `/internal` boundary с отдельным rotating shared secret;
+- ADMIN/VIEWER users используют revocable 12-hour sessions;
+- logout, административный revoke, disable user и password rotation отзывают активные sessions;
+- actor административного incident decision выводится из authenticated principal;
+- `/auth/login`, `/admin` и `/internal` защищены базовым rate limit;
+- raw evidence и audit history защищены append-only database triggers.
 
+До production остаются внешний proxy-level rate limit, deployment acceptance, encrypted off-host backup, restore rehearsal и утверждённая retention policy для Vision images.

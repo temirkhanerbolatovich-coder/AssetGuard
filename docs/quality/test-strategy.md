@@ -20,4 +20,4 @@
 
 Фикстуры хранятся без secrets и персональных данных в `backend/tests/fixtures/`.
 
-Статус на 2026-09-23: все шесть сценариев представлены sanitized JSON fixtures. Pytest поднимает изолированную PostgreSQL test database и проверяет полную inventory цепочку, RBAC и Vision workflow. Vision integration test использует детерминированный detector, чтобы не скачивать ML weights в обычном test run; реальный Grounding DINO проверяется отдельным ручным smoke-сценарием на demo-паре изображений. Следующий уровень проверки — browser E2E и optional model smoke job.
+Статус на 2026-09-23: 13 pytest tests проходят на disposable PostgreSQL database. Проверяются все шесть fixture-сценариев, полная inventory цепочка, RBAC, revoke/logout/disable user, authenticated audit actor, version-tolerant envelope schema, endpoint identity change/conflict и Vision workflow. GitHub Actions поднимает PostgreSQL, запускает tests, `pip check`, JavaScript syntax check и production Compose validation. Vision integration test использует детерминированный detector; реальный Grounding DINO остаётся отдельным ручным smoke-сценарием. Следующий уровень — browser E2E и optional real-model CI job.

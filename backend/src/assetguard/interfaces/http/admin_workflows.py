@@ -17,6 +17,7 @@ from assetguard.modules.incidents.models import (
     EndpointHistoryEntryRecord, IncidentDecisionRecord, IncidentRecord,
 )
 from assetguard.modules.incidents.service import decide_incident
+from assetguard.modules.identity.auth import AuthPrincipal
 from assetguard.modules.snapshots.models import ComponentObservationRecord, HardwareSnapshotRecord
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_viewer)])
@@ -33,7 +34,8 @@ class BaselineAccept(BaseModel):
 class DecisionBody(BaseModel):
     classification: Classification
     comment: str | None = Field(default=None, max_length=4000)
-    actor: str = Field(min_length=1, max_length=255)
+    # Kept temporarily for API compatibility; the authenticated principal is authoritative.
+    actor: str | None = Field(default=None, min_length=1, max_length=255)
 
 
 def missing() -> None:
@@ -157,21 +159,29 @@ def incident(incident_id: UUID, session: Annotated[Session, Depends(get_session)
     }
 
 
-@router.post("/incidents/{incident_id}/decision", dependencies=[Depends(require_admin)])
-def decision(incident_id: UUID, body: DecisionBody, session: Annotated[Session, Depends(get_session)]):
+@router.post("/incidents/{incident_id}/decision")
+def decision(
+    incident_id: UUID, body: DecisionBody,
+    session: Annotated[Session, Depends(get_session)],
+    principal: Annotated[AuthPrincipal, Depends(require_admin)],
+):
     item = session.get(IncidentRecord, incident_id)
     if not item:
         missing()
-    result = decide_incident(session, item, body.classification, body.actor, body.comment, False)
+    result = decide_incident(session, item, body.classification, principal.username, body.comment, False)
     return {"id": str(result.id), "incident_status": item.status}
 
 
-@router.post("/incidents/{incident_id}/resolve", dependencies=[Depends(require_admin)])
-def resolve(incident_id: UUID, body: DecisionBody, session: Annotated[Session, Depends(get_session)]):
+@router.post("/incidents/{incident_id}/resolve")
+def resolve(
+    incident_id: UUID, body: DecisionBody,
+    session: Annotated[Session, Depends(get_session)],
+    principal: Annotated[AuthPrincipal, Depends(require_admin)],
+):
     item = session.get(IncidentRecord, incident_id)
     if not item:
         missing()
-    result = decide_incident(session, item, body.classification, body.actor, body.comment, True)
+    result = decide_incident(session, item, body.classification, principal.username, body.comment, True)
     return {"id": str(result.id), "incident_status": item.status}
 
 
