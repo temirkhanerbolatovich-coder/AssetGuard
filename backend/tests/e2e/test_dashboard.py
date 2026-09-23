@@ -56,6 +56,8 @@ def test_admin_can_open_dashboard_and_create_asset(live_server):
         page.locator("#token").fill(admin_secret)
         page.get_by_role("button", name="Войти").click()
         page.locator("#status").filter(has_text="Данные актуальны").wait_for()
+        assert page.get_by_role("heading", name="Как работает Agent").is_visible()
+        assert page.get_by_role("heading", name="Последний инцидент").is_visible()
 
         page.get_by_role("button", name="Добавить актив").click()
         form = page.locator("#create-asset")
@@ -66,7 +68,9 @@ def test_admin_can_open_dashboard_and_create_asset(live_server):
 
         row = page.locator("#assets tr", has_text=inventory_number)
         row.wait_for()
-        row.click()
+        open_button = row.get_by_role("button", name="Открыть карточку")
+        assert open_button.is_visible()
+        open_button.click()
         page.locator("#detail-title").filter(has_text="Browser E2E workstation").wait_for()
         assert page.get_by_role("heading", name="Состав оборудования").is_visible()
         assert page.get_by_role("heading", name="Эталон и изменения").is_visible()

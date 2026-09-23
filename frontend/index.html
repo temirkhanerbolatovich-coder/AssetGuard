@@ -11,7 +11,7 @@
 <body>
 <header class="app-header">
   <a class="brand" href="#overview" aria-label="AssetGuard, на главную"><span class="brand-mark" aria-hidden="true">A</span><span><strong>AssetGuard</strong><small>Контроль IT-активов</small></span></a>
-  <nav class="main-nav" aria-label="Основная навигация"><a href="#overview">Обзор</a><a href="#devices">Устройства</a><a href="#vision">Vision</a></nav>
+  <nav class="main-nav" aria-label="Основная навигация"><a href="#overview">Обзор</a><a href="#devices">Устройства</a><a href="#agent-workflow">Как работает Agent</a><a href="#vision">Vision</a></nav>
   <form id="token-form" class="token-form">
     <input id="username" autocomplete="username" placeholder="Логин">
     <input id="token" type="password" autocomplete="current-password" placeholder="Пароль или токен" required>
@@ -30,6 +30,10 @@
       <article><span>Требуют внимания</span><strong id="attention-count">—</strong><small>изменения или обращения</small></article>
       <article><span>Не проверено</span><strong id="unchecked-count">—</strong><small>нет связи или эталона</small></article>
     </div>
+    <article id="incident-spotlight" class="panel incident-spotlight">
+      <div class="section-heading"><div><span class="eyebrow">Реальный кейс из данных Agent</span><h2>Последний инцидент</h2></div><span id="incident-spotlight-status" class="status-pill neutral">—</span></div>
+      <div id="incident-spotlight-body"><div class="skeleton"></div></div>
+    </article>
     <div class="overview-grid">
       <article class="panel attention-panel"><div class="section-heading"><div><span class="eyebrow">Приоритет</span><h2>Что требует внимания</h2></div><span id="attention-badge" class="status-pill neutral">—</span></div><div id="attention-list" class="stack-list"><div class="skeleton"></div><div class="skeleton short"></div></div></article>
       <article class="panel"><div class="section-heading"><div><span class="eyebrow">Активность</span><h2>Последние события</h2></div><span id="last-activity" class="meta">—</span></div><div id="activity-list" class="timeline compact-timeline"><div class="skeleton"></div></div></article>
@@ -41,7 +45,7 @@
   </section>
 
   <section id="devices" class="page-section">
-    <div class="section-heading page-heading"><div><span class="eyebrow">Реестр</span><h2>Устройства</h2><p>Поиск по имени, hostname, инвентарному номеру и кабинету.</p></div><button id="show-create">Добавить актив</button></div>
+    <div class="section-heading page-heading"><div><span class="eyebrow">Реестр</span><h2>Устройства</h2><p>Нажмите на название устройства или кнопку «Открыть карточку», чтобы увидеть данные Agent, оборудование и историю изменений.</p></div><button id="show-create">Добавить актив</button></div>
     <form id="create-asset" class="create-form panel" hidden>
       <label>Инвентарный номер<input name="inventory_number" required></label><label>Название<input name="name" required></label>
       <label>Тип<select name="asset_type"><option value="Desktop">Стационарный ПК</option><option value="Laptop">Ноутбук</option><option value="Other">Другое</option></select></label>
@@ -54,7 +58,7 @@
       <label class="checkbox-filter"><input id="device-change-filter" type="checkbox"> Только с изменениями</label>
       <label><span>Сортировка</span><select id="device-sort"><option value="recent">Сначала активные</option><option value="attention">Сначала проблемные</option><option value="name">По названию</option></select></label>
     </div>
-    <div class="panel table-panel"><div class="table-wrap"><table><thead><tr><th>Устройство</th><th>Расположение</th><th>Состояние</th><th>Последняя проверка</th><th>Оборудование</th><th></th></tr></thead><tbody id="assets"><tr><td colspan="6"><div class="skeleton"></div></td></tr></tbody></table></div><p id="device-result-count" class="table-footer"></p></div>
+    <div class="panel table-panel"><div class="table-wrap"><table><thead><tr><th>Устройство</th><th>Расположение</th><th>Состояние</th><th>Последняя проверка</th><th>Оборудование</th><th>Действие</th></tr></thead><tbody id="assets"><tr><td colspan="6"><div class="skeleton"></div></td></tr></tbody></table></div><p id="device-result-count" class="table-footer"></p></div>
   </section>
 
   <section id="detail" class="page-section detail-section" hidden>
@@ -73,6 +77,17 @@
       <details class="baseline-details"><summary>Показать эталонный состав</summary><div id="baseline-hardware" class="hardware-grid"></div></details>
     </article>
     <div class="detail-lower-grid"><article class="panel"><span class="eyebrow">Решения</span><h2>Обращения</h2><div id="detail-incidents"></div></article><article class="panel"><span class="eyebrow">Хронология</span><h2>История устройства</h2><div id="detail-history" class="timeline"></div></article></div>
+  </section>
+
+  <section id="agent-workflow" class="page-section agent-section">
+    <div class="section-heading page-heading"><div><span class="eyebrow">Без магии и скрытого доступа</span><h2>Как работает Agent</h2><p>GLPI Agent только собирает разрешённые характеристики компьютера. AssetGuard принимает данные, сохраняет доказательство и сравнивает его с эталоном.</p></div><span id="agent-online-badge" class="status-pill neutral">Нет данных</span></div>
+    <div class="agent-flow" aria-label="Путь данных от Agent до инцидента">
+      <article><span class="flow-number">1</span><div><h3>Сбор</h3><p>Agent читает BIOS, CPU, RAM, накопители и сетевые идентификаторы. Пользовательские файлы и пароли не собираются.</p></div></article>
+      <article><span class="flow-number">2</span><div><h3>Безопасная отправка</h3><p>Инвентаризация уходит в AssetGuard по HTTPS с ключом и защитой от повторной загрузки.</p></div></article>
+      <article><span class="flow-number">3</span><div><h3>Сравнение</h3><p>Backend сохраняет исходный отчёт, строит снимок и сравнивает серийные номера и состав с подтверждённым эталоном.</p></div></article>
+      <article><span class="flow-number">4</span><div><h3>Решение человека</h3><p>При расхождении создаётся инцидент с доказательствами «Было → Стало». Система не объявляет изменение кражей автоматически.</p></div></article>
+    </div>
+    <div class="agent-proof panel"><div><span class="eyebrow">Последний сигнал</span><h3 id="agent-last-signal">Ожидаем данные Agent</h3><p id="agent-proof-text">После входа здесь появится фактическое время последней инвентаризации.</p></div><a class="button-anchor" href="#devices">Посмотреть устройства</a></div>
   </section>
 
   <section id="vision" class="page-section">

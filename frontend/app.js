@@ -64,6 +64,26 @@ function buildDevices() {
   state.devices = devices;
 }
 function deviceForEndpoint(endpointId) { return state.devices.find((device) => device.endpointId === endpointId); }
+function incidentLabel(incident, change = null) {
+  const parts = (incident?.title || "").split(":");
+  const component = componentLabels[change?.component_type || parts[0]] || change?.component_type || parts[0] || "Оборудование";
+  const event = eventLabels[change?.type || parts[1]?.trim()] || change?.type || parts[1]?.trim() || "обнаружено изменение";
+  return `${component}: ${event}`;
+}
+function renderIncidentSpotlight() {
+  const incident = state.incidents.find((item) => ["OPEN","UNDER_REVIEW"].includes(item.status)) || state.incidents[0];
+  const body = $("incident-spotlight-body"), status = $("incident-spotlight-status");
+  if (!incident) {
+    status.textContent = "Нет инцидентов"; status.className = "status-pill ok";
+    body.innerHTML = '<div class="spotlight-empty"><div><strong>Agent не обнаружил расхождений</strong><p>Когда состав устройства изменится относительно эталона, здесь появятся причина и доказательства.</p></div><a href="#agent-workflow">Как это работает →</a></div>';
+    return;
+  }
+  const device = deviceForEndpoint(incident.endpoint_id), change = state.changes.find((item) => item.id === incident.change_event_id);
+  status.outerHTML = pill(incident.status); const newStatus = $("incident-spotlight").querySelector(".status-pill"); if (newStatus) newStatus.id = "incident-spotlight-status";
+  const comparison = change ? `<div class="spotlight-comparison"><span><small>Было</small>${escapeHtml(componentSummary(change.component_type,change.evidence?.previous))}</span><b>→</b><span><small>Стало</small>${escapeHtml(componentSummary(change.component_type,change.evidence?.current))}</span></div>` : "";
+  const action = device?.assetId ? `<button class="open-device" data-id="${device.assetId}">Открыть карточку и доказательства</button>` : device ? `<button class="link-endpoint button-secondary" data-id="${device.endpointId}" data-name="${escapeHtml(device.hostname || "")}">Сначала связать с активом</button>` : "";
+  body.innerHTML = `<div class="spotlight-main"><div><strong>${escapeHtml(incidentLabel(incident,change))}</strong><p>${escapeHtml(device?.name || "Устройство")} · Agent сообщил ${relativeTime(incident.created_at)}</p></div>${action}</div>${comparison}<ol class="incident-path"><li class="done">Agent прислал снимок</li><li class="done">AssetGuard сравнил с эталоном</li><li class="active">Создан инцидент</li><li>Решение оператора</li></ol>`;
+}
 function renderDashboard() {
   const devices = state.devices;
   const online = devices.filter((item) => item.status === "OK").length;
@@ -86,6 +106,11 @@ function renderDashboard() {
   $("location-summary").innerHTML = [...locations.entries()].map(([name,count]) => `<span class="tag">${escapeHtml(name)} <strong>${count}</strong></span>`).join("") || '<p class="empty">Добавьте кабинет в карточке актива.</p>';
   const full = devices.filter((item) => item.endpoint?.current_snapshot?.type === "FULL").length;
   $("inventory-summary").innerHTML = `<div class="summary-line"><span>Успешно обработано</span><strong>${devices.filter((item) => item.endpoint?.current_snapshot).length} из ${devices.length}</strong></div><div class="summary-line"><span>Полная инвентаризация</span><strong>${full}</strong></div><div class="summary-line"><span>Последняя активность</span><strong>${latest ? relativeTime(latest) : "—"}</strong></div>`;
+  renderIncidentSpotlight();
+  const reporting = devices.filter((item) => item.endpoint?.last_seen_at).length;
+  $("agent-online-badge").textContent = `${reporting} ${reporting === 1 ? "Agent на связи" : "Agent на связи"}`; $("agent-online-badge").className = `status-pill ${reporting ? "ok" : "neutral"}`;
+  $("agent-last-signal").textContent = latest ? `Инвентаризация получена ${relativeTime(latest)}` : "Ожидаем данные Agent";
+  $("agent-proof-text").textContent = latest ? `${dateTime(latest)} · отчёт принят, нормализован и сохранён в истории.` : "После первой отправки здесь появится фактическое время последней инвентаризации.";
   bindDynamicActions();
 }
 function hardwareBrief(endpoint) {
@@ -106,12 +131,12 @@ function renderDevices() {
   const rooms = [...new Set(state.devices.map((item) => item.room).filter(Boolean))].sort(); const selectedRoom = $("device-room-filter").value;
   $("device-room-filter").innerHTML = '<option value="">Все кабинеты</option>' + rooms.map((room) => `<option value="${escapeHtml(room)}">${escapeHtml(room)}</option>`).join(""); $("device-room-filter").value = rooms.includes(selectedRoom) ? selectedRoom : "";
   const devices = filteredDevices();
-  $("assets").innerHTML = devices.length ? devices.map((item) => `<tr class="device-row" data-asset-id="${item.assetId || ""}"><td data-label="Устройство"><div class="device-name"><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml([item.inventoryNumber,item.hostname].filter(Boolean).join(" · ") || "Не связано с Agent")}</small></div></td><td data-label="Расположение">${escapeHtml([item.organization,item.room].filter(Boolean).join(" · ") || "Не указано")}</td><td data-label="Состояние">${pill(item.status)}${item.endpoint?.open_changes ? `<small>${item.endpoint.open_changes} откр. изм.</small>` : ""}</td><td data-label="Последняя проверка"><strong>${escapeHtml(relativeTime(item.endpoint?.last_seen_at))}</strong><small>${dateTime(item.endpoint?.last_seen_at)}</small></td><td data-label="Оборудование"><span class="hardware-brief">${escapeHtml(hardwareBrief(item.endpoint))}</span></td><td data-label="Действие">${item.assetId ? '<button class="row-action" aria-label="Открыть карточку">→</button>' : `<button class="link-endpoint button-secondary" data-id="${item.endpointId}" data-name="${escapeHtml(item.hostname || "")}">Связать</button>`}</td></tr>`).join("") : '<tr><td colspan="6"><p class="empty">По заданным условиям устройства не найдены.</p></td></tr>';
+  $("assets").innerHTML = devices.length ? devices.map((item) => `<tr class="device-row" data-asset-id="${item.assetId || ""}"><td data-label="Устройство"><div class="device-name">${item.assetId ? `<button class="device-open-link open-device" data-id="${item.assetId}">${escapeHtml(item.name)}</button>` : `<strong>${escapeHtml(item.name)}</strong>`}<small>${escapeHtml([item.inventoryNumber,item.hostname].filter(Boolean).join(" · ") || "Не связано с Agent")}</small></div></td><td data-label="Расположение">${escapeHtml([item.organization,item.room].filter(Boolean).join(" · ") || "Не указано")}</td><td data-label="Состояние">${pill(item.status)}${item.endpoint?.open_changes ? `<small>${item.endpoint.open_changes} откр. изм.</small>` : ""}</td><td data-label="Последняя проверка"><strong>${escapeHtml(relativeTime(item.endpoint?.last_seen_at))}</strong><small>${dateTime(item.endpoint?.last_seen_at)}</small></td><td data-label="Оборудование"><span class="hardware-brief">${escapeHtml(hardwareBrief(item.endpoint))}</span></td><td data-label="Действие">${item.assetId ? `<button class="row-action open-device" data-id="${item.assetId}">Открыть карточку</button>` : `<button class="link-endpoint button-secondary" data-id="${item.endpointId}" data-name="${escapeHtml(item.hostname || "")}">Связать</button>`}</td></tr>`).join("") : '<tr><td colspan="6"><p class="empty">По заданным условиям устройства не найдены.</p></td></tr>';
   $("device-result-count").textContent = `Показано ${devices.length} из ${state.devices.length}`;
   document.querySelectorAll("tr.device-row[data-asset-id]").forEach((row) => { if (row.dataset.assetId) row.onclick = () => detail(row.dataset.assetId); }); bindDynamicActions();
 }
 function bindDynamicActions() {
-  document.querySelectorAll(".open-device").forEach((button) => button.onclick = () => detail(button.dataset.id));
+  document.querySelectorAll(".open-device").forEach((button) => button.onclick = (event) => { event.stopPropagation(); detail(button.dataset.id); });
   document.querySelectorAll(".link-endpoint").forEach((button) => button.onclick = (event) => { event.stopPropagation(); openLink(button.dataset.id, button.dataset.name); });
 }
 function factRows(items) { const rows = items.filter(([,value]) => value !== null && value !== undefined && value !== ""); return rows.length ? rows.map(([label,value]) => `<dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd>`).join("") : '<p class="empty">Данные пока не получены.</p>'; }
@@ -124,7 +149,7 @@ function componentMeta(item) {
   else if (item.type === "CPU") values.push(raw.core ? `${raw.core} ядер` : null, raw.thread ? `${raw.thread} потоков` : null, raw.speed ? `${raw.speed} МГц` : null, raw.manufacturer, raw.id);
   else if (item.type === "GPU") values.push(raw.memory ? `${raw.memory} МБ памяти` : null, raw.resolution, raw.chipset, raw.pcislot);
   else if (item.type === "NETWORK") values.push(raw.macaddr || raw.mac, raw.ipaddress || raw.ip, raw.status, raw.speed, raw.type);
-  else if (item.type === "DRIVE") values.push(raw.letter || raw.label, raw.filesystem, raw.total != null ? `Всего ${bytes(raw.total)}` : null, raw.free != null ? `Свободно ${bytes(raw.free)}` : null, raw.systemdrive ? "Системный" : null);
+  else if (item.type === "DRIVE") values.push(raw.letter || raw.label, raw.filesystem, raw.total != null ? `Всего ${storageSize(raw.total)}` : null, raw.free != null ? `Свободно ${storageSize(raw.free)}` : null, raw.systemdrive ? "Системный" : null);
   else if (item.type === "CONTROLLER") values.push(raw.manufacturer, raw.type, raw.pcislot, raw.vendorid && raw.productid ? `${raw.vendorid}:${raw.productid}` : null);
   else if (item.type === "MOTHERBOARD") values.push(item.manufacturer, item.part_number, item.serial ? `S/N ${item.serial}` : null);
   else values.push(item.manufacturer, item.serial ? `S/N ${item.serial}` : null, item.slot);
@@ -173,7 +198,7 @@ async function detail(assetId, scroll = true) {
     $("baseline-action").innerHTML = asset.recommended_baseline_snapshot_id ? `<button id="accept-baseline">${asset.baseline ? "Обновить эталон" : "Подтвердить как эталон"}</button>` : "";
     if ($("accept-baseline")) $("accept-baseline").onclick = async () => { if (confirm("Подтвердить последний наблюдавшийся состав оборудования как новый эталон? Это действие не удаляет историю изменений.")) await sendAction(`/admin/snapshots/${asset.recommended_baseline_snapshot_id}/baseline`,{reason:"Подтверждено оператором в карточке устройства"},"POST","Эталонное состояние подтверждено"); };
     $("detail-changes").innerHTML = asset.baseline ? changeCards(asset.changes) : '<div class="attention-banner"><span class="attention-icon">!</span><div><strong>Эталон ещё не создан</strong><p>Подтвердите текущий состав, чтобы AssetGuard начал показывать изменения по принципу «Было → Стало».</p></div></div>';
-    $("detail-incidents").innerHTML = asset.incidents.length ? asset.incidents.map((incident) => `<article class="row-card"><div class="row-title"><b>${escapeHtml((componentLabels[incident.title.split(":")[0]] || incident.title.split(":")[0]) + ": " + (eventLabels[incident.title.split(":")[1]?.trim()] || incident.title.split(":")[1]?.trim() || "изменение"))}</b>${pill(incident.status)}</div><div class="meta">${dateTime(incident.created_at)}</div>${["OPEN","UNDER_REVIEW"].includes(incident.status) ? `<div class="actions"><button class="classify button-secondary" data-id="${incident.id}">Взять на проверку</button><button class="resolve" data-id="${incident.id}">Подтвердить решение</button></div>` : ""}</article>`).join("") : '<p class="empty">Открытых обращений нет.</p>';
+    $("detail-incidents").innerHTML = asset.incidents.length ? asset.incidents.map((incident) => `<article class="row-card"><div class="row-title"><b>${escapeHtml(incidentLabel(incident))}</b>${pill(incident.status)}</div><div class="meta">${dateTime(incident.created_at)}</div>${["OPEN","UNDER_REVIEW"].includes(incident.status) ? `<div class="actions"><button class="classify button-secondary" data-id="${incident.id}">Взять на проверку</button><button class="resolve" data-id="${incident.id}">Подтвердить решение</button></div>` : ""}</article>`).join("") : '<p class="empty">Открытых обращений нет.</p>';
     document.querySelectorAll(".classify").forEach((button) => button.onclick = () => incidentAction(button.dataset.id,false)); document.querySelectorAll(".resolve").forEach((button) => button.onclick = () => incidentAction(button.dataset.id,true));
     $("detail-history").innerHTML = asset.history.length ? asset.history.map((entry) => `<article><time>${dateTime(entry.occurred_at)}</time><div><b>${escapeHtml(eventLabels[entry.type] || entry.type)}</b><p>${escapeHtml(historyMessage(entry))}</p></div></article>`).join("") : '<p class="empty">История появится после первой проверки или действия с устройством.</p>';
     if(scroll) $("detail").scrollIntoView({behavior:"smooth",block:"start"});

@@ -53,6 +53,7 @@ docker compose --env-file .env -f infra/containers/docker-compose.free-demo.yml 
 - [Карта документации](docs/README.md)
 - [Чек-лист завершения MVP](docs/product/mvp-completion-checklist.md)
 - [Аудит данных и UX Dashboard](docs/product/dashboard-data-audit.md)
+- [Архитектура и готовый сценарий питча](docs/product/pitch-guide.md)
 - [Локальная demo-поставка](docs/operations/local-demo-guide.md)
 - [Production deployment и recovery](docs/operations/production-deployment.md)
 - [Бесплатный deployment](docs/operations/free-deployment.md)

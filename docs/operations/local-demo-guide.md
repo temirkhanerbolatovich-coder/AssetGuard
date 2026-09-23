@@ -11,6 +11,8 @@
 
 Следуйте `docs/product/demo-scenario.md`. Для локального GLPI evidence используйте `scripts/windows/collect-minimal-inventory.ps1`; отправка в поднятый gateway: `send-minimal-inventory.ps1 -GatewayUri http://127.0.0.1:8000/internal/inventories`.
 
+Для полностью воспроизводимого pitch-инцидента выполните `scripts/windows/prepare-pitch-incident.ps1`. Он создаст связанный актив, baseline из двух модулей RAM и второй полный снимок без одного модуля через рабочие API. Готовый порядок показа и текст выступления находятся в `docs/product/pitch-guide.md`.
+
 Для Vision загрузите `demo/vision/room-305-baseline.png`, сохраните scan как baseline и затем загрузите `demo/vision/room-305-warning.png`. Первый scan может быть медленнее: Grounding DINO weights скачиваются в локальный Hugging Face cache и модель инициализируется на CPU/GPU. Подробности находятся в `demo/vision/README.md`.
 
 ## Границы поставки
