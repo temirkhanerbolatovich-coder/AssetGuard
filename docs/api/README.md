@@ -1,6 +1,6 @@
 # Границы API
 
-Production URL/transport contract GLPI Agent не имитирует нативный GLPI server protocol. Internal adapter boundary `POST /internal/inventories` принимает JSON от доверенного bridge по rotating shared secret и idempotency key, преобразует его через `InventorySourceAdapter`, сохраняет immutable RawInventory, затем синхронно создаёт snapshot, change events и incidents. Текущая реализация — честно названный `TrustedJsonBridgeAdapter`; native GLPI adapter появится только после protocol spike.
+Доступны две transport boundaries. `POST /internal/inventories` принимает JSON от доверенного bridge по rotating shared secret и idempotency key. `POST /glpi-agent` реализует наблюдаемый GLPI Agent 1.19 XML flow `PROLOG → SEND → INVENTORY` с HTTP Basic authentication. `TrustedJsonBridgeAdapter` и `DirectGlpiAgentAdapter` преобразуют transport payload в общий canonical envelope, сохраняют immutable RawInventory и запускают один snapshot/change/incident workflow.
 
 Реализованные resource boundaries:
 
@@ -9,6 +9,7 @@ Production URL/transport contract GLPI Agent не имитирует натив�
 | Assets | list, create, get, update |
 | Endpoints | list, get, link to asset |
 | Inventories | внутренний ingest endpoint после spike; admin list/get |
+| Native GLPI Agent | authenticated XML PROLOG/INVENTORY endpoint |
 | Snapshots | list, get |
 | Baseline | get, accept snapshot |
 | Changes | list, get |

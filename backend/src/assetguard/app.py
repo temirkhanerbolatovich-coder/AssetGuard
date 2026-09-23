@@ -11,6 +11,7 @@ from assetguard.interfaces.http.admin_workflows import router as admin_workflows
 from assetguard.interfaces.http.admin_inventories import router as admin_inventories_router
 from assetguard.interfaces.http.auth import router as auth_router
 from assetguard.interfaces.http.vision import router as vision_router
+from assetguard.interfaces.http.glpi_agent import router as glpi_agent_router
 from assetguard.infrastructure.http_middleware import SecurityAndRateLimitMiddleware
 
 
@@ -28,4 +29,5 @@ app.include_router(admin_workflows_router)
 app.include_router(admin_inventories_router)
 app.include_router(auth_router)
 app.include_router(vision_router)
+app.include_router(glpi_agent_router)
 app.mount("/", StaticFiles(directory=Path(__file__).resolve().parents[3] / "frontend", html=True), name="frontend")

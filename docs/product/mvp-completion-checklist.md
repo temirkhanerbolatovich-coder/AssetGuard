@@ -4,8 +4,8 @@
 
 ## Текущая оценка
 
-- Демонстрационный MVP через explicit bridge: **готов**.
-- Исходный native GLPI transport Definition of Done: **не закрыт** до protocol spike и выбора direct receiver/GLPI sidecar.
+- Демонстрационный MVP через native GLPI transport и explicit bridge: **готов**.
+- Native GLPI Agent 1.19 `PROLOG → INVENTORY` проверен реальным loopback end-to-end; production TLS/DNS acceptance остаётся отдельным шагом.
 - Production hardening foundation реализован в коде; публичное развёртывание и recovery rehearsal требуют целевого домена/хоста.
 
 ## Реализовано
@@ -13,7 +13,7 @@
 | Область | Статус | Результат |
 | --- | --- | --- |
 | GLPI Agent | Готово | GLPI Agent 1.19 проверен на реальном Windows-PC; есть version lock и minimal privacy profile. |
-| Collection/transport | Частично | Локальный collection и explicit bridge готовы; нативный GLPI HTTP protocol ещё не подтверждён. |
+| Collection/transport | Готово для 1.19 | Native uncompressed XML PROLOG/INVENTORY и explicit JSON bridge проверены end-to-end. |
 | Raw evidence | Готово | Append-only JSONB payload, hash, idempotency и processing status. |
 | PostgreSQL | Готово | Migrations для raw inventory, snapshots, baseline, change events, incidents, assets, users и Vision. |
 | Asset / endpoint | Готово | Assets связаны с актуальным endpoint; один asset имеет только один текущий endpoint. |
@@ -27,7 +27,7 @@
 | Background demo | Готово | User-level demo tasks и production Compose deployment с restart policy. |
 | Local package | Готово | ZIP без secret/database/log data, startup scripts и documentation. |
 | GitHub | Готово | Public repository: `temirkhanerbolatovich-coder/AssetGuard`. |
-| Automated tests | Готово | Disposable PostgreSQL, inventory/Vision E2E, auth lifecycle и identity conflict; 13 tests + GitHub Actions workflow. |
+| Automated tests | Готово | Disposable PostgreSQL, JSON/native inventory, Vision E2E, auth lifecycle и identity conflict; 14 tests + GitHub Actions workflow. |
 
 ## Оставшаяся работа
 
@@ -52,7 +52,7 @@
 - [x] Endpoint last-seen policy: `REQUIRES_VERIFICATION`, без автоматического вывода о пропаже или краже.
 - [x] Managed production deployment: Docker restart policy, независимо от интерактивной Windows-сессии.
 - [ ] Deployment acceptance на целевом сервере: DNS, публичный/корпоративный сертификат, encrypted off-host backup и restore rehearsal.
-- [ ] Native GLPI protocol spike и реализация `DirectGlpiAgentAdapter` либо `GlpiApiAdapter`.
+- [x] Native GLPI Agent 1.19 protocol spike и `DirectGlpiAgentAdapter`.
 - [ ] Browser E2E и optional real Grounding DINO CI smoke job.
 
 ### За пределами текущего demo

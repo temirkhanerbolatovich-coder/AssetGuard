@@ -24,7 +24,7 @@ class SecurityAndRateLimitMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint):
         started = time.monotonic()
-        protected = request.url.path.startswith(("/admin", "/internal", "/auth/login"))
+        protected = request.url.path.startswith(("/admin", "/internal", "/auth/login", "/glpi-agent"))
         if protected and self._limited(request):
             logger.warning("rate_limit_exceeded path=%s client=%s", request.url.path, self._client(request))
             return JSONResponse(status_code=429, content={"detail": "Rate limit exceeded."}, headers={"Retry-After": "60"})

@@ -28,4 +28,4 @@ Configuration spike от 2026-09-23 подтверждён на установл
 
 ## Правило до production
 
-Нельзя запускать агент с full default payload против Gateway. Перед production-отправкой нужны: проверка minimal JSON на sanitized fixture, утверждение policy владельцем проекта и отдельная проверка нативного HTTP-протокола GLPI Agent против Gateway. Текущий backend принимает только внутренний JSON ingestion contract, а не подтверждённый нативный GLPI Agent protocol.
+Нельзя запускать агент с full default payload против Gateway. Native `/glpi-agent` проверен только вместе с этим минимальным profile, `no-compression = 1`, HTTP Basic credentials и GLPI Agent 1.19. Перед production-отправкой нужны утверждение policy владельцем проекта, HTTPS trust и защищённое хранение agent credentials.

@@ -1,6 +1,6 @@
 # AssetGuard
 
-AssetGuard — MVP системы непрерывного контроля компьютерных активов. Она принимает инвентаризацию от неизменённого GLPI Agent, сохраняет исходный payload, строит нормализованные снимки оборудования, сравнивает их с явно подтверждённым baseline и ведёт объяснимую историю изменений и решений.
+AssetGuard — MVP системы непрерывного контроля компьютерных активов. Она принимает инвентаризацию от неизменённого GLPI Agent через нативный XML transport либо explicit JSON bridge, сохраняет исходный payload, строит нормализованные снимки оборудования, сравнивает их с явно подтверждённым baseline и ведёт объяснимую историю изменений и решений.
 
 ## Статус
 
@@ -19,7 +19,7 @@ pwsh -File .\scripts\windows\start-demo.ps1
 
 Откройте http://127.0.0.1:8000. Для bootstrap можно использовать admin token из локального `.env`; затем рекомендуется создать named ADMIN/VIEWER пользователя и входить по username/password. Сессии можно завершать и отзывать, secrets не включаются в исходники или release archive.
 
-GitHub Actions проверяет migrations/tests на PostgreSQL, зависимости Python, JavaScript syntax и production Compose. Локально актуальный набор содержит 13 tests.
+GitHub Actions проверяет migrations/tests на PostgreSQL, зависимости Python, JavaScript syntax и production Compose. Локально актуальный набор содержит 14 tests.
 
 Production Compose также включает Vision dependencies, persistent image storage и model cache; ограничения и настройки описаны в `docs/operations/production-deployment.md`.
 

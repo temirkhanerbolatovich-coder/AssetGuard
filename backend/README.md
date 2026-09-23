@@ -26,6 +26,12 @@ python -m uvicorn assetguard.app:app --reload
 
 Endpoint принимает JSON object до 2 MiB по умолчанию, сохраняет SHA-256 и возвращает `202` для новой записи, `200` для повторной доставки того же payload и `409` при повторном ключе с иным payload. После сохранения evidence синхронный application workflow создаёт snapshot и выполняет безопасное сравнение с baseline; сам ingest никогда автоматически не меняет baseline.
 
+## Native GLPI Agent transport
+
+`POST /glpi-agent` реализует наблюдаемый GLPI Agent 1.19 legacy XML flow: authenticated `PROLOG` → `<RESPONSE>SEND</RESPONSE>` → `INVENTORY`. Агент использует HTTP Basic user `assetguard`, а password равен rotating `ASSETGUARD_INVENTORY_SHARED_SECRET`. Для endpoint обязателен agent option `no-compression = 1`; вне loopback используется только HTTPS с нормальной проверкой сертификата.
+
+`DirectGlpiAgentAdapter` сохраняет исходный XML и его SHA-256 внутри immutable JSONB evidence, преобразует секции в canonical GLPI-shaped envelope и запускает тот же snapshot/change/incident workflow. Inventory считается `FULL` только при наличии списков `MEMORIES` и `STORAGES`; иначе используется безопасный `PARTIAL`, который не создаёт removals по отсутствующим категориям.
+
 ## Baseline and change detection
 
 `accept_snapshot_as_baseline()` — единственный путь к `ACTIVE` baseline. Normalizer создаёт только candidate snapshot. `detect_changes()` сравнивает active baseline с current snapshot для RAM и storage, записывает evidence и использует stable dedup key; absence в неполной категории не создаёт removal.
@@ -40,7 +46,7 @@ Endpoint принимает JSON object до 2 MiB по умолчанию, со
 
 ## Ограничения текущего этапа
 
-- Нет подтверждённого direct endpoint нативного протокола GLPI Agent: используется explicit bridge.
+- Native endpoint подтверждён локальным end-to-end запуском неизменённого GLPI Agent 1.19; production TLS/DNS acceptance ещё не выполнен.
 - Vision не поддерживает RTSP, quality gate, multi-frame aggregation и автоматический `ANOMALY`.
 - Иерархия Institution/Building/Floor не реализована; Vision room задаётся уникальным именем.
 - Deployment acceptance на целевом сервере ещё не выполнен.

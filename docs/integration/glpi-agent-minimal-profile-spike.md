@@ -26,4 +26,4 @@
 
 ## Ограничение
 
-Это доказательство локального collection profile, а не доказательство сетевого протокола. Gateway пока не реализует нативный GLPI Agent HTTP endpoint: он принимает только внутренний authenticated JSON ingestion contract.
+Privacy profile отдельно от transport был повторно использован в native protocol spike. Неизменённый GLPI Agent 1.19 успешно прошёл authenticated `PROLOG` и отправил uncompressed `INVENTORY` в `/glpi-agent`; backend создал `PROCESSED` RawInventory и `ONLINE` endpoint. Это не отменяет обязательную проверку новых версий агента и production TLS deployment.

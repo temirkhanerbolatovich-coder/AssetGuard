@@ -42,6 +42,8 @@ def text(value: Any) -> str | None:
 
 
 def integer(value: Any) -> int | None:
+    if isinstance(value, str) and value.strip().isdigit():
+        return int(value.strip())
     return int(value) if isinstance(value, (int, float)) and not isinstance(value, bool) and value >= 0 else None
 
 

@@ -11,4 +11,6 @@ Upstream GLPI Agent устанавливается отдельно: AssetGuard 
 
 Скрипты не отключают TLS, не записывают secrets в исходники и не меняют baseline автоматически.
 
+Для primary native transport настройте установленный GLPI Agent 1.19 на `https://<host>/glpi-agent`, Basic user `assetguard`, rotating inventory secret и profile `glpi-agent-minimal-profile.cfg`. Explicit `send-minimal-inventory.ps1` остаётся fallback для автономного collection режима. Production credentials должны храниться в защищённой конфигурации агента с ограниченным ACL, а не в командном файле.
+
 Для локального Vision demo Python environment должен быть установлен с extras `backend[dev,vision]`. Модель загружается при первом scan; demo-изображения находятся в `demo/vision/`.
