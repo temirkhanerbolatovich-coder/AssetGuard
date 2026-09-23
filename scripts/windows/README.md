@@ -1,13 +1,14 @@
-# Windows: будущие операции Phase 0
+# Windows operations
 
-Этот каталог намеренно не содержит скрипта автоматической установки. Сначала требуется завершить и проверить ручную/WinGet установку upstream GLPI Agent на лабораторной машине.
+Upstream GLPI Agent устанавливается отдельно: AssetGuard не модифицирует и не форкает collector. Скрипты каталога покрывают локальную demo-эксплуатацию:
 
-После установки сюда могут быть добавлены только проверяемые и безопасные скрипты для:
+- `new-local-env.ps1` — создаёт локальные secrets;
+- `start-demo.ps1` — поднимает PostgreSQL, миграции и API;
+- `collect-minimal-inventory.ps1` — собирает privacy-limited JSON;
+- `send-minimal-inventory.ps1` — отправляет его в authenticated gateway;
+- `install-background-demo.ps1` / `uninstall-background-demo.ps1` — управляют demo Scheduled Tasks;
+- `backup-database.ps1` / `restore-database.ps1` — создают и восстанавливают SQL backup.
 
-- чтения версии агента;
-- расчёта SHA-256 уже скачанного MSI;
-- запуска локального inventory без передачи payload третьим лицам;
-- копирования payload в закрытую тестовую область с последующей sanitization.
+Скрипты не отключают TLS, не записывают secrets в исходники и не меняют baseline автоматически.
 
-Скрипт не должен отключать TLS, записывать secrets в репозиторий, публиковать инвентаризацию или менять baseline.
-
+Для локального Vision demo Python environment должен быть установлен с extras `backend[dev,vision]`. Модель загружается при первом scan; demo-изображения находятся в `demo/vision/`.

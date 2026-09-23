@@ -1,38 +1,34 @@
-# AssetGuard Vision — анализ интеграции до разработки
+# AssetGuard Vision — минимальная интеграция
 
-## Текущее состояние AssetGuard
+## Решение
 
-| Область | Наблюдение | Вывод для Vision |
-| --- | --- | --- |
-| Backend | FastAPI modular monolith; routers `/internal/inventories` и `/admin/*` | Vision API добавляется отдельным router/module, не меняя Agent ingestion. |
-| Данные активов | Есть `OrganizationRecord`, `AssetRecord`, поле `AssetRecord.room` строкой | Полноценной модели `Building`/`Floor`/`Room` пока нет; для Vision нужна нормализованная room hierarchy, а не повторное использование строки. |
-| Devices | `ManagedEndpointRecord` связан с Asset | Digital inventory room можно агрегировать по assets, но связывание detections ↔ endpoints запрещено в MVP. |
-| Evidence workflow | Есть snapshot → explicit baseline → change → incident → history для hardware endpoint | Vision нужен отдельный room-level workflow. Повторно использовать hardware baseline нельзя: единицы, owner и правила подтверждения отличаются. |
-| UI | Одна HTML/JS dashboard страница с Assets и endpoint detail | Vision добавляется отдельным разделом/room page, сохраняя текущие карточки и token-auth UI. |
+Для демонстрационного MVP Vision добавлен как изолированный модуль существующего FastAPI modular monolith. Это минимальный путь: используются текущие PostgreSQL, SQLAlchemy/Alembic, `/admin/*` authentication, единый Dashboard и принятая структура `modules`/`interfaces`. Отдельный microservice и полная room hierarchy не нужны для сегодняшнего сценария и увеличили бы число точек отказа.
 
-## Минимальная целевая граница
+`Dashboard multipart upload → /admin/vision/scans → lazy Grounding DINO inference → original/annotated JPEG → PostgreSQL scan/detections/counts → explicit room baseline → comparison → WARNING`
 
-`Dashboard upload → Vision Service → AssetGuard Vision API → PostgreSQL/object storage → Dashboard`.
+## Что добавлено
 
-Vision Service владеет inference и annotated image generation. AssetGuard владеет room hierarchy, access control, scan/detection persistence, baseline/count comparison, warning/anomaly state и display. Для MVP разумен отдельный service process/container с HTTP contract; основной backend не импортирует ML runtime и не зависит от его доступности.
+- `modules/vision`: адаптер Grounding DINO, image validation/annotation и baseline comparison;
+- router `/admin/vision/*`, использующий существующие ADMIN/VIEWER guards;
+- таблицы `vision_rooms`, `vision_scans`, `vision_detections`, `vision_baselines`;
+- локальное image storage `.local/vision` для demo;
+- блок Dashboard с upload, annotated image, counts, baseline и history;
+- integration test всего workflow с детерминированным detector;
+- реальный smoke test на Grounding DINO и demo-паре изображений.
 
-## Предлагаемая очередность, когда будет дано разрешение
+Модель загружается лениво при первом scan. Поэтому отсутствие ML dependencies или сбой inference возвращает ошибку только Vision endpoint и не мешает старту основного AssetGuard API.
 
-1. Создать `Institution`, `Building`, `Floor`, `Room` и явную миграцию данных из `AssetRecord.room`; не удалять старое поле до миграции.
-2. Зафиксировать Vision Service API contract и storage abstraction для uploaded/annotated images; добавить size/type limits.
-3. Поднять отдельный Vision Service с mock detector и contract tests. Только затем подключать Grounding DINO и его model lifecycle.
-4. Добавить `VisionScan`, immutable detections, baseline items и count-comparison (`WARNING` first).
-5. Реализовать upload + room page + annotated-image display + history.
-6. Добавить operator confirmation/repeated-scan rule для `ANOMALY`, threshold/configuration и error/observability path.
+## Осознанно не реализовано
 
-## Необходимые решения перед реализацией
+- Institution → Building → Floor → Room: room пока задаётся уникальным именем;
+- отдельный inference service/container и S3-compatible storage;
+- RTSP/cameras/scheduler, video, tracking и распознавание людей;
+- `ANOMALY`, автоматическое подтверждение пропажи и уведомления;
+- сопоставление физической detection с конкретным endpoint/asset;
+- обучение/калибровка модели и production accuracy guarantees.
 
-- Где хранятся uploaded/annotated images: локальный volume для demo или S3-compatible object storage.
-- Какая среда запуска модели: CPU demo или GPU; Grounding DINO runtime/веса нельзя включать в базовый backend image без отдельного решения.
-- Кто создаёт и редактирует hierarchy Institution/Building/Floor/Room и каким образом первоначально мигрировать строковые room значения.
-- Каким правилом WARNING превращается в ANOMALY: количество последовательных scans, период либо явное решение оператора.
-- Политика retention и права доступа к фотографиям помещений.
+Эти функции не нужны для требуемого demo-сценария. Текущий `WARNING` означает только расхождение counts с baseline, а не доказанную пропажу.
 
-## Риски, учтённые в ТЗ
+## Ограничения demo
 
-Count mismatch не доказывает пропажу: плохой ракурс, освещение и перекрытие создают ложные срабатывания. Поэтому confidence threshold, immutable scan history, initial WARNING и ручное/повторное подтверждение являются обязательными, а не UI-деталями.
+Grounding DINO tiny — zero-shot detector: классы и threshold конфигурируются, но counts чувствительны к ракурсу, освещению и перекрытиям. Снимки сохраняются локально, а inference на CPU может быть медленным. Для production следующим отдельным этапом понадобятся dataset/accuracy evaluation, устойчивое object storage, retention/access policy и решение о GPU или отдельном Vision Service.

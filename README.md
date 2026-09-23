@@ -4,7 +4,7 @@ AssetGuard — MVP системы непрерывного контроля ко
 
 ## Статус
 
-Готов локальный демонстрационный MVP v0.1: FastAPI backend, PostgreSQL migrations, browser dashboard, baseline/change/incident workflow и GLPI Agent minimal privacy profile. Vision Inventory в эту поставку не входит.
+Готов демонстрационный MVP v0.1: FastAPI backend, PostgreSQL migrations, browser dashboard, baseline/change/incident workflow, GLPI Agent minimal privacy profile и AssetGuard Vision. Vision поддерживает загрузку JPEG/PNG, Grounding DINO object detection, bounding boxes, подсчёт объектов, room baseline, повторное сравнение и начальный статус `WARNING`.
 
 ## Быстрый запуск на Windows
 
@@ -13,11 +13,17 @@ AssetGuard — MVP системы непрерывного контроля ко
 ```powershell
 pwsh -File .\scripts\windows\new-local-env.ps1
 py -3.12 -m venv backend/.venv
-backend/.venv/Scripts/python.exe -m pip install -e 'backend[dev]'
+backend/.venv/Scripts/python.exe -m pip install -e 'backend[dev,vision]'
 pwsh -File .\scripts\windows\start-demo.ps1
 ```
 
 Откройте http://127.0.0.1:8000. Admin token берётся из локального `.env`; он не включается в исходники или release archive.
+
+Production Compose также включает Vision dependencies, persistent image storage и model cache; ограничения и настройки описаны в `docs/operations/production-deployment.md`.
+
+## Демонстрация Vision
+
+В блоке **AssetGuard Vision** укажите помещение и загрузите `demo/vision/room-305-baseline.png`. После обработки нажмите **Сохранить baseline**, затем загрузите `demo/vision/room-305-warning.png`: на втором кадре удалён принтер, поэтому сравнение показывает расхождение и `WARNING`. Первый запуск загружает/инициализирует модель и на CPU может занять больше времени; следующие scans выполняются уже на прогретой модели.
 
 ## Главный принцип
 
@@ -31,7 +37,10 @@ pwsh -File .\scripts\windows\start-demo.ps1
 - [Карта документации](docs/README.md)
 - [Чек-лист завершения MVP](docs/product/mvp-completion-checklist.md)
 - [Локальная demo-поставка](docs/operations/local-demo-guide.md)
+- [Production deployment и recovery](docs/operations/production-deployment.md)
 - [GLPI minimal profile spike](docs/integration/glpi-agent-minimal-profile-spike.md)
+- [Требования AssetGuard Vision](docs/product/assetguard-vision-requirements.md)
+- [Минимальная интеграция AssetGuard Vision](docs/architecture/assetguard-vision-integration-analysis.md)
 
 ## Будущий вертикальный поток
 

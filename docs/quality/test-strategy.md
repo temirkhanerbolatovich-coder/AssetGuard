@@ -7,7 +7,7 @@
 | Unit | canonicalization, placeholders, identity confidence, matching, diff, dedup keys |
 | Integration | raw → snapshot → baseline → event → incident → history в PostgreSQL |
 | Contract | наблюдаемый GLPI Agent ingest контракт после spike |
-| End-to-end | обязательный demo-сценарий через API/UI |
+| End-to-end | обязательные inventory и Vision demo-сценарии через API |
 
 ## Обязательные sanitized fixtures
 
@@ -20,4 +20,4 @@
 
 Фикстуры хранятся без secrets и персональных данных в `backend/tests/fixtures/`.
 
-Статус на 2026-09-23: все шесть сценариев представлены отдельными sanitized JSON fixtures. Для минимального privacy-профиля добавлен unit-check: запрещённые top-level категории не должны попасть в `content`. Следующий тестовый шаг — изолировать PostgreSQL fixture database и автоматизировать полную цепочку для каждого сценария без использования локальной demo-базы.
+Статус на 2026-09-23: все шесть сценариев представлены sanitized JSON fixtures. Pytest поднимает изолированную PostgreSQL test database и проверяет полную inventory цепочку, RBAC и Vision workflow. Vision integration test использует детерминированный detector, чтобы не скачивать ML weights в обычном test run; реальный Grounding DINO проверяется отдельным ручным smoke-сценарием на demo-паре изображений. Следующий уровень проверки — browser E2E и optional model smoke job.

@@ -1,38 +1,34 @@
-# Карта будущей структуры исходного кода
+# Фактическая структура исходного кода
 
-Структура ориентирована на modular monolith. Каждый модуль инкапсулирует прикладную логику и не требует самостоятельного развёртывания.
+Проект остаётся FastAPI modular monolith: доменные модули разделены в коде, но используют единый API process и PostgreSQL.
 
 ```text
 backend/
-  src/
-    assetguard/
-      modules/
-        assets/          # Asset, Organization, связь Asset—Endpoint
-        endpoints/       # ManagedEndpoint и идентификаторы
-        inventory/       # Gateway, RawInventory, source adapters
-        snapshots/       # normalizer и HardwareSnapshot
-        baselines/       # явное принятие и supersede baseline
-        changes/         # diff, evidence, deterministic deduplication
-        incidents/       # workflow и append-only decisions
-        history/         # единая append-only timeline
-        identity/        # canonicalization, confidence, component matching
-      shared/            # минимальные общие типы, ошибки, время, audit
-      interfaces/        # HTTP/admin входы и контракты
-      infrastructure/    # PostgreSQL, внешние API, logging
+  migrations/versions/       # Alembic migrations 0001–0009
+  src/assetguard/
+    app.py                    # HTTP composition root и static Dashboard
+    infrastructure/           # config, database, HTTP middleware
+    interfaces/http/          # inventory, admin, auth и Vision routers
+    modules/
+      assets/                 # Asset и связь Asset—Endpoint
+      endpoints/              # endpoint status/identity operations
+      inventory/              # RawInventory и ingestion workflow
+      snapshots/              # hardware normalization
+      baselines/              # explicit hardware baseline
+      changes/                # evidence-aware diff и deduplication
+      incidents/              # incident workflow
+      history/                # append-only Asset timeline
+      identity/               # users, sessions и authentication
+      vision/                 # detection, annotation, counts и room baseline
   tests/
-    unit/
-    integration/
-    contract/
-    fixtures/
-frontend/
-  src/
-    features/            # dashboard, assets, incidents
-    shared/
-infra/
-  database/              # будущие миграции и локальная БД
-  containers/            # будущие compose/container definition
-  observability/         # будущая конфигурация logs/metrics
+    fixtures/                 # sanitized GLPI Agent payloads
+    unit/                     # normalization/privacy/health tests
+    integration/              # inventory и Vision vertical slices
+frontend/                     # единый HTML/CSS/JS Dashboard
+infra/containers/             # local PostgreSQL и production Compose/Caddy
+scripts/windows/              # local run, collection, scheduled tasks, backup/restore
+demo/vision/                  # воспроизводимая пара demo-изображений
+docs/                         # architecture, API, product и operations
 ```
 
-Каталоги созданы как пустой каркас. Выбор языка, фреймворка, ORM и конкретных файлов делается отдельным решением после утверждения implementation plan и результатов spike.
-
+Vision намеренно не вынесен в отдельный service для demo MVP. Модель загружается лениво, поэтому обычный inventory workflow не зависит от её инициализации. Отдельный inference service остаётся возможным production evolution, а не требованием текущей архитектуры.
