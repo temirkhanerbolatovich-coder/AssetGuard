@@ -11,7 +11,7 @@
 <body>
 <header class="app-header">
   <a class="brand" href="#overview" aria-label="AssetGuard, на главную"><span class="brand-mark" aria-hidden="true">A</span><span><strong>AssetGuard</strong><small>Контроль IT-активов</small></span></a>
-  <nav class="main-nav" aria-label="Основная навигация"><a href="#overview">Обзор</a><a href="#devices">Устройства</a><a href="#agent-workflow">Как работает Agent</a><a href="#vision">Vision</a></nav>
+  <nav class="main-nav" aria-label="Основная навигация"><a href="#overview">Обзор</a><a href="#locations">Локации</a><a href="#devices">Устройства</a><a href="#agent-workflow">Как работает Agent</a><a href="#vision">Vision</a></nav>
   <form id="token-form" class="token-form">
     <input id="username" autocomplete="username" placeholder="Логин">
     <input id="token" type="password" autocomplete="current-password" placeholder="Пароль или токен" required>
@@ -42,6 +42,14 @@
     <div class="overview-grid secondary-grid">
       <article class="panel"><span class="eyebrow">Размещение</span><h3>Кабинеты и организации</h3><div id="location-summary" class="tag-list"><span class="skeleton short"></span></div></article>
       <article class="panel"><span class="eyebrow">Инвентаризация</span><h3>Качество данных</h3><div id="inventory-summary" class="summary-lines"></div></article>
+    </div>
+  </section>
+
+  <section id="locations" class="page-section">
+    <div class="section-heading page-heading"><div><span class="eyebrow">Структура школы</span><h2>Локации</h2><p>Корпуса, этажи и кабинеты теперь являются отдельными объектами. У кабинета можно указать ответственного и открыть сводку закреплённого оборудования.</p></div></div>
+    <div class="overview-grid">
+      <article class="panel"><div class="section-heading"><div><span class="eyebrow">Иерархия</span><h3>Организация → корпус → этаж → кабинет</h3></div></div><div id="location-tree" class="stack-list"><div class="skeleton"></div></div></article>
+      <article class="panel"><span class="eyebrow">Добавить корпус</span><h3>Новая локация</h3><form id="create-building" class="create-form"><label>Название корпуса<input name="name" placeholder="Главный корпус" required></label><label>Ответственный<input name="responsible_name" placeholder="ФИО"></label><label>Контакт<input name="responsible_contact" placeholder="Телефон или email"></label><button>Создать корпус</button></form><div id="location-report" class="summary-lines"><p class="empty">Откройте сводку кабинета в дереве.</p></div></article>
     </div>
   </section>
 

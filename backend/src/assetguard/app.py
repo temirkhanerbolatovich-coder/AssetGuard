@@ -12,6 +12,7 @@ from assetguard.interfaces.http.admin_inventories import router as admin_invento
 from assetguard.interfaces.http.auth import router as auth_router
 from assetguard.interfaces.http.vision import router as vision_router
 from assetguard.interfaces.http.glpi_agent import router as glpi_agent_router
+from assetguard.interfaces.http.admin_locations import router as admin_locations_router
 from assetguard.infrastructure.http_middleware import SecurityAndRateLimitMiddleware
 
 
@@ -25,6 +26,7 @@ app.add_middleware(SecurityAndRateLimitMiddleware)
 app.include_router(health_router)
 app.include_router(inventories_router)
 app.include_router(admin_assets_router)
+app.include_router(admin_locations_router)
 app.include_router(admin_workflows_router)
 app.include_router(admin_inventories_router)
 app.include_router(auth_router)

@@ -28,7 +28,7 @@ from sqlalchemy.orm import Session
 
 from assetguard.infrastructure.config import get_settings
 from assetguard.infrastructure.database import get_session
-from assetguard.modules.assets.models import AssetRecord, OrganizationRecord
+from assetguard.modules.assets.models import AssetRecord, OrganizationRecord, RoomRecord, FloorRecord, BuildingRecord
 from assetguard.modules.baselines.models import BaselineRecord
 from assetguard.modules.changes.models import ChangeEventRecord
 from assetguard.modules.history.service import append_asset_history
@@ -83,6 +83,7 @@ class AssetCreate(BaseModel):
     floor: str | None = Field(default=None, max_length=64)
     room: str | None = Field(default=None, max_length=255)
     notes: str | None = None
+    room_id: UUID | None = None
 
 
 class AssetUpdate(BaseModel):
@@ -94,6 +95,7 @@ class AssetUpdate(BaseModel):
     floor: str | None = Field(default=None, max_length=64)
     room: str | None = Field(default=None, max_length=255)
     notes: str | None = None
+    room_id: UUID | None = None
 
 
 def _asset_view(asset: AssetRecord, endpoint_id: UUID | None, organization: str | None = None) -> dict:
@@ -101,6 +103,7 @@ def _asset_view(asset: AssetRecord, endpoint_id: UUID | None, organization: str 
         "id": str(asset.id), "inventory_number": asset.inventory_number,
         "name": asset.name, "asset_type": asset.asset_type, "status": asset.status,
         "building": asset.building, "floor": asset.floor, "room": asset.room,
+        "room_id": str(asset.room_id) if asset.room_id else None,
         "notes": asset.notes, "organization": organization,
         "endpoint_id": str(endpoint_id) if endpoint_id else None,
     }
@@ -121,6 +124,37 @@ def _scoped_asset(session: Session, asset_id: UUID, principal: AuthPrincipal) ->
     if not asset or (principal.organization_id and asset.organization_id != principal.organization_id):
         raise HTTPException(404, "Asset was not found.")
     return asset
+
+
+def _apply_room_location(asset: AssetRecord, room_id: UUID | None, session: Session, organization_id: UUID) -> None:
+    if room_id is None:
+        asset.room_id = None
+        return
+    room = session.get(RoomRecord, room_id)
+    floor = session.get(FloorRecord, room.floor_id) if room else None
+    building = session.get(BuildingRecord, floor.building_id) if floor else None
+    if not room or not floor or not building or building.organization_id != organization_id:
+        raise HTTPException(422, "The selected room does not belong to this organization.")
+    asset.room_id = room.id
+    # Keep the legacy fields in sync for existing exports and integrations.
+    asset.building, asset.floor, asset.room = building.name, floor.name, room.name
+
+
+def _ensure_room_for_legacy_location(asset: AssetRecord, session: Session) -> None:
+    """Turn legacy text fields into managed locations while preserving import compatibility."""
+    if not asset.room:
+        return
+    building_name, floor_name = asset.building or "Не указан корпус", asset.floor or "Не указан этаж"
+    building = session.scalar(select(BuildingRecord).where(BuildingRecord.organization_id == asset.organization_id, BuildingRecord.name == building_name))
+    if not building:
+        building = BuildingRecord(organization_id=asset.organization_id, name=building_name, created_at=datetime.now(UTC)); session.add(building); session.flush()
+    floor = session.scalar(select(FloorRecord).where(FloorRecord.building_id == building.id, FloorRecord.name == floor_name))
+    if not floor:
+        floor = FloorRecord(building_id=building.id, name=floor_name, created_at=datetime.now(UTC)); session.add(floor); session.flush()
+    room = session.scalar(select(RoomRecord).where(RoomRecord.floor_id == floor.id, RoomRecord.name == asset.room))
+    if not room:
+        room = RoomRecord(floor_id=floor.id, name=asset.room, created_at=datetime.now(UTC)); session.add(room); session.flush()
+    asset.room_id = room.id
 
 
 def scoped_endpoint(session: Session, endpoint_id: UUID, principal: AuthPrincipal) -> ManagedEndpointRecord:
@@ -562,6 +596,9 @@ def create_asset(body: AssetCreate, session: Annotated[Session, Depends(get_sess
         building=body.building, floor=body.floor, room=body.room, notes=body.notes,
         created_at=now, updated_at=now,
     )
+    _apply_room_location(asset, body.room_id, session, organization.id)
+    if body.room_id is None:
+        _ensure_room_for_legacy_location(asset, session)
     session.add(asset)
     session.flush()
     append_asset_history(
@@ -586,8 +623,12 @@ def update_asset(asset_id: UUID, body: AssetUpdate, session: Annotated[Session, 
         ))
         if duplicate:
             raise HTTPException(409, "Inventory number already exists.")
+    if "room_id" in changes:
+        _apply_room_location(asset, changes.pop("room_id"), session, asset.organization_id)
     for field, value in changes.items():
         setattr(asset, field, value)
+    if "room_id" not in body.model_fields_set and {"building", "floor", "room"} & set(changes):
+        _ensure_room_for_legacy_location(asset, session)
     asset.updated_at = datetime.now(UTC)
     append_asset_history(
         session, asset_id=asset.id, event_type="ASSET_UPDATED",

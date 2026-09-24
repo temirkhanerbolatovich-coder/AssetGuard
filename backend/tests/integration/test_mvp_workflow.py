@@ -64,6 +64,15 @@ async def _complete_mvp_workflow() -> None:
         assert location_update.status_code == 200
         assert location_update.json()["building"] == "Корпус А"
         assert location_update.json()["floor"] == "2"
+        location_tree = await client.get("/admin/locations/tree", headers=admin_headers())
+        assert location_tree.status_code == 200
+        room = location_tree.json()[0]["floors"][0]["rooms"][0]
+        assert room["name"] == "205"
+        assert room["asset_count"] == 1
+        room_report = await client.get(f"/admin/locations/rooms/{room['id']}/report", headers=admin_headers())
+        assert room_report.status_code == 200
+        assert room_report.json()["path"] == {"building": "Корпус А", "floor": "2"}
+        assert room_report.json()["assets"][0]["id"] == asset_id
         export = await client.get("/admin/assets/export.xlsx", headers=admin_headers())
         assert export.status_code == 200
         assert export.headers["content-type"].startswith("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
