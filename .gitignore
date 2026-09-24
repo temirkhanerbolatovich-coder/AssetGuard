@@ -11,6 +11,7 @@ logs/
 *.inspect.ndjson
 .local/
 tools/glpi-agent-portable/
+installer-output/
 
 # Editor and OS files
 .vscode/
