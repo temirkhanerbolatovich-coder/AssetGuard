@@ -112,6 +112,13 @@ def _scoped_asset(session: Session, asset_id: UUID, principal: AuthPrincipal) ->
     return asset
 
 
+def scoped_endpoint(session: Session, endpoint_id: UUID, principal: AuthPrincipal) -> ManagedEndpointRecord:
+    endpoint = session.get(ManagedEndpointRecord, endpoint_id)
+    if not endpoint or (principal.organization_id and endpoint.organization_id != principal.organization_id):
+        raise HTTPException(404, "Endpoint was not found.")
+    return endpoint
+
+
 def _latest_snapshot(session: Session, endpoint_id: UUID) -> HardwareSnapshotRecord | None:
     return session.scalar(select(HardwareSnapshotRecord).where(
         HardwareSnapshotRecord.managed_endpoint_id == endpoint_id,

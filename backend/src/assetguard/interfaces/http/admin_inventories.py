@@ -8,10 +8,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from assetguard.infrastructure.database import get_session
-from assetguard.interfaces.http.admin_assets import require_viewer
+from assetguard.interfaces.http.admin_assets import require_viewer, scoped_endpoint
+from assetguard.modules.identity.auth import AuthPrincipal
+from assetguard.modules.snapshots.models import ManagedEndpointRecord
 from assetguard.modules.inventory.models import RawInventoryRecord
 
-router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_viewer)])
+router = APIRouter(prefix="/admin", tags=["admin"])
 
 
 def _summary(item: RawInventoryRecord) -> dict:
@@ -33,18 +35,27 @@ def _summary(item: RawInventoryRecord) -> dict:
 @router.get("/inventories")
 def list_inventories(
     session: Annotated[Session, Depends(get_session)],
+    principal: Annotated[AuthPrincipal, Depends(require_viewer)],
     endpoint_id: UUID | None = None,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
 ):
     query = select(RawInventoryRecord).order_by(RawInventoryRecord.received_at.desc()).limit(limit)
+    if principal.organization_id:
+        query = query.join(ManagedEndpointRecord).where(ManagedEndpointRecord.organization_id == principal.organization_id)
     if endpoint_id:
+        scoped_endpoint(session, endpoint_id, principal)
         query = query.where(RawInventoryRecord.managed_endpoint_id == endpoint_id)
     return [_summary(item) for item in session.scalars(query)]
 
 
 @router.get("/inventories/{inventory_id}")
-def inventory_detail(inventory_id: UUID, session: Annotated[Session, Depends(get_session)]):
+def inventory_detail(inventory_id: UUID, session: Annotated[Session, Depends(get_session)], principal: Annotated[AuthPrincipal, Depends(require_viewer)]):
     item = session.get(RawInventoryRecord, inventory_id)
     if not item:
         raise HTTPException(404, "Raw inventory was not found.")
+    if not item.managed_endpoint_id:
+        if principal.organization_id:
+            raise HTTPException(404, "Raw inventory was not found.")
+    else:
+        scoped_endpoint(session, item.managed_endpoint_id, principal)
     return {**_summary(item), "payload": item.payload}
