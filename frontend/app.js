@@ -1,6 +1,6 @@
 const $ = (id) => document.getElementById(id);
 let token = sessionStorage.getItem("assetguard-admin-token") || "";
-let state = {assets: [], endpoints: [], devices: [], changes: [], incidents: [], operations: null, locations: [], users: [], locationAccess: [], organizations: [], currentUser: null, visionRooms: [], selectedAsset: null, linkingEndpoint: null, visionRoomId: null, visionScan: null, visionImageUrl: null, assetQrUrl: null};
+let state = {assets: [], endpoints: [], devices: [], changes: [], incidents: [], operations: null, locations: [], users: [], locationAccess: [], organizations: [], agentCredentials: [], currentUser: null, visionRooms: [], selectedAsset: null, linkingEndpoint: null, visionRoomId: null, visionScan: null, visionImageUrl: null, assetQrUrl: null};
 $("token").value = token;
 
 const escapeHtml = (value) => String(value ?? "—").replace(/[&<>"']/g, (char) => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[char]));
@@ -23,11 +23,11 @@ const bytes = (value) => {
 };
 const storageSize = (value) => value == null ? "—" : `${(Number(value) / 1024).toFixed(Number(value) % 1024 ? 1 : 0)} ГБ`;
 const ramBytes = (value) => value == null ? null : (Number(value) < 1048576 ? Number(value) * 1048576 : Number(value));
-const statusLabels = {OK:"В норме",ATTENTION:"Требует внимания",ANOMALY:"Обнаружено расхождение",OFFLINE:"Не в сети",UNCHECKED:"Нет данных Agent",MANUAL:"Ручной учёт",WARNING:"Требует внимания",NOT_CHECKED:"Не проверено",ONLINE:"В норме",REQUIRES_VERIFICATION:"Требует проверки",IDENTITY_CONFLICT:"Конфликт идентификации",OPEN:"Открыто",UNDER_REVIEW:"На проверке",RESOLVED:"Закрыто",DISMISSED:"Не подтверждено",ACTIVE:"Активен"};
+const statusLabels = {OK:"В норме",ATTENTION:"Требует внимания",ANOMALY:"Обнаружено расхождение",OFFLINE:"Не в сети",UNCHECKED:"Нет данных Agent",MANUAL:"Ручной учёт",WARNING:"Требует внимания",NOT_CHECKED:"Не проверено",ONLINE:"В норме",REQUIRES_VERIFICATION:"Требует проверки",IDENTITY_CONFLICT:"Конфликт идентификации",OPEN:"Открыто",UNDER_REVIEW:"На проверке",RESOLVED:"Закрыто",DISMISSED:"Не подтверждено",ACTIVE:"Активен",REVOKED:"Отозван"};
 const categoryLabels = {IT:"IT-оборудование",FURNITURE:"Мебель",SPORTS:"Спортинвентарь",EDUCATIONAL:"Учебное оборудование",OTHER:"Другое имущество"};
 const componentLabels = {RAM:"Оперативная память",STORAGE:"Физические накопители",DRIVE:"Разделы дисков",CONTROLLER:"Контроллеры",CPU:"Процессор",GPU:"Видеокарта",MOTHERBOARD:"Материнская плата",NETWORK:"Сетевые интерфейсы",MONITOR:"Мониторы",ENDPOINT:"Устройство"};
 const eventLabels = {COMPONENT_ADDED:"Компонент добавлен",COMPONENT_REMOVED:"Компонент отсутствует",COMPONENT_CHANGED:"Характеристики изменились",COMPONENT_REPLACED:"Компонент заменён",HOSTNAME_CHANGED:"Изменилось имя компьютера",DEVICE_IDENTITY_CHANGED:"Изменился идентификатор устройства",INVENTORY_COMPLETED:"Инвентаризация завершена",BASELINE_ACCEPTED:"Эталон подтверждён",HARDWARE_CHANGE_DETECTED:"Обнаружено изменение оборудования",INCIDENT_CREATED:"Создано обращение",INCIDENT_CLASSIFIED:"Обращение классифицировано",INCIDENT_RESOLVED:"Обращение закрыто",ASSET_CREATED:"Актив добавлен",ASSET_UPDATED:"Карточка обновлена",ENDPOINT_LINKED:"Устройство связано с активом",ENDPOINT_UNLINKED:"Устройство отвязано"};
-const classForStatus = (value) => ({OK:"ok",ONLINE:"ok",ACTIVE:"ok",RESOLVED:"ok",ATTENTION:"attention",WARNING:"warning",OPEN:"warning",UNDER_REVIEW:"warning",ANOMALY:"anomaly",IDENTITY_CONFLICT:"danger",OFFLINE:"offline",UNCHECKED:"unchecked",NOT_CHECKED:"unchecked",REQUIRES_VERIFICATION:"unchecked"}[value] || "neutral");
+const classForStatus = (value) => ({OK:"ok",ONLINE:"ok",ACTIVE:"ok",RESOLVED:"ok",ATTENTION:"attention",WARNING:"warning",OPEN:"warning",UNDER_REVIEW:"warning",ANOMALY:"anomaly",IDENTITY_CONFLICT:"danger",REVOKED:"danger",OFFLINE:"offline",UNCHECKED:"unchecked",NOT_CHECKED:"unchecked",REQUIRES_VERIFICATION:"unchecked"}[value] || "neutral");
 const pill = (value) => `<span class="status-pill ${classForStatus(value)}">${escapeHtml(statusLabels[value] || value || "Не проверено")}</span>`;
 
 function showToast(message, error = false) {
@@ -46,6 +46,13 @@ async function apiBlob(path) {
   const response = await fetch(path, {headers: {"X-AssetGuard-Admin-Token": token}});
   if (!response.ok) throw new Error("Не удалось загрузить изображение результата.");
   return response.blob();
+}
+async function copyAgentCredential(fieldId) {
+  const field=$(fieldId), value=field.value;
+  if(!value) return;
+  try { await navigator.clipboard.writeText(value); }
+  catch { field.focus(); field.select(); if(!document.execCommand("copy")) throw new Error("Не удалось скопировать. Выделите значение и скопируйте вручную."); }
+  showToast("Скопировано в буфер обмена");
 }
 function deviceStatus(endpoint, asset = null) {
   if (!endpoint && asset && asset.category !== "IT") return "MANUAL";
@@ -183,8 +190,27 @@ function userRoleLabel(role) { return ({ADMIN:"Администратор шко
 function renderAdminAccessVisibility() {
   const signedIn=Boolean(state.currentUser), isAdmin=state.currentUser?.role==="ADMIN";
   $("location-access-nav").hidden=!signedIn; $("location-access-shortcut").hidden=!signedIn; $("location-access").hidden=!signedIn;
+  $("agent-credentials-nav").hidden=!isAdmin; $("agent-credentials").hidden=!isAdmin;
   $("access-admin-content").hidden=!isAdmin; $("access-role-notice").hidden=!signedIn||isAdmin;
   if(signedIn&&!isAdmin)$("access-role-notice").textContent=`Вы вошли как «${userRoleLabel(state.currentUser.role)}». Создавать учётные записи и назначать доступы может администратор школы.`;
+}
+function renderAgentCredentials() {
+  if(state.currentUser?.role!=="ADMIN") return;
+  const select=$("agent-organization"), field=$("agent-organization-field"), tenantOrganizationId=state.currentUser.organization_id;
+  field.hidden=Boolean(tenantOrganizationId);
+  select.innerHTML=state.organizations.map((item)=>`<option value="${item.id}">${escapeHtml(item.name)}</option>`).join("")||'<option value="">Школа ещё не создана</option>';
+  if(tenantOrganizationId) select.value=tenantOrganizationId;
+  const rows=state.agentCredentials.map((item)=>{
+    const bound=Boolean(item.endpoint_id), revoked=item.status==="REVOKED";
+    const connection=revoked?"Отозван":bound?"Подключён к компьютеру":"Ожидает установку";
+    const status=revoked?"REVOKED":bound?"ONLINE":"ACTIVE";
+    return `<div class="credential-row"><div><strong>${escapeHtml(item.username)}</strong><small>${connection} · создан ${escapeHtml(dateTime(item.issued_at))}${item.revoked_at?` · отозван ${escapeHtml(dateTime(item.revoked_at))}`:""}</small></div>${pill(status)}${!revoked?`<button type="button" class="button-secondary revoke-agent-credential" data-id="${item.id}">Отозвать ключ</button>`:""}</div>`;
+  }).join("");
+  $("agent-credentials-list").innerHTML=rows||'<p class="empty">Ключей пока нет. Создайте первый перед установкой Agent.</p>';
+  // A bootstrap administrator may legitimately create a platform-scoped key before
+  // the first school is configured; tenant administrators are scoped automatically.
+  $("create-agent-credential").querySelector("button[type=submit]").disabled=false;
+  document.querySelectorAll(".revoke-agent-credential").forEach((button)=>button.onclick=async()=>{if(!confirm("Отозвать ключ? Этот компьютер больше не сможет отправлять инвентаризацию."))return;try{await api(`/admin/agent-credentials/${button.dataset.id}/revoke`,{method:"POST"});showToast("Ключ Agent отозван");await loadAdminAccess();}catch(error){showToast(error.message,true);}});
 }
 function syncRoleControls() {
   const user=state.currentUser, isAdmin=user?.role==="ADMIN", editableRooms=new Set(user?.editable_room_ids||[]), canEditAssets=isAdmin||editableRooms.size>0;
@@ -222,7 +248,7 @@ async function loadAdminAccess() {
   renderAdminAccessVisibility();
   if(state.currentUser?.role!=="ADMIN")return;
   $("access-load-error").hidden=true;
-  try { const [users,locationAccess,organizations]=await Promise.all([api("/admin/users"),api("/admin/locations/access"),api("/admin/locations/organizations")]);state={...state,users,locationAccess,organizations};renderAdminAccess();syncRoleControls(); }
+  try { const [users,locationAccess,organizations,agentCredentials]=await Promise.all([api("/admin/users"),api("/admin/locations/access"),api("/admin/locations/organizations"),api("/admin/agent-credentials")]);state={...state,users,locationAccess,organizations,agentCredentials};renderAdminAccess();renderAgentCredentials();syncRoleControls(); }
   catch(error) { $("access-load-error").hidden=false;$("access-load-error").textContent=`Не удалось загрузить управление пользователями: ${error.message}. Проверьте вход именно под администратором школы.`; }
 }
 function hardwareBrief(endpoint) {
@@ -390,6 +416,10 @@ $("create-user").addEventListener("submit",async(event)=>{event.preventDefault()
 $("grant-location-access").addEventListener("submit",async(event)=>{event.preventDefault();const form=event.currentTarget;try{const body=Object.fromEntries(new FormData(form).entries());const [scope_type,scope_id]=body.scope.split(":");await api("/admin/locations/access",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({user_id:body.user_id,scope_type,scope_id,permission:body.permission})});showToast("Назначение сохранено");await loadAdminAccess();}catch(error){showToast(error.message,true);}});
 $("access-user").addEventListener("change",renderAdminAccess);
 $("refresh-access").onclick=loadAdminAccess;
+$("create-agent-credential").addEventListener("submit",async(event)=>{event.preventDefault();try{const organizationId=state.currentUser?.organization_id||$("agent-organization").value||null;const credential=await api("/admin/agent-credentials",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({organization_id:organizationId})});await loadAdminAccess();$("agent-credential-username").value=credential.username;$("agent-credential-secret").value=credential.secret;$("agent-credential-dialog").showModal();showToast("Ключ для компьютера создан. Скопируйте его сейчас.");}catch(error){showToast(error.message,true);}});
+$("refresh-agent-credentials").onclick=loadAdminAccess;
+document.querySelectorAll(".copy-agent-credential").forEach((button)=>button.onclick=async()=>{try{await copyAgentCredential(button.dataset.field);}catch(error){showToast(error.message,true);}});
+$("agent-credential-dialog").addEventListener("close",()=>{$("agent-credential-username").value="";$("agent-credential-secret").value="";});
 $("export-assets").onclick = async () => { try { const blob = await apiBlob("/admin/assets/export.xlsx"); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = "assetguard-assets.xlsx"; link.click(); URL.revokeObjectURL(url); } catch (error) { showToast(error.message, true); } };
 $("export-assets-pdf").onclick = async () => { try { const blob = await apiBlob("/admin/assets/export.pdf"); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = "assetguard-assets.pdf"; link.click(); URL.revokeObjectURL(url); } catch (error) { showToast(error.message, true); } };
 function confirmAssetImport(file,format,preview) {

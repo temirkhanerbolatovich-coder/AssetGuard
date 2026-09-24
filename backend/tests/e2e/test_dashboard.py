@@ -62,6 +62,19 @@ def test_admin_can_open_dashboard_and_create_asset(live_server):
         assert page.get_by_role("heading", name="Последний инцидент").is_visible()
         assert page.locator("#setup-guide").is_visible()
 
+        page.locator("#agent-credentials-nav").click()
+        page.locator("#agent-credentials").scroll_into_view_if_needed()
+        page.get_by_role("button", name="Создать ключ для компьютера").click()
+        credential_dialog = page.locator("#agent-credential-dialog")
+        credential_dialog.wait_for(state="visible")
+        agent_username = page.locator("#agent-credential-username").input_value()
+        agent_secret = page.locator("#agent-credential-secret").input_value()
+        assert agent_username.startswith("ag-")
+        assert len(agent_secret) >= 32
+        assert page.locator("#agent-credentials-list").get_by_text(agent_username).is_visible()
+        credential_dialog.get_by_role("button", name="Я скопировал данные").click()
+        assert page.locator("#agent-credential-secret").input_value() == ""
+
         page.set_viewport_size({"width": 1280, "height": 900})
         assert page.locator(".app-header").evaluate("element => element.getBoundingClientRect().height < 220")
         assert page.locator("body").evaluate("element => element.scrollWidth <= element.clientWidth")
