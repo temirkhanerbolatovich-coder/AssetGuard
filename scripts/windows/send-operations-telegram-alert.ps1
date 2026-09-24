@@ -13,6 +13,7 @@ param(
     [ValidateRange(5, 1440)] [int]$RepeatAfterMinutes = 240,
     [ValidateRange(1, 99)] [int]$MinimumFreeStoragePercent = 10,
     [string]$StateFile = (Join-Path $env:LOCALAPPDATA 'AssetGuard\operations-alert-state.json'),
+    [string]$CredentialPath = (Join-Path $env:LOCALAPPDATA 'AssetGuard\telegram-credentials.clixml'),
     [switch]$SendTest
 )
 $ErrorActionPreference = 'Stop'
@@ -21,8 +22,13 @@ if (-not (Test-Path -LiteralPath $envPath)) { throw "Missing '$envPath'." }
 foreach ($line in Get-Content -LiteralPath $envPath) {
     if ($line -match '^([^#=]+)=(.*)$') { Set-Item -Path "Env:$($matches[1])" -Value $matches[2] }
 }
+if ((-not $env:ASSETGUARD_TELEGRAM_BOT_TOKEN -or -not $env:ASSETGUARD_TELEGRAM_CHAT_ID) -and (Test-Path -LiteralPath $CredentialPath)) {
+    $credential = Import-Clixml -LiteralPath $CredentialPath
+    $env:ASSETGUARD_TELEGRAM_CHAT_ID = $credential.UserName
+    $env:ASSETGUARD_TELEGRAM_BOT_TOKEN = $credential.GetNetworkCredential().Password
+}
 if (-not $env:ASSETGUARD_TELEGRAM_BOT_TOKEN -or -not $env:ASSETGUARD_TELEGRAM_CHAT_ID) {
-    throw 'Set ASSETGUARD_TELEGRAM_BOT_TOKEN and ASSETGUARD_TELEGRAM_CHAT_ID in .env first.'
+    throw 'Configure Telegram in .env or create the current-user DPAPI credential with set-telegram-credentials.ps1.'
 }
 if (-not $ApiBaseUrl) { $ApiBaseUrl = $env:ASSETGUARD_PUBLIC_URL }
 if (-not $ApiBaseUrl) { $ApiBaseUrl = 'http://127.0.0.1:8000' }

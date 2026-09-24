@@ -14,7 +14,7 @@ Upstream GLPI Agent устанавливается отдельно: AssetGuard 
 - `backup-database.ps1` / `restore-database.ps1` — создают AES-256-GCM encrypted backup, опционально копируют его на внешний диск или `rclone` remote и восстанавливают БД;
 - `verify-backup-restore.ps1` — безопасно репетирует restore в отдельном одноразовом PostgreSQL контейнере, не затрагивая рабочую БД.
 - `set-backup-passphrase.ps1` / `install-backup-schedule.ps1` — сохраняют пароль backup через Windows DPAPI и устанавливают daily backup + weekly isolated restore rehearsal для текущего Windows-пользователя.
-- `send-operations-telegram-alert.ps1` / `install-operations-telegram-monitor.ps1` — проверяют offline Agent, failed ingest, конфликты идентификации и место на диске, затем отправляют deduplicated alert в Telegram.
+- `set-telegram-credentials.ps1` / `send-operations-telegram-alert.ps1` / `install-operations-telegram-monitor.ps1` — сохраняют Telegram credential в DPAPI, проверяют offline Agent, failed ingest, конфликты идентификации и место на диске, затем отправляют deduplicated alert.
 
 Скрипты не отключают TLS, не записывают secrets в исходники и не меняют baseline автоматически.
 
@@ -86,7 +86,14 @@ $passphrase = Read-Host 'Backup passphrase' -AsSecureString
 
 1. Создайте бота через `@BotFather`, получите token и начните диалог с ботом (или добавьте его в закрытую группу).
 2. Получите numeric `chat_id` через `getUpdates` после первого сообщения боту. Token нельзя пересылать в чат или коммитить в Git.
-3. Впишите только в локальный `.env`:
+3. Рекомендуемый вариант — сохранить token с Windows DPAPI, не добавляя его даже в локальный `.env`:
+
+```powershell
+$token = Read-Host 'Telegram bot token' -AsSecureString
+.\scripts\windows\set-telegram-credentials.ps1 -BotToken $token -ChatId '<chat_id>'
+```
+
+Альтернативно можно вписать только в локальный `.env`:
 
 ```dotenv
 ASSETGUARD_TELEGRAM_BOT_TOKEN=<token>
