@@ -15,6 +15,8 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$diagnosticDirectory = Join-Path $env:ProgramData 'AssetGuard'
+$diagnosticPath = Join-Path $diagnosticDirectory 'last-agent-install-error.txt'
 
 function Test-Administrator {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -27,6 +29,18 @@ function Remove-OneTimeConfig([string]$Path) {
     $firstLine = Get-Content -LiteralPath $Path -TotalCount 1 -ErrorAction SilentlyContinue
     if ($firstLine -eq '{') {
         Remove-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Write-InstallDiagnostic([System.Exception]$Exception) {
+    try {
+        New-Item -ItemType Directory -Force -Path $diagnosticDirectory | Out-Null
+        # Exceptions emitted by the reviewed installer never include the inventory secret.
+        Set-Content -LiteralPath $diagnosticPath -Value $Exception.ToString() -Encoding utf8 -NoNewline
+        & icacls.exe $diagnosticPath '/inheritance:r' '/grant:r' '*S-1-5-18:(F)' '*S-1-5-32-544:(F)' | Out-Null
+    }
+    catch {
+        # Preserve the original installer failure even if diagnostic recording is unavailable.
     }
 }
 
@@ -56,6 +70,10 @@ try {
     }
     if ($runNow) { $arguments.RunInventoryNow = $true }
     & (Join-Path $PSScriptRoot 'install-assetguard-agent-service.ps1') @arguments
+}
+catch {
+    Write-InstallDiagnostic $_.Exception
+    throw
 }
 finally {
     # The only plaintext copy created by the wizard must not remain on disk.

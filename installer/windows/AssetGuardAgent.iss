@@ -4,7 +4,7 @@
 ; AssetGuard-owned privacy-limited profile. It does not package or modify GLPI Agent.
 
 #define AppName "AssetGuard Agent"
-#define AppVersion "0.1.3"
+#define AppVersion "0.1.4"
 #define AppPublisher "AssetGuard"
 #define AppGuid "{{7BF917A0-D474-45CA-89E5-2F19C83142B3}"
 
@@ -160,7 +160,7 @@ begin
       '-NoProfile -ExecutionPolicy Bypass -File "' + ExpandConstant('{app}\install-assetguard-agent-from-config.ps1') + '" -ConfigPath "' + OneTimeConfigPath + '"',
       '', SW_HIDE, ewWaitUntilTerminated, ResultCode) or (ResultCode <> 0) then begin
       RemoveOneTimeConfig();
-      RaiseException('Не удалось установить службу AssetGuard Agent. Проверьте подключение к интернету, WinGet и введённые данные.');
+      RaiseException('Не удалось установить службу AssetGuard Agent. Подробность сохранена в C:\\ProgramData\\AssetGuard\\last-agent-install-error.txt. Откройте этот файл от имени администратора или отправьте мне его скриншот.');
     end;
   end;
 end;
