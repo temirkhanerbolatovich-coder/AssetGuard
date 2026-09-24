@@ -74,10 +74,19 @@ def require_viewer(
     return principal
 
 
+AssetType = Literal["Desktop", "Laptop", "Printer", "Projector", "Network", "Furniture", "Sports", "Educational", "Other"]
+AssetCategory = Literal["IT", "FURNITURE", "SPORTS", "EDUCATIONAL", "OTHER"]
+TrackingMode = Literal["INDIVIDUAL", "GROUPED"]
+
+
 class AssetCreate(BaseModel):
     inventory_number: str = Field(min_length=1, max_length=128)
     name: str = Field(min_length=1, max_length=255)
-    asset_type: Literal["Desktop", "Laptop", "Other"]
+    asset_type: AssetType
+    category: AssetCategory = "IT"
+    tracking_mode: TrackingMode = "INDIVIDUAL"
+    quantity: int = Field(default=1, ge=1, le=1_000_000)
+    unit: str = Field(default="шт.", min_length=1, max_length=32)
     status: str = Field(default="ACTIVE", max_length=32)
     building: str | None = Field(default=None, max_length=255)
     floor: str | None = Field(default=None, max_length=64)
@@ -89,7 +98,11 @@ class AssetCreate(BaseModel):
 class AssetUpdate(BaseModel):
     inventory_number: str | None = Field(default=None, min_length=1, max_length=128)
     name: str | None = Field(default=None, min_length=1, max_length=255)
-    asset_type: Literal["Desktop", "Laptop", "Other"] | None = None
+    asset_type: AssetType | None = None
+    category: AssetCategory | None = None
+    tracking_mode: TrackingMode | None = None
+    quantity: int | None = Field(default=None, ge=1, le=1_000_000)
+    unit: str | None = Field(default=None, min_length=1, max_length=32)
     status: str | None = Field(default=None, max_length=32)
     building: str | None = Field(default=None, max_length=255)
     floor: str | None = Field(default=None, max_length=64)
@@ -102,6 +115,7 @@ def _asset_view(asset: AssetRecord, endpoint_id: UUID | None, organization: str 
     return {
         "id": str(asset.id), "inventory_number": asset.inventory_number,
         "name": asset.name, "asset_type": asset.asset_type, "status": asset.status,
+        "category": asset.category, "tracking_mode": asset.tracking_mode, "quantity": asset.quantity, "unit": asset.unit,
         "building": asset.building, "floor": asset.floor, "room": asset.room,
         "room_id": str(asset.room_id) if asset.room_id else None,
         "notes": asset.notes, "organization": organization,
@@ -592,7 +606,7 @@ def create_asset(body: AssetCreate, session: Annotated[Session, Depends(get_sess
     now = datetime.now(UTC)
     asset = AssetRecord(
         organization_id=organization.id, inventory_number=body.inventory_number,
-        name=body.name, asset_type=body.asset_type, status=body.status,
+        name=body.name, asset_type=body.asset_type, category=body.category, tracking_mode=body.tracking_mode, quantity=body.quantity, unit=body.unit.strip(), status=body.status,
         building=body.building, floor=body.floor, room=body.room, notes=body.notes,
         created_at=now, updated_at=now,
     )
@@ -703,6 +717,8 @@ def link_endpoint(
         raise HTTPException(404, "Asset or endpoint was not found.")
     if endpoint.organization_id and asset.organization_id and endpoint.organization_id != asset.organization_id:
         raise HTTPException(409, "An endpoint and an asset must belong to the same organization.")
+    if asset.tracking_mode != "INDIVIDUAL" or asset.category != "IT":
+        raise HTTPException(422, "Only individually tracked IT assets can be linked to an Agent endpoint.")
     endpoint.organization_id = endpoint.organization_id or asset.organization_id
     if endpoint.asset_id and endpoint.asset_id != asset.id:
         append_asset_history(
