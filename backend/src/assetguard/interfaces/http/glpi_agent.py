@@ -93,6 +93,9 @@ async def receive_glpi_agent(
             snapshot = normalize_raw_inventory(session, ingested.raw_inventory)
             if credential and credential.managed_endpoint_id is None:
                 credential.managed_endpoint_id = snapshot.managed_endpoint_id
+                endpoint = session.get(ManagedEndpointRecord, snapshot.managed_endpoint_id)
+                if endpoint and credential.organization_id:
+                    endpoint.organization_id = credential.organization_id
                 session.commit()
             elif credential and credential.managed_endpoint_id != snapshot.managed_endpoint_id:
                 raise HTTPException(status.HTTP_409_CONFLICT, "Agent credential is bound to another endpoint.")

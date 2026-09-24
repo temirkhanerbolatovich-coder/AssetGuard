@@ -11,7 +11,7 @@ from assetguard.modules.inventory.models import Base
 class ManagedEndpointRecord(Base):
     __tablename__ = "managed_endpoints"
     id: Mapped[UUID] = mapped_column(PostgreSQLUUID(as_uuid=True), primary_key=True, default=uuid4)
-    source: Mapped[str] = mapped_column(String(64)); source_agent_id: Mapped[str | None] = mapped_column(String(255)); asset_id: Mapped[UUID | None] = mapped_column(ForeignKey("assets.id"))
+    source: Mapped[str] = mapped_column(String(64)); source_agent_id: Mapped[str | None] = mapped_column(String(255)); asset_id: Mapped[UUID | None] = mapped_column(ForeignKey("assets.id")); organization_id: Mapped[UUID | None] = mapped_column(ForeignKey("organizations.id"), nullable=True)
     hostname: Mapped[str | None] = mapped_column(String(255)); last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     status: Mapped[str] = mapped_column(String(32)); created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True)); updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 

@@ -438,10 +438,13 @@ def update_asset(asset_id: UUID, body: AssetUpdate, session: Annotated[Session, 
     return _asset_view(asset, endpoint_id, organization.name if organization else None)
 
 
-@router.get("/endpoints", dependencies=[Depends(require_viewer)])
-def list_endpoints(session: Annotated[Session, Depends(get_session)]):
+@router.get("/endpoints")
+def list_endpoints(session: Annotated[Session, Depends(get_session)], principal: Annotated[AuthPrincipal, Depends(require_viewer)]):
     result = []
-    for endpoint in session.scalars(select(ManagedEndpointRecord).order_by(ManagedEndpointRecord.last_seen_at.desc())):
+    statement = select(ManagedEndpointRecord).order_by(ManagedEndpointRecord.last_seen_at.desc())
+    if principal.organization_id:
+        statement = statement.where(ManagedEndpointRecord.organization_id == principal.organization_id)
+    for endpoint in session.scalars(statement):
         item = _endpoint_summary(session, endpoint)
         asset = session.get(AssetRecord, endpoint.asset_id) if endpoint.asset_id else None
         organization = session.get(OrganizationRecord, asset.organization_id) if asset else None
@@ -456,10 +459,10 @@ def evaluate_endpoints(session: Annotated[Session, Depends(get_session)]):
     return {"updated": changed, "stale_after_hours": get_settings().endpoint_stale_after_hours}
 
 
-@router.get("/endpoints/{endpoint_id}", dependencies=[Depends(require_viewer)])
-def endpoint_detail(endpoint_id: UUID, session: Annotated[Session, Depends(get_session)]):
+@router.get("/endpoints/{endpoint_id}")
+def endpoint_detail(endpoint_id: UUID, session: Annotated[Session, Depends(get_session)], principal: Annotated[AuthPrincipal, Depends(require_viewer)]):
     endpoint = session.get(ManagedEndpointRecord, endpoint_id)
-    if not endpoint:
+    if not endpoint or (principal.organization_id and endpoint.organization_id != principal.organization_id):
         raise HTTPException(404, "Endpoint was not found.")
     identifiers = list(session.scalars(select(EndpointIdentifierRecord).where(
         EndpointIdentifierRecord.managed_endpoint_id == endpoint.id,

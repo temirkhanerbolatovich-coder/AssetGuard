@@ -32,6 +32,10 @@ class UserUpdate(BaseModel):
     password: str | None = Field(default=None, min_length=12, max_length=512)
 
 
+class AgentCredentialCreate(BaseModel):
+    organization_id: UUID | None = None
+
+
 @router.post("/auth/login")
 def login(body: LoginBody, session: Annotated[Session, Depends(get_session)]):
     user = session.scalar(select(UserRecord).where(UserRecord.username == body.username))
@@ -118,13 +122,13 @@ def agent_credentials(session: Annotated[Session, Depends(get_session)]):
 
 
 @router.post("/admin/agent-credentials", dependencies=[Depends(require_admin)], status_code=201)
-def create_agent_credential(session: Annotated[Session, Depends(get_session)]):
+def create_agent_credential(session: Annotated[Session, Depends(get_session)], body: AgentCredentialCreate | None = None):
     # The raw secret is returned exactly once and is never persisted in plaintext.
     username = f"ag-{secrets.token_hex(8)}"
     secret = secrets.token_urlsafe(32)
     credential = AgentCredentialRecord(
         username=username, secret_hash=hash_password(secret), status="ACTIVE",
-        issued_at=datetime.now(UTC), revoked_at=None, managed_endpoint_id=None,
+        issued_at=datetime.now(UTC), revoked_at=None, managed_endpoint_id=None, organization_id=body.organization_id if body else None,
     )
     session.add(credential)
     session.commit()
