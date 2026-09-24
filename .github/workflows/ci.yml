@@ -51,7 +51,14 @@ jobs:
       - name: Audit Python dependencies for known vulnerabilities
         run: |
           python -m pip install pip-audit
-          python -m pip_audit --strict --skip-editable
+          python - <<'PY' > /tmp/assetguard-external-requirements.txt
+          from importlib.metadata import distributions
+          for dist in sorted(distributions(), key=lambda item: item.metadata['Name'].lower()):
+              name = dist.metadata['Name']
+              if name and name.lower() != 'assetguard-backend':
+                  print(f'{name}=={dist.version}')
+          PY
+          python -m pip_audit --strict -r /tmp/assetguard-external-requirements.txt
       - name: Run migrations and API tests
         working-directory: backend
         run: python -m pytest -q tests/unit tests/integration
