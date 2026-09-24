@@ -18,6 +18,8 @@ from assetguard.modules.incidents.models import (
 )
 from assetguard.modules.incidents.service import decide_incident
 from assetguard.modules.identity.auth import AuthPrincipal
+from assetguard.modules.identity.location_access import permitted_room_ids
+from assetguard.modules.assets.models import AssetRecord
 from assetguard.modules.snapshots.models import ComponentObservationRecord, HardwareSnapshotRecord, ManagedEndpointRecord
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_viewer)])
@@ -40,6 +42,14 @@ class DecisionBody(BaseModel):
 
 def missing() -> None:
     raise HTTPException(status_code=404, detail="Resource was not found.")
+
+
+def _scope_endpoints(query, session: Session, principal: AuthPrincipal, field):
+    allowed_rooms = permitted_room_ids(session, principal)
+    if allowed_rooms is None:
+        return query
+    endpoint_ids = select(ManagedEndpointRecord.id).join(AssetRecord, AssetRecord.id == ManagedEndpointRecord.asset_id).where(AssetRecord.room_id.in_(allowed_rooms))
+    return query.where(field.in_(endpoint_ids))
 
 
 @router.get("/endpoints/{endpoint_id}/snapshots")
@@ -104,6 +114,7 @@ def changes(session: Annotated[Session, Depends(get_session)], principal: Annota
     query = select(ChangeEventRecord).order_by(ChangeEventRecord.detected_at.desc())
     if principal.organization_id:
         query = query.join(ManagedEndpointRecord).where(ManagedEndpointRecord.organization_id == principal.organization_id)
+    query = _scope_endpoints(query, session, principal, ChangeEventRecord.managed_endpoint_id)
     if endpoint_id:
         scoped_endpoint(session, endpoint_id, principal)
         query = query.where(ChangeEventRecord.managed_endpoint_id == endpoint_id)
@@ -137,6 +148,7 @@ def incidents(session: Annotated[Session, Depends(get_session)], principal: Anno
     query = select(IncidentRecord).order_by(IncidentRecord.created_at.desc())
     if principal.organization_id:
         query = query.join(ManagedEndpointRecord).where(ManagedEndpointRecord.organization_id == principal.organization_id)
+    query = _scope_endpoints(query, session, principal, IncidentRecord.managed_endpoint_id)
     if endpoint_id:
         scoped_endpoint(session, endpoint_id, principal)
         query = query.where(IncidentRecord.managed_endpoint_id == endpoint_id)

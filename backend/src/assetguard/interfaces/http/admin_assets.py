@@ -177,6 +177,11 @@ def scoped_endpoint(session: Session, endpoint_id: UUID, principal: AuthPrincipa
     endpoint = session.get(ManagedEndpointRecord, endpoint_id)
     if not endpoint or (principal.organization_id and endpoint.organization_id != principal.organization_id):
         raise HTTPException(404, "Endpoint was not found.")
+    if endpoint.asset_id:
+        asset = session.get(AssetRecord, endpoint.asset_id)
+        require_room_access(session, asset.room_id if asset else None, principal)
+    elif permitted_room_ids(session, principal) is not None:
+        raise HTTPException(404, "Endpoint was not found.")
     return endpoint
 
 

@@ -10,6 +10,8 @@ from sqlalchemy.orm import Session
 from assetguard.infrastructure.database import get_session
 from assetguard.interfaces.http.admin_assets import require_viewer, scoped_endpoint
 from assetguard.modules.identity.auth import AuthPrincipal
+from assetguard.modules.identity.location_access import permitted_room_ids
+from assetguard.modules.assets.models import AssetRecord
 from assetguard.modules.snapshots.models import ManagedEndpointRecord
 from assetguard.modules.inventory.models import RawInventoryRecord
 
@@ -42,6 +44,10 @@ def list_inventories(
     query = select(RawInventoryRecord).order_by(RawInventoryRecord.received_at.desc()).limit(limit)
     if principal.organization_id:
         query = query.join(ManagedEndpointRecord).where(ManagedEndpointRecord.organization_id == principal.organization_id)
+    allowed_rooms = permitted_room_ids(session, principal)
+    if allowed_rooms is not None:
+        endpoint_ids = select(ManagedEndpointRecord.id).join(AssetRecord, AssetRecord.id == ManagedEndpointRecord.asset_id).where(AssetRecord.room_id.in_(allowed_rooms))
+        query = query.where(RawInventoryRecord.managed_endpoint_id.in_(endpoint_ids))
     if endpoint_id:
         scoped_endpoint(session, endpoint_id, principal)
         query = query.where(RawInventoryRecord.managed_endpoint_id == endpoint_id)
