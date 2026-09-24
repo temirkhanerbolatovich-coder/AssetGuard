@@ -4,7 +4,7 @@
 ; AssetGuard-owned privacy-limited profile. It does not package or modify GLPI Agent.
 
 #define AppName "AssetGuard Agent"
-#define AppVersion "0.1.0"
+#define AppVersion "0.1.1"
 #define AppPublisher "AssetGuard"
 #define AppGuid "{{7BF917A0-D474-45CA-89E5-2F19C83142B3}"
 
@@ -66,7 +66,7 @@ var
 begin
   Lower := Lowercase(Value);
   Result := (Pos('https://', Lower) = 1) and
-            (Copy(Lower, Length(Lower) - 11, 12) = '/glpi-agent') and
+            (Copy(Lower, Length(Lower) - 10, 11) = '/glpi-agent') and
             (Pos('?', Value) = 0) and (Pos('#', Value) = 0) and (Pos('@', Value) = 0) and
             (Pos(' ', Value) = 0);
 end;
