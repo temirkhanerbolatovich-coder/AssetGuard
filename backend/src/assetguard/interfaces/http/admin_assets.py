@@ -36,6 +36,7 @@ from assetguard.modules.endpoints.service import evaluate_last_seen
 from assetguard.modules.incidents.models import AssetHistoryEntryRecord, IncidentRecord
 from assetguard.modules.inventory.models import RawInventoryRecord
 from assetguard.modules.identity.auth import AuthPrincipal, session_principal
+from assetguard.modules.identity.location_access import permitted_room_ids, require_room_access
 from assetguard.modules.snapshots.models import (
     ComponentObservationRecord, EndpointIdentifierRecord,
     HardwareSnapshotRecord, ManagedEndpointRecord,
@@ -52,7 +53,7 @@ def require_admin(
     valid = [settings.admin_shared_secret, settings.previous_admin_shared_secret]
     shared = bool(token and any(candidate and secrets.compare_digest(token, candidate) for candidate in valid))
     if shared:
-        return AuthPrincipal(username="bootstrap-admin", role="ADMIN", session_id=None, organization_id=None)
+        return AuthPrincipal(user_id=None, username="bootstrap-admin", role="ADMIN", session_id=None, organization_id=None)
     principal = session_principal(session, token) if token else None
     if not principal or principal.role != "ADMIN":
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid administrator credentials.")
@@ -67,9 +68,9 @@ def require_viewer(
     valid = [settings.admin_shared_secret, settings.previous_admin_shared_secret, settings.viewer_shared_secret]
     if token and any(candidate and secrets.compare_digest(token, candidate) for candidate in valid):
         role = "VIEWER" if settings.viewer_shared_secret and secrets.compare_digest(token, settings.viewer_shared_secret) else "ADMIN"
-        return AuthPrincipal(username=f"shared-{role.lower()}", role=role, session_id=None, organization_id=None)
+        return AuthPrincipal(user_id=None, username=f"shared-{role.lower()}", role=role, session_id=None, organization_id=None)
     principal = session_principal(session, token) if token else None
-    if not principal or principal.role not in {"ADMIN", "VIEWER"}:
+    if not principal or principal.role not in {"ADMIN", "VIEWER", "LOCATION_MANAGER", "INVENTORY_CLERK"}:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid AssetGuard credentials.")
     return principal
 
@@ -137,6 +138,7 @@ def _scoped_asset(session: Session, asset_id: UUID, principal: AuthPrincipal) ->
     asset = session.get(AssetRecord, asset_id)
     if not asset or (principal.organization_id and asset.organization_id != principal.organization_id):
         raise HTTPException(404, "Asset was not found.")
+    require_room_access(session, asset.room_id, principal)
     return asset
 
 
@@ -266,6 +268,9 @@ def list_assets(session: Annotated[Session, Depends(get_session)], principal: An
     statement = select(AssetRecord).order_by(AssetRecord.inventory_number)
     if principal.organization_id:
         statement = statement.where(AssetRecord.organization_id == principal.organization_id)
+    allowed_rooms = permitted_room_ids(session, principal)
+    if allowed_rooms is not None:
+        statement = statement.where(AssetRecord.room_id.in_(allowed_rooms))
     for asset in session.scalars(statement):
         endpoint = session.scalar(select(ManagedEndpointRecord).where(ManagedEndpointRecord.asset_id == asset.id))
         organization = session.get(OrganizationRecord, asset.organization_id)
@@ -662,6 +667,13 @@ def list_endpoints(session: Annotated[Session, Depends(get_session)], principal:
     if principal.organization_id:
         statement = statement.where(ManagedEndpointRecord.organization_id == principal.organization_id)
     for endpoint in session.scalars(statement):
+        if endpoint.asset_id:
+            asset = session.get(AssetRecord, endpoint.asset_id)
+            if asset:
+                try: require_room_access(session, asset.room_id, principal)
+                except HTTPException: continue
+        elif permitted_room_ids(session, principal) is not None:
+            continue
         item = _endpoint_summary(session, endpoint)
         asset = session.get(AssetRecord, endpoint.asset_id) if endpoint.asset_id else None
         organization = session.get(OrganizationRecord, asset.organization_id) if asset else None

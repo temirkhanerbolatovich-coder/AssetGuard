@@ -18,6 +18,7 @@ ITERATIONS = 310_000
 
 @dataclass(frozen=True, slots=True)
 class AuthPrincipal:
+    user_id: UUID | None
     username: str
     role: str
     session_id: UUID | None
@@ -66,7 +67,7 @@ def session_principal(session: Session, token: str) -> AuthPrincipal | None:
     user = session.get(UserRecord, record.user_id)
     if not user or not user.is_active:
         return None
-    return AuthPrincipal(username=user.username, role=user.role, session_id=record.id, organization_id=user.organization_id)
+    return AuthPrincipal(user_id=user.id, username=user.username, role=user.role, session_id=record.id, organization_id=user.organization_id)
 
 
 def session_role(session: Session, token: str) -> str | None:

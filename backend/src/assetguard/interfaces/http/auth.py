@@ -22,12 +22,12 @@ class LoginBody(BaseModel):
 
 
 class UserCreate(LoginBody):
-    role: Literal["ADMIN", "VIEWER"]
+    role: Literal["ADMIN", "VIEWER", "LOCATION_MANAGER", "INVENTORY_CLERK"]
     organization_id: UUID | None = None
 
 
 class UserUpdate(BaseModel):
-    role: Literal["ADMIN", "VIEWER"] | None = None
+    role: Literal["ADMIN", "VIEWER", "LOCATION_MANAGER", "INVENTORY_CLERK"] | None = None
     active: bool | None = None
     password: str | None = Field(default=None, min_length=12, max_length=512)
 

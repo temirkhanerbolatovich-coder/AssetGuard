@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID as PostgreSQLUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -38,3 +38,14 @@ class AgentCredentialRecord(Base):
     organization_id: Mapped[UUID | None] = mapped_column(ForeignKey("organizations.id"), nullable=True)
     issued_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class LocationAccessRecord(Base):
+    __tablename__ = "location_access"
+    __table_args__ = (UniqueConstraint("user_id", "scope_type", "scope_id", name="uq_location_access_scope"),)
+    id: Mapped[UUID] = mapped_column(PostgreSQLUUID(as_uuid=True), primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    scope_type: Mapped[str] = mapped_column(String(16))  # BUILDING, FLOOR, ROOM
+    scope_id: Mapped[UUID] = mapped_column(PostgreSQLUUID(as_uuid=True))
+    permission: Mapped[str] = mapped_column(String(16))  # VIEWER or EDITOR
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

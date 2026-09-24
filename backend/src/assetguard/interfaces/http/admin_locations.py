@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -13,6 +13,8 @@ from assetguard.infrastructure.database import get_session
 from assetguard.interfaces.http.admin_assets import require_admin, require_viewer
 from assetguard.modules.assets.models import AssetRecord, BuildingRecord, FloorRecord, OrganizationRecord, RoomRecord
 from assetguard.modules.identity.auth import AuthPrincipal
+from assetguard.modules.identity.location_access import permitted_room_ids, require_room_access
+from assetguard.modules.identity.models import LocationAccessRecord, UserRecord
 from assetguard.modules.snapshots.models import ManagedEndpointRecord
 
 router = APIRouter(prefix="/admin/locations", tags=["locations"])
@@ -44,6 +46,13 @@ class RoomUpdate(BaseModel):
     responsible_name: str | None = Field(default=None, max_length=255)
     responsible_contact: str | None = Field(default=None, max_length=255)
     notes: str | None = None
+
+
+class AccessGrant(BaseModel):
+    user_id: UUID
+    scope_type: Literal["BUILDING", "FLOOR", "ROOM"]
+    scope_id: UUID
+    permission: Literal["VIEWER", "EDITOR"]
 
 
 def _clean(value: str | None) -> str | None:
@@ -81,7 +90,16 @@ def _room(session: Session, room_id: UUID, principal: AuthPrincipal) -> RoomReco
     if not room:
         raise HTTPException(404, "Room was not found.")
     _floor(session, room.floor_id, principal)
+    require_room_access(session, room.id, principal)
     return room
+
+
+def _scope_organization(session: Session, scope_type: str, scope_id: UUID) -> UUID | None:
+    if scope_type == "BUILDING":
+        item = session.get(BuildingRecord, scope_id); return item.organization_id if item else None
+    if scope_type == "FLOOR":
+        floor = session.get(FloorRecord, scope_id); building = session.get(BuildingRecord, floor.building_id) if floor else None; return building.organization_id if building else None
+    room = session.get(RoomRecord, scope_id); floor = session.get(FloorRecord, room.floor_id) if room else None; building = session.get(BuildingRecord, floor.building_id) if floor else None; return building.organization_id if building else None
 
 
 def _room_view(session: Session, room: RoomRecord) -> dict:
@@ -101,12 +119,13 @@ def location_tree(session: Annotated[Session, Depends(get_session)], principal: 
     query = select(BuildingRecord).order_by(BuildingRecord.name)
     if principal.organization_id:
         query = query.where(BuildingRecord.organization_id == principal.organization_id)
-    result = []
+    result = []; allowed_rooms = permitted_room_ids(session, principal)
     for building in session.scalars(query):
         floors = []
         for floor in session.scalars(select(FloorRecord).where(FloorRecord.building_id == building.id).order_by(FloorRecord.name)):
-            floors.append({"id": str(floor.id), "name": floor.name, "responsible_name": floor.responsible_name, "responsible_contact": floor.responsible_contact, "rooms": [_room_view(session, room) for room in session.scalars(select(RoomRecord).where(RoomRecord.floor_id == floor.id).order_by(RoomRecord.name))]})
-        result.append({"id": str(building.id), "name": building.name, "responsible_name": building.responsible_name, "responsible_contact": building.responsible_contact, "notes": building.notes, "floors": floors})
+            rooms = [room for room in session.scalars(select(RoomRecord).where(RoomRecord.floor_id == floor.id).order_by(RoomRecord.name)) if allowed_rooms is None or room.id in allowed_rooms]
+            if rooms: floors.append({"id": str(floor.id), "name": floor.name, "responsible_name": floor.responsible_name, "responsible_contact": floor.responsible_contact, "rooms": [_room_view(session, room) for room in rooms]})
+        if floors: result.append({"id": str(building.id), "name": building.name, "responsible_name": building.responsible_name, "responsible_contact": building.responsible_contact, "notes": building.notes, "floors": floors})
     return result
 
 
@@ -154,3 +173,37 @@ def room_report(room_id: UUID, session: Annotated[Session, Depends(get_session)]
     room = _room(session, room_id, principal); floor = session.get(FloorRecord, room.floor_id); building = session.get(BuildingRecord, floor.building_id) if floor else None
     assets = list(session.scalars(select(AssetRecord).where(AssetRecord.room_id == room.id).order_by(AssetRecord.inventory_number)))
     return {"room": _room_view(session, room), "path": {"building": building.name if building else None, "floor": floor.name if floor else None}, "assets": [{"id": str(asset.id), "inventory_number": asset.inventory_number, "name": asset.name, "status": asset.status, "asset_type": asset.asset_type} for asset in assets]}
+
+
+@router.get("/access")
+def list_access(session: Annotated[Session, Depends(get_session)], principal: Annotated[AuthPrincipal, Depends(require_admin)]):
+    query = select(LocationAccessRecord).order_by(LocationAccessRecord.created_at.desc())
+    rows = []
+    for item in session.scalars(query):
+        user = session.get(UserRecord, item.user_id)
+        if not user or (principal.organization_id and user.organization_id != principal.organization_id):
+            continue
+        rows.append({"id": str(item.id), "user_id": str(item.user_id), "username": user.username, "scope_type": item.scope_type, "scope_id": str(item.scope_id), "permission": item.permission})
+    return rows
+
+
+@router.post("/access", status_code=status.HTTP_201_CREATED)
+def grant_access(body: AccessGrant, session: Annotated[Session, Depends(get_session)], principal: Annotated[AuthPrincipal, Depends(require_admin)]):
+    user = session.get(UserRecord, body.user_id); scope_organization = _scope_organization(session, body.scope_type, body.scope_id)
+    if not user or scope_organization is None or (principal.organization_id and (user.organization_id != principal.organization_id or scope_organization != principal.organization_id)) or (user.organization_id and user.organization_id != scope_organization):
+        raise HTTPException(404, "User or location was not found.")
+    item = session.scalar(select(LocationAccessRecord).where(LocationAccessRecord.user_id == user.id, LocationAccessRecord.scope_type == body.scope_type, LocationAccessRecord.scope_id == body.scope_id))
+    if item:
+        item.permission = body.permission
+    else:
+        item = LocationAccessRecord(user_id=user.id, scope_type=body.scope_type, scope_id=body.scope_id, permission=body.permission, created_at=datetime.now(UTC)); session.add(item)
+    session.commit(); session.refresh(item)
+    return {"id": str(item.id), "user_id": str(item.user_id), "scope_type": item.scope_type, "scope_id": str(item.scope_id), "permission": item.permission}
+
+
+@router.delete("/access/{access_id}", status_code=status.HTTP_204_NO_CONTENT)
+def revoke_access(access_id: UUID, session: Annotated[Session, Depends(get_session)], principal: Annotated[AuthPrincipal, Depends(require_admin)]):
+    item = session.get(LocationAccessRecord, access_id); user = session.get(UserRecord, item.user_id) if item else None
+    if not item or not user or (principal.organization_id and user.organization_id != principal.organization_id):
+        raise HTTPException(404, "Location access was not found.")
+    session.delete(item); session.commit()
