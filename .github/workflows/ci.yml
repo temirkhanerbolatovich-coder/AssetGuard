@@ -39,7 +39,7 @@ jobs:
       ASSETGUARD_PUBLIC_HOST: assetguard.example.org
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
@@ -90,7 +90,7 @@ jobs:
       HF_HOME: ${{ github.workspace }}/.cache/huggingface
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
