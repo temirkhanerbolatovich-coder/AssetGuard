@@ -11,7 +11,8 @@ Upstream GLPI Agent устанавливается отдельно: AssetGuard 
 - `install-assetguard-agent-service.ps1` / `uninstall-assetguard-agent-service.ps1` — ставят upstream GLPI Agent как обычную Windows-службу с автозапуском, recovery и защищённым минимальным AssetGuard profile. Это рекомендуемый путь для pilot-PC;
 - `start-free-public-demo.ps1` — поднимает контейнерный demo и временный публичный Cloudflare HTTPS URL;
 - `install-quick-tunnel-watchdog.ps1` / `uninstall-quick-tunnel-watchdog.ps1` — поддерживают Quick Tunnel после сбоя и при следующем входе в Windows; текущий URL находится в `%LOCALAPPDATA%\AssetGuard\quick-tunnel.json`;
-- `backup-database.ps1` / `restore-database.ps1` — создают AES-256-GCM encrypted backup, опционально копируют его на внешний диск или `rclone` remote и восстанавливают БД.
+- `backup-database.ps1` / `restore-database.ps1` — создают AES-256-GCM encrypted backup, опционально копируют его на внешний диск или `rclone` remote и восстанавливают БД;
+- `verify-backup-restore.ps1` — безопасно репетирует restore в отдельном одноразовом PostgreSQL контейнере, не затрагивая рабочую БД.
 
 Скрипты не отключают TLS, не записывают secrets в исходники и не меняют baseline автоматически.
 
@@ -51,5 +52,19 @@ $secret = Read-Host 'Inventory secret' -AsSecureString
 ```powershell
 .\scripts\windows\uninstall-assetguard-agent-service.ps1
 ```
+
+## Проверка восстановления backup
+
+Сначала создайте обычный encrypted backup, затем передайте тот же пароль скрипту проверки. Скрипт расшифровывает файл во временную директорию, поднимает изолированный PostgreSQL без открытых портов, восстанавливает SQL, проверяет Alembic revision и количество ключевых сущностей, а затем удаляет контейнер и plaintext. Рабочая база не используется для записи.
+
+```powershell
+$passphrase = Read-Host 'Backup passphrase' -AsSecureString
+.\scripts\windows\backup-database.ps1 -Passphrase $passphrase
+.\scripts\windows\verify-backup-restore.ps1 `
+  -BackupFile .\.local\backups\assetguard-YYYYMMDD-HHMMSS.sql.agbackup `
+  -Passphrase $passphrase -CompareWithCurrentDatabase
+```
+
+`-CompareWithCurrentDatabase` нужен только для свежесозданного backup: он read-only сравнивает количество восстановленных assets, endpoints, inventories, snapshots, incidents и Vision scans с текущей БД. Для старого off-site backup запускайте без этого флага — старый снимок может корректно отличаться от сегодняшних данных.
 
 Для локального Vision demo Python environment должен быть установлен с extras `backend[dev,vision]`. Модель загружается при первом scan; demo-изображения находятся в `demo/vision/`.

@@ -57,6 +57,7 @@
 - [x] Native GLPI Agent 1.19 protocol spike и `DirectGlpiAgentAdapter`.
 - [x] Browser E2E через Playwright/Chromium в GitHub Actions.
 - [x] Optional real Grounding DINO CI smoke job: ручной и еженедельный workflow с настоящей моделью и demo-кадром.
+- [x] Isolated encrypted-backup restore rehearsal: отдельный disposable PostgreSQL без опубликованных портов, проверка Alembic revision и entity counts; успешно выполнен локально 2026-09-24.
 
 ### За пределами текущего demo
 

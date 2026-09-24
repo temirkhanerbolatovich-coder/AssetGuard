@@ -59,6 +59,14 @@ pwsh -File .\scripts\windows\restore-database.ps1 -BackupFile .local\backups\ass
 
 Пароль нельзя восстановить. Храните его отдельно от backup и обязательно выполните пробное восстановление до использования схемы как единственной копии.
 
+Для пробного восстановления используйте `verify-backup-restore.ps1`, а не destructive `restore-database.ps1`: он запускает временный PostgreSQL без открытого порта, проверяет схему и ключевые количества данных, после чего удаляет контейнер и plaintext.
+
+```powershell
+pwsh -File .\scripts\windows\verify-backup-restore.ps1 `
+  -BackupFile .local\backups\assetguard-YYYYMMDD-HHMMSS.sql.agbackup `
+  -CompareWithCurrentDatabase
+```
+
 ## Бесплатные CI и E2E
 
 Workflow GitHub Actions запускает API/integration tests, Chromium E2E через Playwright и проверку обоих Compose-файлов. Standard runners бесплатны для публичного репозитория. Локальный браузерный тест:

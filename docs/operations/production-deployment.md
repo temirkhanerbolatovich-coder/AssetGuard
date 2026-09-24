@@ -54,3 +54,13 @@ pwsh -File scripts/windows/restore-database.ps1 -BackupFile .local/backups/<file
 ```
 
 Stop API writes before a restore. After restoration, run migrations, verify `/health`, compare entity counts and perform one read-only dashboard check.
+
+For a non-destructive restore rehearsal use the isolated verifier instead. It decrypts only to a temporary file, restores to a disposable PostgreSQL container with no published ports, checks the Alembic revision and key entity counts, then destroys the container and temporary SQL. For a backup created immediately beforehand, compare its read-only counts with the source database:
+
+```powershell
+pwsh -File scripts/windows/verify-backup-restore.ps1 `
+  -BackupFile .local/backups/<file>.sql.agbackup `
+  -CompareWithCurrentDatabase
+```
+
+Never use `restore-database.ps1` merely to prove that a backup works: that command writes into the operational database.
