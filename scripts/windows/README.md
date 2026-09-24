@@ -9,7 +9,7 @@ Upstream GLPI Agent устанавливается отдельно: AssetGuard 
 - `install-background-demo.ps1` / `uninstall-background-demo.ps1` — управляют demo Scheduled Tasks;
 - `install-pilot-agent-schedule.ps1` — ставит отдельное расписание Agent на каждом pilot-компьютере; поддерживает необязательные измерения packet loss и задержки до указанной цели;
 - `install-assetguard-agent-service.ps1` / `uninstall-assetguard-agent-service.ps1` — ставят upstream GLPI Agent как обычную Windows-службу с автозапуском, recovery и защищённым минимальным AssetGuard profile. Это рекомендуемый путь для pilot-PC;
-- `build-agent-installer.ps1` — собирает `AssetGuard-Agent-Setup-0.1.1.exe`: мастер установки для передачи на другие Windows-компьютеры;
+- `build-agent-installer.ps1` — собирает `AssetGuard-Agent-Setup-0.1.2.exe`: мастер установки для передачи на другие Windows-компьютеры;
 - `start-free-public-demo.ps1` — поднимает контейнерный demo и временный публичный Cloudflare HTTPS URL;
 - `install-quick-tunnel-watchdog.ps1` / `uninstall-quick-tunnel-watchdog.ps1` — поддерживают Quick Tunnel после сбоя и при следующем входе в Windows; текущий URL находится в `%LOCALAPPDATA%\AssetGuard\quick-tunnel.json`;
 - `backup-database.ps1` / `restore-database.ps1` — создают AES-256-GCM encrypted backup, опционально копируют его на внешний диск или `rclone` remote и восстанавливают БД;
@@ -47,7 +47,7 @@ winget install --id JRSoftware.InnoSetup --exact --source winget
 .\scripts\windows\build-agent-installer.ps1
 ```
 
-Готовый файл появится в `installer-output\AssetGuard-Agent-Setup-0.1.1.exe` (эта папка намеренно не попадает в Git). Рядом передайте SHA-256, который покажет команда сборки. Для production-пилота перед распространением подпишите EXE сертификатом code signing: без подписи Windows SmartScreen может попросить дополнительное подтверждение.
+Готовый файл появится в `installer-output\AssetGuard-Agent-Setup-0.1.2.exe` (эта папка намеренно не попадает в Git). Рядом передайте SHA-256, который покажет команда сборки. Для production-пилота перед распространением подпишите EXE сертификатом code signing: без подписи Windows SmartScreen может попросить дополнительное подтверждение.
 
 На каждом целевом ПК:
 

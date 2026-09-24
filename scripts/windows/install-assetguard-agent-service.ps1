@@ -109,7 +109,9 @@ logfile = $logDirectory\glpi-agent.log
     if ($PSCmdlet.ShouldProcess($configPath, 'Write protected AssetGuard hardware-only profile')) {
         New-Item -ItemType Directory -Force -Path $configDirectory, $logDirectory | Out-Null
         Set-Content -LiteralPath $configPath -Value $config -Encoding ascii -NoNewline
-        & icacls.exe $configPath '/inheritance:r' '/grant:r' 'SYSTEM:(F)' 'BUILTIN\Administrators:(F)' | Out-Null
+        # Well-known SIDs work on every Windows language; localized group names
+        # such as "Administrators" do not resolve on a Russian installation.
+        & icacls.exe $configPath '/inheritance:r' '/grant:r' '*S-1-5-18:(F)' '*S-1-5-32-544:(F)' | Out-Null
         if ($LASTEXITCODE -ne 0) { throw "Could not protect '$configPath' with Windows ACLs." }
     }
 

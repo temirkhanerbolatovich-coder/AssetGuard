@@ -4,7 +4,7 @@
 ; AssetGuard-owned privacy-limited profile. It does not package or modify GLPI Agent.
 
 #define AppName "AssetGuard Agent"
-#define AppVersion "0.1.1"
+#define AppVersion "0.1.2"
 #define AppPublisher "AssetGuard"
 #define AppGuid "{{7BF917A0-D474-45CA-89E5-2F19C83142B3}"
 
@@ -150,7 +150,7 @@ begin
       '  "runInventoryNow": ' + RunNowJson + #13#10 +
       '}';
     SaveStringToFile(OneTimeConfigPath, ConfigJson, False);
-    Exec(ExpandConstant('{cmd}'), '/c icacls "' + OneTimeConfigPath + '" /inheritance:r /grant:r "SYSTEM:(F)" "BUILTIN\Administrators:(F)"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Exec(ExpandConstant('{cmd}'), '/c icacls "' + OneTimeConfigPath + '" /inheritance:r /grant:r "*S-1-5-18:(F)" "*S-1-5-32-544:(F)"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
     if ResultCode <> 0 then begin
       RemoveOneTimeConfig();
       RaiseException('Не удалось защитить временный файл учётных данных. Установка отменена.');
