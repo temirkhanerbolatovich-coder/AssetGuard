@@ -333,8 +333,10 @@ def import_assets_xlsx(
             session.flush()
             append_asset_history(session, asset_id=asset.id, event_type="ASSET_CREATED", related_entity_type="Asset", related_entity_id=asset.id, message="Asset imported from workbook.", metadata={"inventory_number": asset.inventory_number})
         else:
-            for key in ("name", "asset_type", "status", "building", "floor", "room", "notes"):
+            for key in ("name", "asset_type", "building", "floor", "room", "notes"):
                 setattr(asset, key, item[key])
+            if item["status"]:
+                asset.status = item["status"]
             asset.updated_at = now
             append_asset_history(session, asset_id=asset.id, event_type="ASSET_UPDATED", related_entity_type="Asset", related_entity_id=asset.id, message="Asset imported from workbook.", metadata={"source": "xlsx"})
     session.commit()
