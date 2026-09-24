@@ -79,6 +79,11 @@ async def _complete_mvp_workflow() -> None:
         assert room_report.status_code == 200
         assert room_report.json()["path"] == {"building": "Корпус А", "floor": "2"}
         assert room_report.json()["assets"][0]["id"] == asset_id
+        workspace = await client.get(f"/admin/locations/rooms/{room['id']}/workspace", headers=admin_headers())
+        assert workspace.status_code == 200
+        assert workspace.json()["inventory"]["positions"] == 1
+        assert workspace.json()["inventory"]["quantity"] == 1
+        assert workspace.json()["baseline"] == {"agent_ready": 0, "agent_total": 0, "vision_ready": False}
         export = await client.get("/admin/assets/export.xlsx", headers=admin_headers())
         assert export.status_code == 200
         assert export.headers["content-type"].startswith("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")

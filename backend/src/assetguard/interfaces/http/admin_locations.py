@@ -11,11 +11,14 @@ from sqlalchemy.orm import Session
 
 from assetguard.infrastructure.database import get_session
 from assetguard.interfaces.http.admin_assets import require_admin, require_viewer
+from assetguard.modules.baselines.models import BaselineRecord
+from assetguard.modules.incidents.models import IncidentRecord
 from assetguard.modules.assets.models import AssetRecord, BuildingRecord, FloorRecord, OrganizationRecord, RoomRecord
 from assetguard.modules.identity.auth import AuthPrincipal
 from assetguard.modules.identity.location_access import permitted_room_ids, require_room_access
 from assetguard.modules.identity.models import LocationAccessRecord, UserRecord
 from assetguard.modules.snapshots.models import ManagedEndpointRecord
+from assetguard.modules.vision.models import VisionBaselineRecord, VisionRoomRecord, VisionScanRecord
 
 router = APIRouter(prefix="/admin/locations", tags=["locations"])
 
@@ -181,6 +184,46 @@ def room_report(room_id: UUID, session: Annotated[Session, Depends(get_session)]
     room = _room(session, room_id, principal); floor = session.get(FloorRecord, room.floor_id); building = session.get(BuildingRecord, floor.building_id) if floor else None
     assets = list(session.scalars(select(AssetRecord).where(AssetRecord.room_id == room.id).order_by(AssetRecord.inventory_number)))
     return {"room": _room_view(session, room), "path": {"building": building.name if building else None, "floor": floor.name if floor else None}, "assets": [{"id": str(asset.id), "inventory_number": asset.inventory_number, "name": asset.name, "status": asset.status, "asset_type": asset.asset_type} for asset in assets]}
+
+
+@router.get("/rooms/{room_id}/workspace")
+def room_workspace(room_id: UUID, session: Annotated[Session, Depends(get_session)], principal: Annotated[AuthPrincipal, Depends(require_viewer)]):
+    """Return one room's inventory, evidence state and outstanding decisions.
+
+    This is deliberately a room-level read model: it lets the interface keep
+    baseline, observations and incidents together without exposing another
+    room's data to a location-scoped user.
+    """
+    room = _room(session, room_id, principal)
+    floor = session.get(FloorRecord, room.floor_id)
+    building = session.get(BuildingRecord, floor.building_id) if floor else None
+    assets = list(session.scalars(select(AssetRecord).where(AssetRecord.room_id == room.id).order_by(AssetRecord.category, AssetRecord.name, AssetRecord.inventory_number)))
+    asset_ids = [asset.id for asset in assets]
+    endpoints = list(session.scalars(select(ManagedEndpointRecord).where(ManagedEndpointRecord.asset_id.in_(asset_ids)))) if asset_ids else []
+    endpoint_ids = [endpoint.id for endpoint in endpoints]
+    active_baseline_ids = set(session.scalars(select(BaselineRecord.managed_endpoint_id).where(BaselineRecord.managed_endpoint_id.in_(endpoint_ids), BaselineRecord.status == "ACTIVE"))) if endpoint_ids else set()
+    incidents = list(session.scalars(select(IncidentRecord).where(IncidentRecord.managed_endpoint_id.in_(endpoint_ids), IncidentRecord.status.in_(("OPEN", "UNDER_REVIEW"))).order_by(IncidentRecord.created_at.desc()))) if endpoint_ids else []
+    vision_room = session.scalar(select(VisionRoomRecord).where(VisionRoomRecord.location_room_id == room.id))
+    vision_baseline = session.scalar(select(VisionBaselineRecord).where(VisionBaselineRecord.room_id == vision_room.id)) if vision_room else None
+    latest_scan = session.scalar(select(VisionScanRecord).where(VisionScanRecord.room_id == vision_room.id).order_by(VisionScanRecord.created_at.desc())) if vision_room else None
+    categories: dict[str, dict[str, int | str]] = {}
+    for asset in assets:
+        bucket = categories.setdefault(asset.category, {"category": asset.category, "positions": 0, "quantity": 0})
+        bucket["positions"] = int(bucket["positions"]) + 1
+        bucket["quantity"] = int(bucket["quantity"]) + asset.quantity
+    return {
+        "room": _room_view(session, room),
+        "path": {"building": building.name if building else None, "floor": floor.name if floor else None},
+        "inventory": {
+            "positions": len(assets), "quantity": sum(asset.quantity for asset in assets),
+            "categories": list(categories.values()),
+            "assets": [{"id": str(asset.id), "inventory_number": asset.inventory_number, "name": asset.name, "asset_type": asset.asset_type, "category": asset.category, "tracking_mode": asset.tracking_mode, "quantity": asset.quantity, "unit": asset.unit, "status": asset.status} for asset in assets],
+        },
+        "agents": [{"id": str(endpoint.id), "asset_id": str(endpoint.asset_id) if endpoint.asset_id else None, "hostname": endpoint.hostname, "status": endpoint.status, "last_seen_at": endpoint.last_seen_at, "has_baseline": endpoint.id in active_baseline_ids} for endpoint in endpoints],
+        "baseline": {"agent_ready": len(active_baseline_ids), "agent_total": len(endpoints), "vision_ready": vision_baseline is not None},
+        "vision": None if not vision_room else {"room_id": str(vision_room.id), "has_baseline": vision_baseline is not None, "baseline_counts": vision_baseline.counts if vision_baseline else None, "latest_scan": None if not latest_scan else {"id": str(latest_scan.id), "status": latest_scan.status, "created_at": latest_scan.created_at, "counts": latest_scan.counts, "comparison": latest_scan.comparison}},
+        "incidents": [{"id": str(item.id), "endpoint_id": str(item.managed_endpoint_id), "status": item.status, "severity": item.severity, "title": item.title, "created_at": item.created_at} for item in incidents],
+    }
 
 
 @router.get("/access")

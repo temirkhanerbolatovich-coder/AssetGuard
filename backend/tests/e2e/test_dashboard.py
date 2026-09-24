@@ -62,6 +62,9 @@ def test_admin_can_open_dashboard_and_create_asset(live_server):
         assert page.get_by_role("heading", name="Последний инцидент").is_visible()
         assert page.locator("#setup-guide").is_visible()
 
+        # The compact desktop header (1101–1320px) keeps navigation behind
+        # the same menu button as tablet layouts; use the real user path.
+        page.locator("#nav-toggle").click()
         page.locator("#agent-credentials-nav").click()
         page.locator("#agent-credentials").scroll_into_view_if_needed()
         page.get_by_role("button", name="Создать ключ для компьютера").click()
@@ -73,6 +76,7 @@ def test_admin_can_open_dashboard_and_create_asset(live_server):
         assert len(agent_secret) >= 32
         assert page.locator("#agent-credentials-list").get_by_text(agent_username).is_visible()
         credential_dialog.get_by_role("button", name="Я скопировал данные").click()
+        credential_dialog.wait_for(state="hidden")
         assert page.locator("#agent-credential-secret").input_value() == ""
 
         page.set_viewport_size({"width": 1280, "height": 900})
