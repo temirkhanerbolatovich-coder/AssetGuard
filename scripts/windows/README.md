@@ -14,6 +14,7 @@ Upstream GLPI Agent устанавливается отдельно: AssetGuard 
 - `backup-database.ps1` / `restore-database.ps1` — создают AES-256-GCM encrypted backup, опционально копируют его на внешний диск или `rclone` remote и восстанавливают БД;
 - `verify-backup-restore.ps1` — безопасно репетирует restore в отдельном одноразовом PostgreSQL контейнере, не затрагивая рабочую БД.
 - `set-backup-passphrase.ps1` / `install-backup-schedule.ps1` — сохраняют пароль backup через Windows DPAPI и устанавливают daily backup + weekly isolated restore rehearsal для текущего Windows-пользователя.
+- `send-operations-telegram-alert.ps1` / `install-operations-telegram-monitor.ps1` — проверяют offline Agent, failed ingest, конфликты идентификации и место на диске, затем отправляют deduplicated alert в Telegram.
 
 Скрипты не отключают TLS, не записывают secrets в исходники и не меняют baseline автоматически.
 
@@ -80,5 +81,25 @@ $passphrase = Read-Host 'Backup passphrase' -AsSecureString
 ```
 
 Появятся две задачи: ежедневный `AssetGuard Daily Encrypted Backup` и воскресный `AssetGuard Weekly Restore Rehearsal`. Они запускаются лишь когда данный пользователь вошёл в Windows — это осознанное ограничение desktop-pilot, потому что и Docker Desktop, и DPAPI принадлежат интерактивному пользователю. Для постоянного сервера следующим шагом нужен отдельный service account и secret manager.
+
+## Уведомления в Telegram
+
+1. Создайте бота через `@BotFather`, получите token и начните диалог с ботом (или добавьте его в закрытую группу).
+2. Получите numeric `chat_id` через `getUpdates` после первого сообщения боту. Token нельзя пересылать в чат или коммитить в Git.
+3. Впишите только в локальный `.env`:
+
+```dotenv
+ASSETGUARD_TELEGRAM_BOT_TOKEN=<token>
+ASSETGUARD_TELEGRAM_CHAT_ID=<chat_id>
+```
+
+4. Проверьте доставку и установите монитор:
+
+```powershell
+.\scripts\windows\send-operations-telegram-alert.ps1 -SendTest
+.\scripts\windows\install-operations-telegram-monitor.ps1 -EveryMinutes 60
+```
+
+Монитор молчит, когда всё в норме. При сохранении одинаковой проблемы повторное сообщение придёт не чаще чем раз в четыре часа; это защищает чат от спама. Telegram Bot API принимает HTTPS-запросы к `sendMessage`; скрипт использует JSON POST и проверяет поле `ok` в ответе. [Официальная документация Telegram](https://core.telegram.org/bots/api#sendmessage).
 
 Для локального Vision demo Python environment должен быть установлен с extras `backend[dev,vision]`. Модель загружается при первом scan; demo-изображения находятся в `demo/vision/`.
