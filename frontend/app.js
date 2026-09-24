@@ -1,6 +1,6 @@
 const $ = (id) => document.getElementById(id);
 let token = sessionStorage.getItem("assetguard-admin-token") || "";
-let state = {assets: [], endpoints: [], devices: [], changes: [], incidents: [], visionRooms: [], selectedAsset: null, linkingEndpoint: null, visionRoomId: null, visionScan: null, visionImageUrl: null, assetQrUrl: null};
+let state = {assets: [], endpoints: [], devices: [], changes: [], incidents: [], operations: null, visionRooms: [], selectedAsset: null, linkingEndpoint: null, visionRoomId: null, visionScan: null, visionImageUrl: null, assetQrUrl: null};
 $("token").value = token;
 
 const escapeHtml = (value) => String(value ?? "—").replace(/[&<>"']/g, (char) => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[char]));
@@ -113,6 +113,22 @@ function renderDashboard() {
   $("agent-last-signal").textContent = latest ? `Инвентаризация получена ${relativeTime(latest)}` : "Ожидаем данные Agent";
   $("agent-proof-text").textContent = latest ? `${dateTime(latest)} · отчёт принят, нормализован и сохранён в истории.` : "После первой отправки здесь появится фактическое время последней инвентаризации.";
   bindDynamicActions();
+}
+function renderOperations(operations) {
+  const status = $("operations-status"), summary = $("operations-summary");
+  if (!operations) { status.textContent = "Нет данных"; status.className = "status-pill neutral"; summary.innerHTML = '<p class="empty">Операционные данные недоступны.</p>'; return; }
+  const failed = Number(operations.ingest?.failed || 0), offline = Number(operations.agents?.offline || 0) + Number(operations.agents?.stale || 0), conflicts = Number(operations.agents?.identity_conflicts || 0);
+  const attention = failed + offline + conflicts;
+  status.textContent = attention ? "Требует внимания" : "В норме"; status.className = `status-pill ${attention ? "warning" : "ok"}`;
+  summary.innerHTML = [
+    ["Agent на связи", `${operations.agents?.online || 0} из ${operations.agents?.total || 0}`],
+    ["Нет связи / устарели", offline],
+    ["Ошибки приёма данных", failed],
+    ["Конфликты идентификации", conflicts],
+    ["Последний отчёт Agent", operations.agents?.last_inventory_at ? relativeTime(operations.agents.last_inventory_at) : "—"],
+    ["Свободно для Vision", bytes(operations.storage?.free_bytes)],
+    ["Размер базы", bytes(operations.database?.bytes)],
+  ].map(([label,value]) => `<div class="summary-line"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join("");
 }
 function hardwareBrief(endpoint) {
   const summary = endpoint?.hardware_summary; if (!summary) return "Нет данных";
@@ -233,7 +249,7 @@ function renderVisionRooms(rooms) { state.visionRooms=rooms; $("vision-room-sele
 
 async function load(showLoading=true) {
   if(showLoading){$("status").textContent="Обновляем данные…";$("attention-banner").className="attention-banner is-loading";}
-  try { const [assets,endpoints,changes,incidents,visionRooms]=await Promise.all([api("/admin/assets"),api("/admin/endpoints"),api("/admin/changes"),api("/admin/incidents"),api("/admin/vision/rooms")]); state={...state,assets,endpoints,changes,incidents,visionRooms}; buildDevices(); renderDashboard(); renderDevices(); renderVisionRooms(visionRooms); $("status").textContent=`Данные актуальны · ${dateTime(new Date())}`; }
+  try { const [assets,endpoints,changes,incidents,visionRooms,operations]=await Promise.all([api("/admin/assets"),api("/admin/endpoints"),api("/admin/changes"),api("/admin/incidents"),api("/admin/vision/rooms"),api("/admin/operations/status")]); state={...state,assets,endpoints,changes,incidents,visionRooms,operations}; buildDevices(); renderDashboard(); renderOperations(operations); renderDevices(); renderVisionRooms(visionRooms); $("status").textContent=`Данные актуальны · ${dateTime(new Date())}`; }
   catch(error){$("status").textContent=error.message;$("attention-banner").className="attention-banner error";$("attention-banner").innerHTML=`<span class="attention-icon">!</span><div><strong>Не удалось загрузить Dashboard</strong><p>${escapeHtml(error.message)}</p></div>`;showToast(error.message,true);}
 }
 function openAssetFromHash() { const match = location.hash.match(/^#asset=([0-9a-f-]{36})$/i); if (match && token) detail(match[1]); }
