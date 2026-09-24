@@ -41,7 +41,7 @@ def require_admin(
     valid = [settings.admin_shared_secret, settings.previous_admin_shared_secret]
     shared = bool(token and any(candidate and secrets.compare_digest(token, candidate) for candidate in valid))
     if shared:
-        return AuthPrincipal(username="bootstrap-admin", role="ADMIN", session_id=None)
+        return AuthPrincipal(username="bootstrap-admin", role="ADMIN", session_id=None, organization_id=None)
     principal = session_principal(session, token) if token else None
     if not principal or principal.role != "ADMIN":
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid administrator credentials.")
@@ -56,7 +56,7 @@ def require_viewer(
     valid = [settings.admin_shared_secret, settings.previous_admin_shared_secret, settings.viewer_shared_secret]
     if token and any(candidate and secrets.compare_digest(token, candidate) for candidate in valid):
         role = "VIEWER" if settings.viewer_shared_secret and secrets.compare_digest(token, settings.viewer_shared_secret) else "ADMIN"
-        return AuthPrincipal(username=f"shared-{role.lower()}", role=role, session_id=None)
+        return AuthPrincipal(username=f"shared-{role.lower()}", role=role, session_id=None, organization_id=None)
     principal = session_principal(session, token) if token else None
     if not principal or principal.role not in {"ADMIN", "VIEWER"}:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid AssetGuard credentials.")
@@ -187,10 +187,13 @@ def _endpoint_summary(session: Session, endpoint: ManagedEndpointRecord) -> dict
     }
 
 
-@router.get("/assets", dependencies=[Depends(require_viewer)])
-def list_assets(session: Annotated[Session, Depends(get_session)]):
+@router.get("/assets")
+def list_assets(session: Annotated[Session, Depends(get_session)], principal: Annotated[AuthPrincipal, Depends(require_viewer)]):
     result = []
-    for asset in session.scalars(select(AssetRecord).order_by(AssetRecord.inventory_number)):
+    statement = select(AssetRecord).order_by(AssetRecord.inventory_number)
+    if principal.organization_id:
+        statement = statement.where(AssetRecord.organization_id == principal.organization_id)
+    for asset in session.scalars(statement):
         endpoint = session.scalar(select(ManagedEndpointRecord).where(ManagedEndpointRecord.asset_id == asset.id))
         organization = session.get(OrganizationRecord, asset.organization_id)
         view = _asset_view(asset, endpoint.id if endpoint else None, organization.name if organization else None)
@@ -199,14 +202,17 @@ def list_assets(session: Annotated[Session, Depends(get_session)]):
     return result
 
 
-@router.get("/assets/export.xlsx", dependencies=[Depends(require_viewer)])
-def export_assets_xlsx(session: Annotated[Session, Depends(get_session)]):
+@router.get("/assets/export.xlsx")
+def export_assets_xlsx(session: Annotated[Session, Depends(get_session)], principal: Annotated[AuthPrincipal, Depends(require_viewer)]):
     workbook = Workbook()
     sheet = workbook.active
     sheet.title = "Assets"
     headers = ["inventory_number", "name", "asset_type", "status", "organization", "building", "floor", "room", "notes"]
     sheet.append(headers)
-    for asset in session.scalars(select(AssetRecord).order_by(AssetRecord.inventory_number)):
+    statement = select(AssetRecord).order_by(AssetRecord.inventory_number)
+    if principal.organization_id:
+        statement = statement.where(AssetRecord.organization_id == principal.organization_id)
+    for asset in session.scalars(statement):
         organization = session.get(OrganizationRecord, asset.organization_id)
         sheet.append([
             asset.inventory_number, asset.name, asset.asset_type, asset.status,
