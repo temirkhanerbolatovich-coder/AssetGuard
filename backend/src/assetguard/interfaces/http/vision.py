@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from assetguard.infrastructure.config import get_settings
 from assetguard.infrastructure.database import get_session
 from assetguard.interfaces.http.admin_assets import require_admin, require_viewer
+from assetguard.modules.identity.auth import AuthPrincipal
 from assetguard.modules.vision.detector import get_detector
 from assetguard.modules.vision.models import (
     VisionBaselineRecord, VisionDetectionRecord, VisionRoomRecord, VisionScanRecord,
@@ -26,6 +27,21 @@ router = APIRouter(prefix="/admin/vision", tags=["vision"])
 
 class BaselineBody(BaseModel):
     scan_id: UUID
+
+
+def scoped_room(session: Session, room_id: UUID, principal: AuthPrincipal) -> VisionRoomRecord:
+    room = session.get(VisionRoomRecord, room_id)
+    if not room or (principal.organization_id and room.organization_id != principal.organization_id):
+        raise HTTPException(404, "Vision room was not found.")
+    return room
+
+
+def scoped_scan(session: Session, scan_id: UUID, principal: AuthPrincipal) -> VisionScanRecord:
+    scan = session.get(VisionScanRecord, scan_id)
+    if not scan:
+        raise HTTPException(404, "Vision scan was not found.")
+    scoped_room(session, scan.room_id, principal)
+    return scan
 
 
 def scan_view(session: Session, scan: VisionScanRecord) -> dict:
@@ -49,11 +65,12 @@ def scan_view(session: Session, scan: VisionScanRecord) -> dict:
     }
 
 
-@router.post("/scans", dependencies=[Depends(require_admin)], status_code=201)
+@router.post("/scans", status_code=201)
 def upload_scan(
     room_name: Annotated[str, Form(min_length=1, max_length=255)],
     image: Annotated[UploadFile, File()],
     session: Annotated[Session, Depends(get_session)],
+    principal: Annotated[AuthPrincipal, Depends(require_admin)],
     asset_id: Annotated[UUID | None, Form()] = None,
 ):
     settings = get_settings()
@@ -63,9 +80,10 @@ def upload_scan(
     if len(payload) > settings.vision_max_image_bytes:
         raise HTTPException(413, "Vision image is too large.")
     try:
-        if asset_id and not session.get(AssetRecord, asset_id):
+        asset = session.get(AssetRecord, asset_id) if asset_id else None
+        if asset_id and (not asset or (principal.organization_id and asset.organization_id != principal.organization_id)):
             raise HTTPException(404, "Asset was not found.")
-        scan = create_scan(session, room_name=room_name, payload=payload, detector=get_detector(), asset_id=asset_id)
+        scan = create_scan(session, room_name=room_name, payload=payload, detector=get_detector(), asset_id=asset_id, organization_id=principal.organization_id)
     except ValueError as error:
         raise HTTPException(422, str(error)) from error
     except RuntimeError as error:
@@ -74,10 +92,13 @@ def upload_scan(
     return scan_view(session, scan)
 
 
-@router.get("/rooms", dependencies=[Depends(require_viewer)])
-def rooms(session: Annotated[Session, Depends(get_session)]):
+@router.get("/rooms")
+def rooms(session: Annotated[Session, Depends(get_session)], principal: Annotated[AuthPrincipal, Depends(require_viewer)]):
     result = []
-    for room in session.scalars(select(VisionRoomRecord).order_by(VisionRoomRecord.name)):
+    query = select(VisionRoomRecord).order_by(VisionRoomRecord.name)
+    if principal.organization_id:
+        query = query.where(VisionRoomRecord.organization_id == principal.organization_id)
+    for room in session.scalars(query):
         latest = session.scalar(select(VisionScanRecord).where(
             VisionScanRecord.room_id == room.id,
         ).order_by(VisionScanRecord.created_at.desc()))
@@ -93,31 +114,27 @@ def rooms(session: Annotated[Session, Depends(get_session)]):
     return result
 
 
-@router.get("/rooms/{room_id}/scans", dependencies=[Depends(require_viewer)])
-def room_scans(room_id: UUID, session: Annotated[Session, Depends(get_session)]):
-    if not session.get(VisionRoomRecord, room_id):
-        raise HTTPException(404, "Vision room was not found.")
+@router.get("/rooms/{room_id}/scans")
+def room_scans(room_id: UUID, session: Annotated[Session, Depends(get_session)], principal: Annotated[AuthPrincipal, Depends(require_viewer)]):
+    scoped_room(session, room_id, principal)
     return [scan_view(session, scan) for scan in session.scalars(select(VisionScanRecord).where(
         VisionScanRecord.room_id == room_id,
     ).order_by(VisionScanRecord.created_at.desc()))]
 
 
-@router.get("/scans/{scan_id}", dependencies=[Depends(require_viewer)])
-def scan_detail(scan_id: UUID, session: Annotated[Session, Depends(get_session)]):
-    scan = session.get(VisionScanRecord, scan_id)
-    if not scan:
-        raise HTTPException(404, "Vision scan was not found.")
+@router.get("/scans/{scan_id}")
+def scan_detail(scan_id: UUID, session: Annotated[Session, Depends(get_session)], principal: Annotated[AuthPrincipal, Depends(require_viewer)]):
+    scan = scoped_scan(session, scan_id, principal)
     return scan_view(session, scan)
 
 
-@router.get("/scans/{scan_id}/image", dependencies=[Depends(require_viewer)])
+@router.get("/scans/{scan_id}/image")
 def scan_image(
     scan_id: UUID, session: Annotated[Session, Depends(get_session)],
+    principal: Annotated[AuthPrincipal, Depends(require_viewer)],
     kind: Literal["original", "annotated"] = "annotated",
 ):
-    scan = session.get(VisionScanRecord, scan_id)
-    if not scan:
-        raise HTTPException(404, "Vision scan was not found.")
+    scan = scoped_scan(session, scan_id, principal)
     try:
         path = image_path(scan, kind)
     except FileNotFoundError as error:
@@ -125,8 +142,9 @@ def scan_image(
     return FileResponse(path, media_type="image/jpeg", filename=path.name)
 
 
-@router.get("/rooms/{room_id}/baseline", dependencies=[Depends(require_viewer)])
-def get_baseline(room_id: UUID, session: Annotated[Session, Depends(get_session)]):
+@router.get("/rooms/{room_id}/baseline")
+def get_baseline(room_id: UUID, session: Annotated[Session, Depends(get_session)], principal: Annotated[AuthPrincipal, Depends(require_viewer)]):
+    scoped_room(session, room_id, principal)
     baseline = session.scalar(select(VisionBaselineRecord).where(VisionBaselineRecord.room_id == room_id))
     return None if baseline is None else {
         "id": str(baseline.id), "room_id": str(baseline.room_id),
@@ -135,12 +153,10 @@ def get_baseline(room_id: UUID, session: Annotated[Session, Depends(get_session)
     }
 
 
-@router.post("/rooms/{room_id}/baseline", dependencies=[Depends(require_admin)])
-def save_baseline(room_id: UUID, body: BaselineBody, session: Annotated[Session, Depends(get_session)]):
-    room = session.get(VisionRoomRecord, room_id)
-    scan = session.get(VisionScanRecord, body.scan_id)
-    if not room or not scan:
-        raise HTTPException(404, "Vision room or scan was not found.")
+@router.post("/rooms/{room_id}/baseline")
+def save_baseline(room_id: UUID, body: BaselineBody, session: Annotated[Session, Depends(get_session)], principal: Annotated[AuthPrincipal, Depends(require_admin)]):
+    room = scoped_room(session, room_id, principal)
+    scan = scoped_scan(session, body.scan_id, principal)
     try:
         baseline = accept_baseline(session, room, scan)
     except ValueError as error:
