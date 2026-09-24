@@ -492,12 +492,22 @@ def endpoint_detail(endpoint_id: UUID, session: Annotated[Session, Depends(get_s
     }
 
 
-@router.post("/endpoints/{endpoint_id}/asset/{asset_id}", dependencies=[Depends(require_admin)])
-def link_endpoint(endpoint_id: UUID, asset_id: UUID, session: Annotated[Session, Depends(get_session)]):
+@router.post("/endpoints/{endpoint_id}/asset/{asset_id}")
+def link_endpoint(
+    endpoint_id: UUID,
+    asset_id: UUID,
+    session: Annotated[Session, Depends(get_session)],
+    principal: Annotated[AuthPrincipal, Depends(require_admin)],
+):
     endpoint = session.get(ManagedEndpointRecord, endpoint_id)
     asset = session.get(AssetRecord, asset_id)
-    if not endpoint or not asset:
+    if not endpoint or not asset or (principal.organization_id and (
+        endpoint.organization_id != principal.organization_id or asset.organization_id != principal.organization_id
+    )):
         raise HTTPException(404, "Asset or endpoint was not found.")
+    if endpoint.organization_id and asset.organization_id and endpoint.organization_id != asset.organization_id:
+        raise HTTPException(409, "An endpoint and an asset must belong to the same organization.")
+    endpoint.organization_id = endpoint.organization_id or asset.organization_id
     if endpoint.asset_id and endpoint.asset_id != asset.id:
         append_asset_history(
             session, asset_id=endpoint.asset_id, endpoint_id=endpoint.id,

@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from assetguard.infrastructure.database import get_session
 from assetguard.interfaces.http.admin_assets import require_admin
-from assetguard.modules.identity.auth import create_session, hash_password, revoke_session_token, verify_password
+from assetguard.modules.identity.auth import AuthPrincipal, create_session, hash_password, revoke_session_token, verify_password
 from assetguard.modules.identity.models import AgentCredentialRecord, AuthSessionRecord, UserRecord
 
 router = APIRouter(tags=["authentication"])
@@ -54,27 +54,42 @@ def logout(
     return Response(status_code=204)
 
 
-@router.get("/admin/users", dependencies=[Depends(require_admin)])
-def users(session: Annotated[Session, Depends(get_session)]):
-    return [{"id": str(user.id), "username": user.username, "role": user.role, "active": user.is_active, "created_at": user.created_at} for user in session.scalars(select(UserRecord).order_by(UserRecord.username))]
+def _tenant_filter(query, model, principal: AuthPrincipal):
+    """Apply the caller's organization boundary; a legacy global admin remains platform-scoped."""
+    return query.where(model.organization_id == principal.organization_id) if principal.organization_id else query
 
 
-@router.post("/admin/users", dependencies=[Depends(require_admin)], status_code=201)
-def create_user(body: UserCreate, session: Annotated[Session, Depends(get_session)]):
+def _require_same_tenant(organization_id: UUID | None, principal: AuthPrincipal, detail: str) -> None:
+    if principal.organization_id and organization_id != principal.organization_id:
+        raise HTTPException(404, detail)
+
+
+@router.get("/admin/users")
+def users(session: Annotated[Session, Depends(get_session)], principal: Annotated[AuthPrincipal, Depends(require_admin)]):
+    query = _tenant_filter(select(UserRecord).order_by(UserRecord.username), UserRecord, principal)
+    return [{"id": str(user.id), "username": user.username, "role": user.role, "organization_id": str(user.organization_id) if user.organization_id else None, "active": user.is_active, "created_at": user.created_at} for user in session.scalars(query)]
+
+
+@router.post("/admin/users", status_code=201)
+def create_user(body: UserCreate, session: Annotated[Session, Depends(get_session)], principal: Annotated[AuthPrincipal, Depends(require_admin)]):
     if session.scalar(select(UserRecord).where(UserRecord.username == body.username)):
         raise HTTPException(409, "Username already exists.")
-    user = UserRecord(username=body.username, password_hash=hash_password(body.password), role=body.role, organization_id=body.organization_id, is_active=True, created_at=datetime.now(UTC))
+    if principal.organization_id and body.organization_id not in (None, principal.organization_id):
+        raise HTTPException(403, "A tenant administrator can create users only in their own organization.")
+    organization_id = principal.organization_id or body.organization_id
+    user = UserRecord(username=body.username, password_hash=hash_password(body.password), role=body.role, organization_id=organization_id, is_active=True, created_at=datetime.now(UTC))
     session.add(user)
     session.commit()
     session.refresh(user)
     return {"id": str(user.id), "username": user.username, "role": user.role, "organization_id": str(user.organization_id) if user.organization_id else None, "active": user.is_active}
 
 
-@router.patch("/admin/users/{user_id}", dependencies=[Depends(require_admin)])
-def update_user(user_id: UUID, body: UserUpdate, session: Annotated[Session, Depends(get_session)]):
+@router.patch("/admin/users/{user_id}")
+def update_user(user_id: UUID, body: UserUpdate, session: Annotated[Session, Depends(get_session)], principal: Annotated[AuthPrincipal, Depends(require_admin)]):
     user = session.get(UserRecord, user_id)
     if not user:
         raise HTTPException(404, "User was not found.")
+    _require_same_tenant(user.organization_id, principal, "User was not found.")
     if body.role is not None:
         user.role = body.role
     if body.active is not None:
@@ -89,57 +104,65 @@ def update_user(user_id: UUID, body: UserUpdate, session: Annotated[Session, Dep
     return {"id": str(user.id), "username": user.username, "role": user.role, "active": user.is_active}
 
 
-@router.get("/admin/sessions", dependencies=[Depends(require_admin)])
-def sessions(session: Annotated[Session, Depends(get_session)]):
-    rows = session.execute(
+@router.get("/admin/sessions")
+def sessions(session: Annotated[Session, Depends(get_session)], principal: Annotated[AuthPrincipal, Depends(require_admin)]):
+    query = (
         select(AuthSessionRecord, UserRecord.username)
         .join(UserRecord, UserRecord.id == AuthSessionRecord.user_id)
         .order_by(AuthSessionRecord.expires_at.desc())
     )
+    rows = session.execute(_tenant_filter(query, UserRecord, principal))
     return [{
         "id": str(auth_session.id), "username": username,
         "created_at": auth_session.created_at, "expires_at": auth_session.expires_at,
     } for auth_session, username in rows]
 
 
-@router.delete("/admin/sessions/{session_id}", status_code=204, dependencies=[Depends(require_admin)])
-def revoke_session(session_id: UUID, session: Annotated[Session, Depends(get_session)]):
+@router.delete("/admin/sessions/{session_id}", status_code=204)
+def revoke_session(session_id: UUID, session: Annotated[Session, Depends(get_session)], principal: Annotated[AuthPrincipal, Depends(require_admin)]):
     auth_session = session.get(AuthSessionRecord, session_id)
     if not auth_session:
         raise HTTPException(404, "Session was not found.")
+    user = session.get(UserRecord, auth_session.user_id)
+    _require_same_tenant(user.organization_id if user else None, principal, "Session was not found.")
     session.delete(auth_session)
     session.commit()
     return Response(status_code=204)
 
 
-@router.get("/admin/agent-credentials", dependencies=[Depends(require_admin)])
-def agent_credentials(session: Annotated[Session, Depends(get_session)]):
+@router.get("/admin/agent-credentials")
+def agent_credentials(session: Annotated[Session, Depends(get_session)], principal: Annotated[AuthPrincipal, Depends(require_admin)]):
+    query = _tenant_filter(select(AgentCredentialRecord).order_by(AgentCredentialRecord.issued_at.desc()), AgentCredentialRecord, principal)
     return [{
         "id": str(item.id), "username": item.username, "status": item.status,
         "endpoint_id": str(item.managed_endpoint_id) if item.managed_endpoint_id else None,
         "issued_at": item.issued_at, "revoked_at": item.revoked_at,
-    } for item in session.scalars(select(AgentCredentialRecord).order_by(AgentCredentialRecord.issued_at.desc()))]
+    } for item in session.scalars(query)]
 
 
-@router.post("/admin/agent-credentials", dependencies=[Depends(require_admin)], status_code=201)
-def create_agent_credential(session: Annotated[Session, Depends(get_session)], body: AgentCredentialCreate | None = None):
+@router.post("/admin/agent-credentials", status_code=201)
+def create_agent_credential(session: Annotated[Session, Depends(get_session)], principal: Annotated[AuthPrincipal, Depends(require_admin)], body: AgentCredentialCreate | None = None):
     # The raw secret is returned exactly once and is never persisted in plaintext.
     username = f"ag-{secrets.token_hex(8)}"
     secret = secrets.token_urlsafe(32)
+    requested_organization = body.organization_id if body else None
+    if principal.organization_id and requested_organization not in (None, principal.organization_id):
+        raise HTTPException(403, "A tenant administrator can issue credentials only for their own organization.")
     credential = AgentCredentialRecord(
         username=username, secret_hash=hash_password(secret), status="ACTIVE",
-        issued_at=datetime.now(UTC), revoked_at=None, managed_endpoint_id=None, organization_id=body.organization_id if body else None,
+        issued_at=datetime.now(UTC), revoked_at=None, managed_endpoint_id=None, organization_id=principal.organization_id or requested_organization,
     )
     session.add(credential)
     session.commit()
     return {"id": str(credential.id), "username": username, "secret": secret, "status": "ACTIVE"}
 
 
-@router.post("/admin/agent-credentials/{credential_id}/revoke", dependencies=[Depends(require_admin)])
-def revoke_agent_credential(credential_id: UUID, session: Annotated[Session, Depends(get_session)]):
+@router.post("/admin/agent-credentials/{credential_id}/revoke")
+def revoke_agent_credential(credential_id: UUID, session: Annotated[Session, Depends(get_session)], principal: Annotated[AuthPrincipal, Depends(require_admin)]):
     credential = session.get(AgentCredentialRecord, credential_id)
     if not credential:
         raise HTTPException(404, "Agent credential was not found.")
+    _require_same_tenant(credential.organization_id, principal, "Agent credential was not found.")
     if credential.status != "REVOKED":
         credential.status = "REVOKED"
         credential.revoked_at = datetime.now(UTC)
