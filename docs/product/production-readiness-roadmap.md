@@ -23,7 +23,7 @@
 
 ## Этап 3: secure software supply chain
 
-- [x] Python dependency vulnerability audit в CI.
+- [x] Python dependency vulnerability audit в CI: проверяет точные установленные версии, включая CPU-сборку PyTorch, без повторного скачивания из неподходящего PyPI-индекса.
 - [x] Dependabot для Python и GitHub Actions.
 - [ ] Secret scanning / pre-commit hook и protection rules на main.
 - [ ] SAST, container image scan и SBOM release artifact.
