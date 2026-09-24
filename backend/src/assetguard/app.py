@@ -32,4 +32,11 @@ app.include_router(admin_inventories_router)
 app.include_router(auth_router)
 app.include_router(vision_router)
 app.include_router(glpi_agent_router)
-app.mount("/", StaticFiles(directory=Path(__file__).resolve().parents[3] / "frontend", html=True), name="frontend")
+# The frontend is copied next to the backend in the production container
+# (``/app/frontend``).  Deriving it from the installed Python package points to
+# ``/usr/local/lib/frontend`` after ``pip install`` and breaks a Docker deploy.
+FRONTEND_DIRECTORY = Path("/app/frontend")
+if not FRONTEND_DIRECTORY.is_dir():
+    FRONTEND_DIRECTORY = Path(__file__).resolve().parents[3] / "frontend"
+
+app.mount("/", StaticFiles(directory=FRONTEND_DIRECTORY, html=True), name="frontend")
