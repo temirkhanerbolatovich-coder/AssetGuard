@@ -29,3 +29,9 @@ Configuration spike от 2026-09-23 подтверждён на установл
 ## Правило до production
 
 Нельзя запускать агент с full default payload против Gateway. Native `/glpi-agent` проверен только вместе с этим минимальным profile, `no-compression = 1`, HTTP Basic credentials и GLPI Agent 1.19. Перед production-отправкой нужны утверждение policy владельцем проекта, HTTPS trust и защищённое хранение agent credentials.
+
+## Windows service deployment
+
+`scripts/windows/install-assetguard-agent-service.ps1` ставит именно upstream GLPI Agent как автоматическую Windows-службу. Он сохраняет endpoint и inventory secret в отдельном `99-assetguard.cfg`, ACL которого оставляет доступ только `SYSTEM` и группе local Administrators. Profile также отключает встроенный локальный HTTP server (`no-httpd = 1`), чтобы агент не открывал порт управления на компьютере.
+
+Это не anti-tamper software: пользователь без administrator rights не может управлять службой, а Administrator сохраняет возможность остановить, удалить и аудировать её. Скрывать процесс или обходить права администратора не является целью AssetGuard.
