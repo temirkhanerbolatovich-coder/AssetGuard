@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import secrets
+from html import escape
 from io import BytesIO
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Annotated, Literal
 from urllib.parse import urlsplit
 from uuid import UUID
@@ -10,6 +12,14 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, UploadFile, status
 from fastapi.responses import Response, StreamingResponse
 from openpyxl import Workbook, load_workbook
+import pdfplumber
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4, landscape
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import mm
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 import segno
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
@@ -247,8 +257,79 @@ def export_assets_xlsx(session: Annotated[Session, Depends(get_session)], princi
     )
 
 
+def _assets_for_principal(session: Session, principal: AuthPrincipal) -> list[tuple[AssetRecord, str]]:
+    statement = select(AssetRecord).order_by(AssetRecord.inventory_number)
+    if principal.organization_id:
+        statement = statement.where(AssetRecord.organization_id == principal.organization_id)
+    result = []
+    for asset in session.scalars(statement):
+        organization = session.get(OrganizationRecord, asset.organization_id)
+        result.append((asset, organization.name if organization else ""))
+    return result
+
+
+def _pdf_font_name() -> str:
+    """Use a font with Cyrillic glyphs in both the Docker image and local Windows runs."""
+    candidates = (
+        ("AssetGuardDejaVu", Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf")),
+        ("AssetGuardArial", Path("C:/Windows/Fonts/arial.ttf")),
+    )
+    for name, path in candidates:
+        if path.is_file():
+            if name not in pdfmetrics.getRegisteredFontNames():
+                pdfmetrics.registerFont(TTFont(name, str(path)))
+            return name
+    raise RuntimeError("A Unicode font is required for PDF export. Install fonts-dejavu-core.")
+
+
+def _export_assets_pdf(assets: list[tuple[AssetRecord, str]]) -> BytesIO:
+    font = _pdf_font_name()
+    output = BytesIO()
+    document = SimpleDocTemplate(
+        output, pagesize=landscape(A4), leftMargin=10 * mm, rightMargin=10 * mm,
+        topMargin=12 * mm, bottomMargin=12 * mm,
+    )
+    styles = getSampleStyleSheet()
+    title = ParagraphStyle("AssetGuardTitle", parent=styles["Title"], fontName=font, fontSize=16, leading=20)
+    subtitle = ParagraphStyle("AssetGuardSubtitle", parent=styles["Normal"], fontName=font, fontSize=8, leading=11, textColor=colors.HexColor("#4b5563"))
+    cell = ParagraphStyle("AssetGuardCell", parent=styles["Normal"], fontName=font, fontSize=7, leading=9)
+    header = ParagraphStyle("AssetGuardHeader", parent=cell, textColor=colors.white, alignment=1)
+    story = [
+        Paragraph("AssetGuard — реестр оборудования", title),
+        Paragraph(f"Сформировано: {datetime.now().astimezone().strftime('%d.%m.%Y %H:%M')} · Позиций: {len(assets)}", subtitle),
+        Spacer(1, 5 * mm),
+    ]
+    headings = ["Инв. №", "Наименование", "Тип", "Статус", "Организация", "Корпус", "Этаж", "Кабинет", "Примечание"]
+    table_data = [[Paragraph(escape(value), header) for value in headings]]
+    for asset, organization_name in assets:
+        values = [
+            asset.inventory_number, asset.name, asset.asset_type, asset.status, organization_name,
+            asset.building or "", asset.floor or "", asset.room or "", asset.notes or "",
+        ]
+        table_data.append([Paragraph(escape(str(value)).replace("\n", "<br/>"), cell) for value in values])
+    table = Table(table_data, colWidths=[22 * mm, 38 * mm, 22 * mm, 21 * mm, 32 * mm, 22 * mm, 13 * mm, 18 * mm, 48 * mm], repeatRows=1)
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#173b69")),
+        ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#cbd5e1")),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 3), ("RIGHTPADDING", (0, 0), (-1, -1), 3),
+        ("TOPPADDING", (0, 0), (-1, -1), 4), ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f8fafc")]),
+    ]))
+    story.append(table)
+    document.build(story)
+    output.seek(0)
+    return output
+
+
+@router.get("/assets/export.pdf")
+def export_assets_pdf(session: Annotated[Session, Depends(get_session)], principal: Annotated[AuthPrincipal, Depends(require_viewer)]):
+    output = _export_assets_pdf(_assets_for_principal(session, principal))
+    return StreamingResponse(output, media_type="application/pdf", headers={"Content-Disposition": 'attachment; filename="assetguard-assets.pdf"'})
+
+
 IMPORT_COLUMN_ALIASES = {
-    "inventory_number": {"inventory_number", "inventory number", "инвентарный номер", "инв. номер", "инв номер", "инвентарный№"},
+    "inventory_number": {"inventory_number", "inventory number", "инвентарный номер", "инв. номер", "инв номер", "инв. №", "инв №", "инвентарный№"},
     "name": {"name", "название", "наименование", "оборудование", "устройство"},
     "asset_type": {"asset_type", "asset type", "тип", "тип оборудования", "вид оборудования"},
     "status": {"status", "статус", "состояние"},
@@ -296,6 +377,51 @@ def _import_row_values(row: dict[str, object], row_number: int) -> dict[str, str
     return result
 
 
+def _parse_import_rows(header: tuple[object, ...] | list[object], rows: object, first_row_number: int = 2) -> list[dict[str, str | None]]:
+    columns = _canonical_import_columns(tuple(header))
+    required_columns = {"inventory_number", "name", "asset_type"}
+    if any(columns[column] is None for column in required_columns):
+        raise HTTPException(422, "Required columns: inventory_number, name, asset_type (or Russian equivalents).")
+    parsed: list[dict[str, str | None]] = []
+    try:
+        for row_number, values in enumerate(rows, start=first_row_number):
+            values = tuple(values or ())
+            if not any(value not in (None, "") for value in values):
+                continue
+            parsed.append(_import_row_values({name: values[index] if index is not None and index < len(values) else None for name, index in columns.items()}, row_number))
+    except ValueError as error:
+        raise HTTPException(422, str(error)) from error
+    return parsed
+
+
+def _import_assets(parsed: list[dict[str, str | None]], session: Session, principal: AuthPrincipal, apply: bool, source: str) -> dict[str, int | bool]:
+    scoped_organization = session.get(OrganizationRecord, principal.organization_id) if principal.organization_id else None
+    if scoped_organization and any((item["organization"] or scoped_organization.name) != scoped_organization.name for item in parsed):
+        raise HTTPException(403, "A tenant user may import assets only for their organization.")
+    existing = {(organization.name, asset.inventory_number): asset for asset in session.scalars(select(AssetRecord).join(OrganizationRecord)) for organization in [session.get(OrganizationRecord, asset.organization_id)] if organization}
+    creates = sum(1 for item in parsed if (item["organization"] or "Default Organization", item["inventory_number"]) not in existing)
+    updates = len(parsed) - creates
+    if not apply:
+        return {"rows": len(parsed), "creates": creates, "updates": updates, "applied": False}
+    now = datetime.now(UTC)
+    for item in parsed:
+        organization = _organization_for_name(session, item["organization"] or "Default Organization")
+        asset = existing.get((organization.name, item["inventory_number"]))
+        if asset is None:
+            asset = AssetRecord(organization_id=organization.id, inventory_number=item["inventory_number"] or "", name=item["name"] or "", asset_type=item["asset_type"] or "Other", status=item["status"] or "ACTIVE", building=item["building"], floor=item["floor"], room=item["room"], notes=item["notes"], created_at=now, updated_at=now)
+            session.add(asset); session.flush()
+            append_asset_history(session, asset_id=asset.id, event_type="ASSET_CREATED", related_entity_type="Asset", related_entity_id=asset.id, message=f"Asset imported from {source}.", metadata={"inventory_number": asset.inventory_number, "source": source})
+        else:
+            for key in ("name", "asset_type", "building", "floor", "room", "notes"):
+                setattr(asset, key, item[key])
+            if item["status"]:
+                asset.status = item["status"]
+            asset.updated_at = now
+            append_asset_history(session, asset_id=asset.id, event_type="ASSET_UPDATED", related_entity_type="Asset", related_entity_id=asset.id, message=f"Asset imported from {source}.", metadata={"source": source})
+    session.commit()
+    return {"rows": len(parsed), "creates": creates, "updates": updates, "applied": True}
+
+
 @router.post("/assets/import.xlsx")
 def import_assets_xlsx(
     file: Annotated[UploadFile, File()],
@@ -317,54 +443,38 @@ def import_assets_xlsx(
     header = next(rows, None)
     if not header:
         raise HTTPException(422, "The workbook is empty.")
-    columns = _canonical_import_columns(header)
-    required_columns = {"inventory_number", "name", "asset_type"}
-    if any(columns[column] is None for column in required_columns):
-        raise HTTPException(422, "Required columns: inventory_number, name, asset_type (or Russian equivalents).")
-    parsed: list[dict[str, str | None]] = []
+    return _import_assets(_parse_import_rows(header, rows), session, principal, apply, "xlsx")
+
+
+@router.post("/assets/import.pdf")
+def import_assets_pdf(
+    file: Annotated[UploadFile, File()],
+    session: Annotated[Session, Depends(get_session)],
+    principal: Annotated[AuthPrincipal, Depends(require_admin)],
+    apply: bool = Query(default=False),
+):
+    if file.content_type not in {"application/pdf", "application/octet-stream"} and not (file.filename or "").lower().endswith(".pdf"):
+        raise HTTPException(415, "Upload a .pdf file.")
+    content = file.file.read(10 * 1024 * 1024 + 1)
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(413, "The PDF must be no larger than 10 MB.")
     try:
-        for row_number, values in enumerate(rows, start=2):
-            if not any(value not in (None, "") for value in values):
+        with pdfplumber.open(BytesIO(content)) as document:
+            tables = [table for page in document.pages for table in page.extract_tables() if table]
+    except Exception as error:
+        raise HTTPException(422, "The uploaded file is not a valid readable PDF.") from error
+    for table in tables:
+        header, *rows = table
+        if not header:
+            continue
+        try:
+            parsed = _parse_import_rows(header, rows)
+        except HTTPException as error:
+            if error.status_code == 422 and error.detail.startswith("Required columns"):
                 continue
-            parsed.append(_import_row_values({name: values[index] if index is not None and index < len(values) else None for name, index in columns.items()}, row_number))
-    except ValueError as error:
-        raise HTTPException(422, str(error)) from error
-    scoped_organization = session.get(OrganizationRecord, principal.organization_id) if principal.organization_id else None
-    if scoped_organization and any((item["organization"] or scoped_organization.name) != scoped_organization.name for item in parsed):
-        raise HTTPException(403, "A tenant user may import assets only for their organization.")
-    existing = {(organization.name, asset.inventory_number): asset for asset in session.scalars(select(AssetRecord).join(OrganizationRecord)) for organization in [session.get(OrganizationRecord, asset.organization_id)] if organization}
-    creates = updates = 0
-    for item in parsed:
-        organization_name = item["organization"] or "Default Organization"
-        if (organization_name, item["inventory_number"]) in existing:
-            updates += 1
-        else:
-            creates += 1
-    if not apply:
-        return {"rows": len(parsed), "creates": creates, "updates": updates, "applied": False}
-    now = datetime.now(UTC)
-    for item in parsed:
-        organization = _organization_for_name(session, item["organization"] or "Default Organization")
-        asset = existing.get((organization.name, item["inventory_number"]))
-        if asset is None:
-            asset = AssetRecord(
-                organization_id=organization.id, inventory_number=item["inventory_number"] or "",
-                name=item["name"] or "", asset_type=item["asset_type"] or "Other",
-                status=item["status"] or "ACTIVE", building=item["building"], floor=item["floor"],
-                room=item["room"], notes=item["notes"], created_at=now, updated_at=now,
-            )
-            session.add(asset)
-            session.flush()
-            append_asset_history(session, asset_id=asset.id, event_type="ASSET_CREATED", related_entity_type="Asset", related_entity_id=asset.id, message="Asset imported from workbook.", metadata={"inventory_number": asset.inventory_number})
-        else:
-            for key in ("name", "asset_type", "building", "floor", "room", "notes"):
-                setattr(asset, key, item[key])
-            if item["status"]:
-                asset.status = item["status"]
-            asset.updated_at = now
-            append_asset_history(session, asset_id=asset.id, event_type="ASSET_UPDATED", related_entity_type="Asset", related_entity_id=asset.id, message="Asset imported from workbook.", metadata={"source": "xlsx"})
-    session.commit()
-    return {"rows": len(parsed), "creates": creates, "updates": updates, "applied": True}
+            raise
+        return _import_assets(parsed, session, principal, apply, "pdf")
+    raise HTTPException(422, "No supported table was found. PDF import works with a selectable text table and columns inventory_number, name, asset_type (or Russian equivalents); scanned PDFs need OCR first.")
 
 
 @router.get("/assets/{asset_id}/qr.svg")

@@ -46,7 +46,7 @@
   </section>
 
   <section id="devices" class="page-section">
-    <div class="section-heading page-heading"><div><span class="eyebrow">Реестр</span><h2>Устройства</h2><p>Нажмите на название устройства или кнопку «Открыть карточку», чтобы увидеть данные Agent, оборудование и историю изменений.</p></div><div class="actions"><button id="export-assets" class="button-secondary">Экспорт Excel</button><button id="import-assets" class="button-secondary">Импорт Excel</button><input id="import-assets-file" type="file" accept=".xlsx" hidden><button id="show-create">Добавить актив</button></div></div>
+    <div class="section-heading page-heading"><div><span class="eyebrow">Реестр</span><h2>Устройства</h2><p>Нажмите на название устройства или кнопку «Открыть карточку», чтобы увидеть данные Agent, оборудование и историю изменений.</p></div><div class="actions"><button id="export-assets" class="button-secondary">Экспорт Excel</button><button id="export-assets-pdf" class="button-secondary">Экспорт PDF</button><button id="import-assets" class="button-secondary">Импорт Excel</button><input id="import-assets-file" type="file" accept=".xlsx" hidden><button id="import-assets-pdf" class="button-secondary">Импорт PDF</button><input id="import-assets-pdf-file" type="file" accept=".pdf,application/pdf" hidden><button id="show-create">Добавить актив</button></div></div>
     <form id="create-asset" class="create-form panel" hidden>
       <label>Инвентарный номер<input name="inventory_number" required></label><label>Название<input name="name" required></label>
       <label>Тип<select name="asset_type"><option value="Desktop">Стационарный ПК</option><option value="Laptop">Ноутбук</option><option value="Other">Другое</option></select></label>

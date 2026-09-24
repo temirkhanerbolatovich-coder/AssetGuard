@@ -67,6 +67,15 @@ async def _complete_mvp_workflow() -> None:
         export = await client.get("/admin/assets/export.xlsx", headers=admin_headers())
         assert export.status_code == 200
         assert export.headers["content-type"].startswith("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        pdf_export = await client.get("/admin/assets/export.pdf", headers=admin_headers())
+        assert pdf_export.status_code == 200
+        assert pdf_export.headers["content-type"].startswith("application/pdf")
+        assert pdf_export.content.startswith(b"%PDF")
+        pdf_preview = await client.post("/admin/assets/import.pdf", headers=admin_headers(), files={
+            "file": ("assetguard-assets.pdf", pdf_export.content, "application/pdf"),
+        })
+        assert pdf_preview.status_code == 200
+        assert pdf_preview.json() == {"rows": 1, "creates": 0, "updates": 1, "applied": False}
         qr = await client.get(f"/admin/assets/{asset_id}/qr.svg?public_url=https://demo.trycloudflare.com", headers=admin_headers())
         assert qr.status_code == 200
         assert qr.headers["content-type"].startswith("image/svg+xml")
