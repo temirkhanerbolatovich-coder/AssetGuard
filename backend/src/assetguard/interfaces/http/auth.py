@@ -23,6 +23,7 @@ class LoginBody(BaseModel):
 
 class UserCreate(LoginBody):
     role: Literal["ADMIN", "VIEWER"]
+    organization_id: UUID | None = None
 
 
 class UserUpdate(BaseModel):
@@ -58,11 +59,11 @@ def users(session: Annotated[Session, Depends(get_session)]):
 def create_user(body: UserCreate, session: Annotated[Session, Depends(get_session)]):
     if session.scalar(select(UserRecord).where(UserRecord.username == body.username)):
         raise HTTPException(409, "Username already exists.")
-    user = UserRecord(username=body.username, password_hash=hash_password(body.password), role=body.role, is_active=True, created_at=datetime.now(UTC))
+    user = UserRecord(username=body.username, password_hash=hash_password(body.password), role=body.role, organization_id=body.organization_id, is_active=True, created_at=datetime.now(UTC))
     session.add(user)
     session.commit()
     session.refresh(user)
-    return {"id": str(user.id), "username": user.username, "role": user.role, "active": user.is_active}
+    return {"id": str(user.id), "username": user.username, "role": user.role, "organization_id": str(user.organization_id) if user.organization_id else None, "active": user.is_active}
 
 
 @router.patch("/admin/users/{user_id}", dependencies=[Depends(require_admin)])

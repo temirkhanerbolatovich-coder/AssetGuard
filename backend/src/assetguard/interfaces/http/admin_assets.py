@@ -105,6 +105,13 @@ def _organization_for_name(session: Session, name: str) -> OrganizationRecord:
     return organization
 
 
+def _scoped_asset(session: Session, asset_id: UUID, principal: AuthPrincipal) -> AssetRecord:
+    asset = session.get(AssetRecord, asset_id)
+    if not asset or (principal.organization_id and asset.organization_id != principal.organization_id):
+        raise HTTPException(404, "Asset was not found.")
+    return asset
+
+
 def _latest_snapshot(session: Session, endpoint_id: UUID) -> HardwareSnapshotRecord | None:
     return session.scalar(select(HardwareSnapshotRecord).where(
         HardwareSnapshotRecord.managed_endpoint_id == endpoint_id,
@@ -282,10 +289,11 @@ def _import_row_values(row: dict[str, object], row_number: int) -> dict[str, str
     return result
 
 
-@router.post("/assets/import.xlsx", dependencies=[Depends(require_admin)])
+@router.post("/assets/import.xlsx")
 def import_assets_xlsx(
     file: Annotated[UploadFile, File()],
     session: Annotated[Session, Depends(get_session)],
+    principal: Annotated[AuthPrincipal, Depends(require_admin)],
     apply: bool = Query(default=False),
 ):
     if file.content_type not in {
@@ -314,6 +322,9 @@ def import_assets_xlsx(
             parsed.append(_import_row_values({name: values[index] if index is not None and index < len(values) else None for name, index in columns.items()}, row_number))
     except ValueError as error:
         raise HTTPException(422, str(error)) from error
+    scoped_organization = session.get(OrganizationRecord, principal.organization_id) if principal.organization_id else None
+    if scoped_organization and any((item["organization"] or scoped_organization.name) != scoped_organization.name for item in parsed):
+        raise HTTPException(403, "A tenant user may import assets only for their organization.")
     existing = {(organization.name, asset.inventory_number): asset for asset in session.scalars(select(AssetRecord).join(OrganizationRecord)) for organization in [session.get(OrganizationRecord, asset.organization_id)] if organization}
     creates = updates = 0
     for item in parsed:
@@ -349,15 +360,14 @@ def import_assets_xlsx(
     return {"rows": len(parsed), "creates": creates, "updates": updates, "applied": True}
 
 
-@router.get("/assets/{asset_id}/qr.svg", dependencies=[Depends(require_viewer)])
+@router.get("/assets/{asset_id}/qr.svg")
 def asset_qr_svg(
     asset_id: UUID,
     session: Annotated[Session, Depends(get_session)],
+    principal: Annotated[AuthPrincipal, Depends(require_viewer)],
     public_url: str | None = Query(default=None, max_length=2048),
 ):
-    asset = session.get(AssetRecord, asset_id)
-    if not asset:
-        raise HTTPException(404, "Asset was not found.")
+    asset = _scoped_asset(session, asset_id, principal)
     base_url = get_settings().public_url
     if public_url:
         parsed = urlsplit(public_url)
@@ -371,9 +381,9 @@ def asset_qr_svg(
     return Response(output.getvalue(), media_type="image/svg+xml")
 
 
-@router.post("/assets", dependencies=[Depends(require_admin)], status_code=status.HTTP_201_CREATED)
-def create_asset(body: AssetCreate, session: Annotated[Session, Depends(get_session)]):
-    organization = session.scalar(select(OrganizationRecord).order_by(OrganizationRecord.created_at))
+@router.post("/assets", status_code=status.HTTP_201_CREATED)
+def create_asset(body: AssetCreate, session: Annotated[Session, Depends(get_session)], principal: Annotated[AuthPrincipal, Depends(require_admin)]):
+    organization = session.get(OrganizationRecord, principal.organization_id) if principal.organization_id else session.scalar(select(OrganizationRecord).order_by(OrganizationRecord.created_at))
     if not organization:
         organization = OrganizationRecord(name="Default Organization", created_at=datetime.now(UTC))
         session.add(organization)
@@ -402,11 +412,9 @@ def create_asset(body: AssetCreate, session: Annotated[Session, Depends(get_sess
     return _asset_view(asset, None, organization.name)
 
 
-@router.patch("/assets/{asset_id}", dependencies=[Depends(require_admin)])
-def update_asset(asset_id: UUID, body: AssetUpdate, session: Annotated[Session, Depends(get_session)]):
-    asset = session.get(AssetRecord, asset_id)
-    if not asset:
-        raise HTTPException(404, "Asset was not found.")
+@router.patch("/assets/{asset_id}")
+def update_asset(asset_id: UUID, body: AssetUpdate, session: Annotated[Session, Depends(get_session)], principal: Annotated[AuthPrincipal, Depends(require_admin)]):
+    asset = _scoped_asset(session, asset_id, principal)
     changes = body.model_dump(exclude_unset=True)
     if "inventory_number" in changes:
         duplicate = session.scalar(select(AssetRecord).where(
@@ -563,11 +571,9 @@ def _system_sections(
     }
 
 
-@router.get("/assets/{asset_id}", dependencies=[Depends(require_viewer)])
-def asset_detail(asset_id: UUID, session: Annotated[Session, Depends(get_session)]):
-    asset = session.get(AssetRecord, asset_id)
-    if not asset:
-        raise HTTPException(404, "Asset was not found.")
+@router.get("/assets/{asset_id}")
+def asset_detail(asset_id: UUID, session: Annotated[Session, Depends(get_session)], principal: Annotated[AuthPrincipal, Depends(require_viewer)]):
+    asset = _scoped_asset(session, asset_id, principal)
     endpoint = session.scalar(select(ManagedEndpointRecord).where(ManagedEndpointRecord.asset_id == asset.id))
     organization = session.get(OrganizationRecord, asset.organization_id)
     result = _asset_view(asset, endpoint.id if endpoint else None, organization.name if organization else None)
