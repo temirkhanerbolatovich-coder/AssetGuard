@@ -8,6 +8,7 @@ secrets/
 data/
 logs/
 *.log
+*.inspect.ndjson
 .local/
 tools/glpi-agent-portable/
 
