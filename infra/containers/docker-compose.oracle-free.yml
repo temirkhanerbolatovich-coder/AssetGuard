@@ -1,0 +1,17 @@
+# Overlay for Oracle Cloud Always Free VM.Standard.E2.1.Micro (1 GB RAM).
+# Use together with docker-compose.production.yml. It keeps the inventory,
+# RBAC, import/export and Agent APIs available, but deliberately excludes the
+# optional ML runtime. Run Vision on a host with at least 4 GB RAM instead.
+services:
+  postgres:
+    command: ["postgres", "-c", "shared_buffers=64MB", "-c", "max_connections=20"]
+    mem_limit: 256m
+
+  api:
+    build:
+      args:
+        ASSETGUARD_INSTALL_VISION: "0"
+    mem_limit: 384m
+
+  caddy:
+    mem_limit: 96m

@@ -14,6 +14,25 @@ Caddy obtains and renews the public certificate, redirects HTTP to HTTPS and add
 
 The API image installs the optional `vision` dependencies. Uploaded and annotated images are stored in the persistent `assetguard-vision-data` volume; downloaded Hugging Face model files use `assetguard-model-cache`, so container recreation does not download the weights again. The first scan still initializes the model and may take longer, especially on CPU.
 
+### Oracle Always Free (1 GB RAM)
+
+The free `VM.Standard.E2.1.Micro` server is sufficient for the inventory API,
+school hierarchy, RBAC, PDF/Excel import/export, the dashboard and Windows
+Agent ingestion. It is not suitable for the PyTorch Vision runtime. Deploy it
+with the memory-safe overlay:
+
+```powershell
+docker compose --env-file .env `
+  -f infra/containers/docker-compose.production.yml `
+  -f infra/containers/docker-compose.oracle-free.yml up -d --build
+```
+
+This image does not install `torch` or `transformers`; opening a Vision scan
+will clearly report that its runtime is unavailable. For a real Vision pilot,
+move the same production compose configuration to a host with at least 4 GB
+RAM, omit the Oracle overlay and redeploy. All existing inventory data stays in
+the PostgreSQL volume.
+
 Configure `ASSETGUARD_VISION_MODEL_ID`, `ASSETGUARD_VISION_CONFIDENCE_THRESHOLD`, `ASSETGUARD_VISION_CLASSES` and `ASSETGUARD_VISION_MAX_IMAGE_BYTES` when defaults are unsuitable. The supplied Compose configuration is CPU-compatible. GPU passthrough, external object storage, image retention and camera ingestion require a separate deployment decision.
 
 ## Access and secret rotation
