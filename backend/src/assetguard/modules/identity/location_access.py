@@ -25,6 +25,9 @@ def permitted_room_ids(session: Session, principal: AuthPrincipal, write: bool =
 
 
 def require_room_access(session: Session, room_id: UUID | None, principal: AuthPrincipal, write: bool = False) -> None:
+    if write and principal.role != "ADMIN" and principal.user_id is None:
+        from fastapi import HTTPException
+        raise HTTPException(403, "Editing requires an administrator or an editor assignment for this location.")
     allowed = permitted_room_ids(session, principal, write)
     if allowed is not None and (room_id is None or room_id not in allowed):
         from fastapi import HTTPException

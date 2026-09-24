@@ -19,9 +19,19 @@ if ($requiresAsciiFallback -and (Test-Path -LiteralPath $fallbackPython) -and (T
 } elseif (-not (Test-Path -LiteralPath $python)) {
     throw "Missing $python. Create the Python 3.12 environment and install backend[dev,vision] first."
 }
+$venvRoot = Split-Path -Parent (Split-Path -Parent $python)
+$sitePackages = Join-Path $venvRoot 'Lib\site-packages'
+$pythonPathEntries = @((Join-Path $backendPath 'src'))
+if (Test-Path -LiteralPath $sitePackages) { $pythonPathEntries += $sitePackages }
+if ($env:PYTHONPATH) { $pythonPathEntries += $env:PYTHONPATH.Split([IO.Path]::PathSeparator) }
+$env:PYTHONPATH = ($pythonPathEntries | Where-Object { $_ } | Select-Object -Unique) -join [IO.Path]::PathSeparator
 docker compose --env-file $envPath -f (Join-Path $RepositoryRoot 'infra\containers\docker-compose.yml') up -d postgres
 Push-Location $backendPath
 try {
-    & $python -m alembic -c alembic.ini upgrade head
-    & $python -m uvicorn assetguard.app:app --host 127.0.0.1 --port $Port
+    # The current Windows profile contains a UTF-8 editable-install .pth under
+    # a Cyrillic path. Skip site initialization and explicitly add source plus
+    # the venv's installed packages so both startup and migrations work there.
+    & $python -S -m alembic -c alembic.ini upgrade head
+    if ($LASTEXITCODE -ne 0) { throw 'Database migration failed.' }
+    & $python -S -m uvicorn assetguard.app:app --host 127.0.0.1 --port $Port
 } finally { Pop-Location }

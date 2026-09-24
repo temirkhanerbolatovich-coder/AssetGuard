@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import tempfile
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -32,6 +33,9 @@ class Settings:
     vision_storage_root: Path
     vision_max_image_bytes: int
     public_url: str
+    tesseract_cmd: str | None
+    tesseract_data_dir: str | None
+    tesseract_temp_dir: str | None
 
 
 @lru_cache
@@ -45,6 +49,20 @@ def get_settings() -> Settings:
         raise RuntimeError("ASSETGUARD_INVENTORY_SHARED_SECRET must be configured.")
     if not admin_shared_secret:
         raise RuntimeError("ASSETGUARD_ADMIN_SHARED_SECRET must be configured.")
+
+    tesseract_temp_dir = os.environ.get("ASSETGUARD_OCR_TEMP_DIR") or None
+    if tesseract_temp_dir:
+        if not tesseract_temp_dir.isascii() or any(character.isspace() for character in tesseract_temp_dir):
+            raise RuntimeError("ASSETGUARD_OCR_TEMP_DIR must use an ASCII Windows path without spaces for Tesseract OCR.")
+        Path(tesseract_temp_dir).mkdir(parents=True, exist_ok=True)
+        for variable in ("TEMP", "TMP", "TMPDIR"):
+            os.environ[variable] = tesseract_temp_dir
+        tempfile.tempdir = tesseract_temp_dir
+    tesseract_data_dir = os.environ.get("ASSETGUARD_TESSDATA_DIR") or None
+    if os.name == "nt" and tesseract_data_dir and (
+        not tesseract_data_dir.isascii() or any(character.isspace() for character in tesseract_data_dir)
+    ):
+        raise RuntimeError("ASSETGUARD_TESSDATA_DIR must use an ASCII Windows path without spaces for Tesseract OCR.")
 
     return Settings(
         database_url=database_url,
@@ -70,4 +88,7 @@ def get_settings() -> Settings:
         )),
         vision_max_image_bytes=int(os.environ.get("ASSETGUARD_VISION_MAX_IMAGE_BYTES", "10485760")),
         public_url=os.environ.get("ASSETGUARD_PUBLIC_URL", "http://127.0.0.1:8000").rstrip("/"),
+        tesseract_cmd=os.environ.get("ASSETGUARD_TESSERACT_CMD") or None,
+        tesseract_data_dir=tesseract_data_dir,
+        tesseract_temp_dir=tesseract_temp_dir,
     )

@@ -4,7 +4,7 @@ WORKDIR /app
 COPY backend /app/backend
 COPY frontend /app/frontend
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends fonts-dejavu-core \
+    && apt-get install -y --no-install-recommends fonts-dejavu-core tesseract-ocr tesseract-ocr-rus tesseract-ocr-kaz tesseract-ocr-eng \
     && rm -rf /var/lib/apt/lists/* \
     && pip install --no-cache-dir "torch>=2.5,<3.0" --index-url https://download.pytorch.org/whl/cpu \
     && pip install --no-cache-dir "/app/backend[vision]"

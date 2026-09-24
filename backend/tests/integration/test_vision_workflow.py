@@ -3,13 +3,17 @@ from __future__ import annotations
 import asyncio
 import io
 import os
+from datetime import UTC, datetime
+from uuid import uuid4
 
 import httpx
 from PIL import Image
 
 from assetguard.app import app
 from assetguard.infrastructure.config import get_settings
+from assetguard.infrastructure.database import get_session_factory
 from assetguard.interfaces.http import vision as vision_api
+from assetguard.modules.assets.models import BuildingRecord, FloorRecord, OrganizationRecord, RoomRecord
 from assetguard.modules.vision.detector import Detection
 
 
@@ -46,8 +50,26 @@ def test_vision_upload_baseline_comparison_warning(tmp_path, monkeypatch) -> Non
     get_settings.cache_clear()
     detector = SequenceDetector()
     monkeypatch.setattr(vision_api, "get_detector", lambda: detector)
+    now = datetime.now(UTC)
+    with get_session_factory()() as session:
+        organization = OrganizationRecord(
+            name=f"Vision test school {uuid4().hex[:8]}",
+            created_at=datetime(2000, 1, 1, tzinfo=UTC),
+        )
+        session.add(organization)
+        session.flush()
+        building = BuildingRecord(organization_id=organization.id, name=f"Vision test building {uuid4().hex[:8]}", created_at=now)
+        session.add(building)
+        session.flush()
+        floor = FloorRecord(building_id=building.id, name="1", created_at=now)
+        session.add(floor)
+        session.flush()
+        room = RoomRecord(floor_id=floor.id, name="305", created_at=now)
+        session.add(room)
+        session.commit()
+        room_id = room.id
     try:
-        asyncio.run(_exercise_vision_workflow())
+        asyncio.run(_exercise_vision_workflow(room_id))
     finally:
         if original_storage is None:
             os.environ.pop("ASSETGUARD_VISION_STORAGE_ROOT", None)
@@ -56,16 +78,17 @@ def test_vision_upload_baseline_comparison_warning(tmp_path, monkeypatch) -> Non
         get_settings.cache_clear()
 
 
-async def _exercise_vision_workflow() -> None:
+async def _exercise_vision_workflow(room_id) -> None:
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
         asset = await client.post("/admin/assets", headers=admin_headers(), json={
             "inventory_number": "VISION-001", "name": "Vision linked workstation", "asset_type": "Desktop",
+            "room_id": str(room_id),
         })
         assert asset.status_code == 201
         first = await client.post(
             "/admin/vision/scans", headers=admin_headers(),
-            data={"room_name": "Room 305", "asset_id": asset.json()["id"]},
+            data={"location_room_id": str(room_id), "asset_id": asset.json()["id"]},
             files={"image": ("room-305-first.jpg", jpeg_bytes(), "image/jpeg")},
         )
         assert first.status_code == 201, first.text
@@ -84,7 +107,7 @@ async def _exercise_vision_workflow() -> None:
 
         second = await client.post(
             "/admin/vision/scans", headers=admin_headers(),
-            data={"room_name": "Room 305"},
+            data={"location_room_id": str(room_id)},
             files={"image": ("room-305-second.jpg", jpeg_bytes(), "image/jpeg")},
         )
         assert second.status_code == 201, second.text

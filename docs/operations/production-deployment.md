@@ -18,7 +18,7 @@ Configure `ASSETGUARD_VISION_MODEL_ID`, `ASSETGUARD_VISION_CONFIDENCE_THRESHOLD`
 
 ## Access and secret rotation
 
-- The bootstrap admin key can create named `ADMIN` and `VIEWER` users through `POST /admin/users`.
+- The bootstrap admin key can create named `ADMIN`, `VIEWER`, `LOCATION_MANAGER` and `INVENTORY_CLERK` users through `POST /admin/users`; assign a school/area grant before expecting a scoped user to see assets.
 - `POST /auth/login` returns a revocable 12-hour session token. The same token can be entered in the dashboard token field.
 - Viewer sessions can read data but cannot change assets, baselines or incidents.
 - During key rotation, put the old value in `ASSETGUARD_PREVIOUS_ADMIN_SHARED_SECRET` or `ASSETGUARD_PREVIOUS_INVENTORY_SHARED_SECRET`, deploy the new primary key, update clients, then remove the previous key and restart.

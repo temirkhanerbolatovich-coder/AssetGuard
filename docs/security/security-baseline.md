@@ -18,10 +18,11 @@
 ## Реализовано
 
 - ingest отделён в `/internal` boundary с отдельным rotating shared secret;
-- ADMIN/VIEWER users используют revocable 12-hour sessions;
+- Named `ADMIN`, `VIEWER`, `LOCATION_MANAGER` и `INVENTORY_CLERK` users используют revocable 12-hour sessions;
+- Location grants на корпус/этаж/кабинет разграничивают чтение и редактирование активов/отчётов на API boundary; расширенная tenant-route matrix ещё нужна до multi-school rollout;
 - logout, административный revoke, disable user и password rotation отзывают активные sessions;
 - actor административного incident decision выводится из authenticated principal;
 - `/auth/login`, `/admin` и `/internal` защищены базовым rate limit;
 - raw evidence и audit history защищены append-only database triggers.
 
-До production остаются внешний proxy-level rate limit, deployment acceptance, encrypted off-host backup, restore rehearsal и утверждённая retention policy для Vision images.
+До production остаются внешний proxy-level rate limit, deployment acceptance на целевом хосте, encrypted off-host backup, репетиция восстановления из off-site копии и утверждённая retention policy для Vision images. Локальная изолированная репетиция восстановления encrypted backup успешно выполнена 2026-09-24; это подтверждает процедуру восстановления, но не заменяет внешний backup.

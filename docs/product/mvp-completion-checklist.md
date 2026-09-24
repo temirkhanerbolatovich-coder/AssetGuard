@@ -1,6 +1,6 @@
 # AssetGuard MVP v0.1 — чек-лист завершения
 
-Дата актуализации: 2026-09-23. Чек-лист включает исходный computer inventory MVP и демонстрационный AssetGuard Vision vertical slice.
+Дата актуализации: 2026-09-24. Чек-лист включает исходный computer inventory MVP, PDF/OCR импорт и демонстрационный AssetGuard Vision vertical slice.
 
 ## Текущая оценка
 
@@ -23,13 +23,15 @@
 | Incidents/history | Готово | Create/classify/resolve incident и append-only audit history. |
 | PARTIAL safety | Готово | Partial inventory не создаёт ложное удаление RAM/SSD. |
 | Dashboard | Готово | Attention-first обзор, поиск/фильтры, связанные и непривязанные устройства, полная карточка Agent-данных, baseline, читаемое «Было → Стало», incidents и timeline. |
-| AssetGuard Vision | Готово для demo | Image upload, Grounding DINO, bounding boxes, counts, explicit room baseline, comparison, `WARNING` и history. |
+| AssetGuard Vision | Готово для demo | Image upload, Grounding DINO, bounding boxes, counts, baseline, comparison, `WARNING` и history; кабинет связан с локацией и доступ фильтруется. RTSP и связка каждой detection с endpoint остаются будущим этапом. |
+| Иерархия и права локаций | Частично | Организация → корпус → этаж → кабинет и grants VIEWER/EDITOR работают на сервере для ключевых ресурсов; полный tenant-route matrix и физический аудит ещё нужны. |
 | Background demo | Готово | User-level demo tasks и production Compose deployment с restart policy. |
 | Local package | Готово | ZIP без secret/database/log data, startup scripts и documentation. |
 | GitHub | Готово | Public repository: `temirkhanerbolatovich-coder/AssetGuard`. |
 | Automated tests | Готово | Disposable PostgreSQL, JSON/native inventory, Vision workflow, auth lifecycle, identity conflict и Playwright browser E2E; GitHub Actions workflow. |
 | Бесплатный demo deployment | Готово | Docker Compose + Cloudflare Quick Tunnel, временный публичный HTTPS URL без домена. |
-| Encrypted backup | Готово | AES-256-GCM backup, restore и optional off-site copy на диск или `rclone` remote. |
+| Encrypted backup | Готово локально | AES-256-GCM backup, restore и optional off-site copy на диск или `rclone`; fresh local restore rehearsal passed 2026-09-24, off-site здесь не настроен. |
+| Excel/PDF импорт и экспорт | Готово для поддерживаемых ведомостей | PDF разбирается постранично; сканы — через локальный Tesseract OCR. Перед записью можно проверить все строки, искать, листать по 25 позиций, видеть create/update и исключать строки. Пустые формы и неподтверждённые сводные данные не превращаются в фиктивный реестр. |
 
 ## Оставшаяся работа
 
@@ -58,12 +60,14 @@
 - [x] Browser E2E через Playwright/Chromium в GitHub Actions.
 - [x] Optional real Grounding DINO CI smoke job: ручной и еженедельный workflow с настоящей моделью и demo-кадром.
 - [x] Isolated encrypted-backup restore rehearsal: отдельный disposable PostgreSQL без опубликованных портов, проверка Alembic revision и entity counts; успешно выполнен локально 2026-09-24.
+- [x] PDF import preview: все найденные строки выдаются API; применение по-прежнему только после явного подтверждения, отдельные строки можно исключить.
 
 ### За пределами текущего demo
 
 - RTSP/camera scheduler, quality gate, multi-frame aggregation и `ANOMALY` confirmation;
-- Institution/Building/Floor hierarchy, QR/mobile обход, 1C, Excel, AD, Linux/macOS;
-- связывание Vision detection с конкретным endpoint/asset;
+- Фиксация мобильного QR-обхода («на месте / отсутствует / повреждено», количество, исполнитель, время); QR-код пока только открывает карточку;
+- 1С/AD integrations, Linux/macOS Agent, полный matrix-тест tenant/location границ всех admin API;
+- связывание каждой Vision detection с конкретным endpoint/asset;
 - custom agent, remote desktop, helpdesk, automatic theft detection.
 
 ## Критерий завершения первой части

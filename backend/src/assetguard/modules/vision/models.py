@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, Float, ForeignKey, String, Text
+from sqlalchemy import DateTime, Float, ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID as PostgreSQLUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -13,9 +13,11 @@ from assetguard.modules.inventory.models import Base
 
 class VisionRoomRecord(Base):
     __tablename__ = "vision_rooms"
+    __table_args__ = (UniqueConstraint("location_room_id", name="uq_vision_rooms_location_room"),)
     id: Mapped[UUID] = mapped_column(PostgreSQLUUID(as_uuid=True), primary_key=True, default=uuid4)
     name: Mapped[str] = mapped_column(String(255))
     organization_id: Mapped[UUID | None] = mapped_column(ForeignKey("organizations.id"), nullable=True)
+    location_room_id: Mapped[UUID | None] = mapped_column(ForeignKey("location_rooms.id", ondelete="RESTRICT"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 

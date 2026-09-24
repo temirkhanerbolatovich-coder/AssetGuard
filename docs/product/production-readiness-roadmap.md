@@ -8,15 +8,15 @@
 - [x] One-time выдача credential администратору и revoke без смены ключей других устройств.
 - [ ] Self-service re-enrolment flow с подтверждением администратора.
 - [ ] Migration от legacy общего inventory secret с датой отключения fallback.
-- [~] Tenant model: school/organisation и tenant-bound users/credentials есть; отдельные роли `TENANT_ADMIN`, `OPERATOR` ещё не выделены из текущих `ADMIN`, `VIEWER`.
-- [~] Tenant filtering внедрён на assets, endpoints, raw inventories, incidents, Vision, Excel и identity API; нужен полный matrix-тест всех admin routes перед multi-school rollout.
+- [~] Tenant model: school/organisation, tenant-bound users/credentials и job roles `LOCATION_MANAGER`/`INVENTORY_CLERK` есть; отдельная полномочная модель `TENANT_ADMIN`/`OPERATOR` ещё не выделена.
+- [~] Tenant filtering внедрён на assets, endpoints, raw inventories, incidents, Vision, Excel/PDF и identity API; нужен полный matrix-тест всех admin routes перед multi-school rollout.
 - [ ] SSO/AD или хотя бы MFA для production admin accounts.
 
 ## Этап 2: надёжная эксплуатация
 
 - [ ] Постоянный сервер, домен, TLS acceptance и firewall policy.
-- [~] Automated encrypted backup + weekly isolated restore rehearsal доступны через Windows Task Scheduler; off-site ротация и отдельная политика хранения ключа ещё не настроены.
-- [~] Регулярный isolated restore rehearsal готов к расписанию; текущий локальный rehearsal выполнен 2026-09-24.
+- [~] Automated encrypted backup + weekly isolated restore rehearsal доступны через Windows Task Scheduler; свежая локальная копия проверена восстановлением 2026-09-24. Off-site ротация и отдельная политика хранения ключа ещё не настроены.
+- [x] Изолированная локальная restore rehearsal: зашифрованная копия восстановлена в отдельный временный PostgreSQL и сравнена с текущей БД; off-site recovery остаётся незакрытым.
 - [~] `/health` и `/health/ready` готовы; метрики API, disk, backup age, Agent last-seen и failed ingest ещё нужно агрегировать и подключить к alerting.
 - [ ] Alerting для ответственного сотрудника с правилами escalation.
 - [ ] Staging environment и rollback runbook.
@@ -40,8 +40,8 @@
 
 - [ ] Утверждённая data inventory, retention/deletion policy для raw inventory и Vision images.
 - [ ] Согласованный legal/security review для школ и выбранного места хранения данных.
-- [ ] Нормализованная hierarchy `organisation → building → floor → room`, а не только поля Asset.
-- [ ] Mobile QR audit, reports, notifications, 1C/AD/helpdesk integrations.
+- [x] Нормализованная hierarchy `organisation → building → floor → room`; основные location grants enforced на сервере.
+- [~] QR-коды карточек и location reports доступны; фиксация физического mobile audit, notifications, 1C/AD/helpdesk integrations ещё нужна.
 - [ ] Vision production track: object storage, quality gate, multi-frame/RTSP, evaluation dataset и human confirmation.
 
 ## Не делать до этапа 1

@@ -9,8 +9,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from assetguard.infrastructure.database import get_session
-from assetguard.interfaces.http.admin_assets import require_admin
+from assetguard.interfaces.http.admin_assets import require_admin, require_viewer
 from assetguard.modules.identity.auth import AuthPrincipal, create_session, hash_password, revoke_session_token, verify_password
+from assetguard.modules.identity.location_access import permitted_room_ids
 from assetguard.modules.identity.models import AgentCredentialRecord, AuthSessionRecord, UserRecord
 
 router = APIRouter(tags=["authentication"])
@@ -42,6 +43,20 @@ def login(body: LoginBody, session: Annotated[Session, Depends(get_session)]):
     if not user or not user.is_active or not verify_password(body.password, user.password_hash):
         raise HTTPException(401, "Invalid username or password.")
     return {"access_token": create_session(session, user), "token_type": "assetguard", "expires_in": 43200, "role": user.role}
+
+
+@router.get("/auth/me")
+def current_user(principal: Annotated[AuthPrincipal, Depends(require_viewer)], session: Annotated[Session, Depends(get_session)]):
+    editable_rooms = permitted_room_ids(session, principal, write=True)
+    if principal.role != "ADMIN" and principal.user_id is None:
+        editable_rooms = set()
+    return {
+        "id": str(principal.user_id) if principal.user_id else None,
+        "username": principal.username,
+        "role": principal.role,
+        "organization_id": str(principal.organization_id) if principal.organization_id else None,
+        "editable_room_ids": None if principal.role == "ADMIN" else [str(room_id) for room_id in (editable_rooms or set())],
+    }
 
 
 @router.post("/auth/logout", status_code=204)

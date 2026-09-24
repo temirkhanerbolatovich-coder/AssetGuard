@@ -1,6 +1,6 @@
 const $ = (id) => document.getElementById(id);
 let token = sessionStorage.getItem("assetguard-admin-token") || "";
-let state = {assets: [], endpoints: [], devices: [], changes: [], incidents: [], operations: null, locations: [], visionRooms: [], selectedAsset: null, linkingEndpoint: null, visionRoomId: null, visionScan: null, visionImageUrl: null, assetQrUrl: null};
+let state = {assets: [], endpoints: [], devices: [], changes: [], incidents: [], operations: null, locations: [], users: [], locationAccess: [], organizations: [], currentUser: null, visionRooms: [], selectedAsset: null, linkingEndpoint: null, visionRoomId: null, visionScan: null, visionImageUrl: null, assetQrUrl: null};
 $("token").value = token;
 
 const escapeHtml = (value) => String(value ?? "—").replace(/[&<>"']/g, (char) => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[char]));
@@ -23,7 +23,7 @@ const bytes = (value) => {
 };
 const storageSize = (value) => value == null ? "—" : `${(Number(value) / 1024).toFixed(Number(value) % 1024 ? 1 : 0)} ГБ`;
 const ramBytes = (value) => value == null ? null : (Number(value) < 1048576 ? Number(value) * 1048576 : Number(value));
-const statusLabels = {OK:"В норме",ATTENTION:"Требует внимания",ANOMALY:"Обнаружено расхождение",OFFLINE:"Не в сети",UNCHECKED:"Не проверено",WARNING:"Требует внимания",NOT_CHECKED:"Не проверено",ONLINE:"В норме",REQUIRES_VERIFICATION:"Требует проверки",IDENTITY_CONFLICT:"Конфликт идентификации",OPEN:"Открыто",UNDER_REVIEW:"На проверке",RESOLVED:"Закрыто",DISMISSED:"Не подтверждено",ACTIVE:"Активен"};
+const statusLabels = {OK:"В норме",ATTENTION:"Требует внимания",ANOMALY:"Обнаружено расхождение",OFFLINE:"Не в сети",UNCHECKED:"Нет данных Agent",MANUAL:"Ручной учёт",WARNING:"Требует внимания",NOT_CHECKED:"Не проверено",ONLINE:"В норме",REQUIRES_VERIFICATION:"Требует проверки",IDENTITY_CONFLICT:"Конфликт идентификации",OPEN:"Открыто",UNDER_REVIEW:"На проверке",RESOLVED:"Закрыто",DISMISSED:"Не подтверждено",ACTIVE:"Активен"};
 const categoryLabels = {IT:"IT-оборудование",FURNITURE:"Мебель",SPORTS:"Спортинвентарь",EDUCATIONAL:"Учебное оборудование",OTHER:"Другое имущество"};
 const componentLabels = {RAM:"Оперативная память",STORAGE:"Физические накопители",DRIVE:"Разделы дисков",CONTROLLER:"Контроллеры",CPU:"Процессор",GPU:"Видеокарта",MOTHERBOARD:"Материнская плата",NETWORK:"Сетевые интерфейсы",MONITOR:"Мониторы",ENDPOINT:"Устройство"};
 const eventLabels = {COMPONENT_ADDED:"Компонент добавлен",COMPONENT_REMOVED:"Компонент отсутствует",COMPONENT_CHANGED:"Характеристики изменились",COMPONENT_REPLACED:"Компонент заменён",HOSTNAME_CHANGED:"Изменилось имя компьютера",DEVICE_IDENTITY_CHANGED:"Изменился идентификатор устройства",INVENTORY_COMPLETED:"Инвентаризация завершена",BASELINE_ACCEPTED:"Эталон подтверждён",HARDWARE_CHANGE_DETECTED:"Обнаружено изменение оборудования",INCIDENT_CREATED:"Создано обращение",INCIDENT_CLASSIFIED:"Обращение классифицировано",INCIDENT_RESOLVED:"Обращение закрыто",ASSET_CREATED:"Актив добавлен",ASSET_UPDATED:"Карточка обновлена",ENDPOINT_LINKED:"Устройство связано с активом",ENDPOINT_UNLINKED:"Устройство отвязано"};
@@ -47,7 +47,8 @@ async function apiBlob(path) {
   if (!response.ok) throw new Error("Не удалось загрузить изображение результата.");
   return response.blob();
 }
-function deviceStatus(endpoint) {
+function deviceStatus(endpoint, asset = null) {
+  if (!endpoint && asset && asset.category !== "IT") return "MANUAL";
   if (!endpoint?.current_snapshot) return "UNCHECKED";
   if (endpoint.status === "IDENTITY_CONFLICT") return "ANOMALY";
   if (endpoint.status !== "ONLINE") return "UNCHECKED";
@@ -60,7 +61,7 @@ function buildDevices() {
   const devices = state.assets.map((asset) => {
     const endpoint = asset.endpoint;
     if (endpoint) linkedEndpointIds.add(endpoint.id);
-    return {kind:"asset",assetId:asset.id,endpointId:endpoint?.id || null,name:asset.name,inventoryNumber:asset.inventory_number,hostname:endpoint?.hostname || null,building:asset.building,floor:asset.floor,room:asset.room,organization:asset.organization,category:asset.category,trackingMode:asset.tracking_mode,quantity:asset.quantity,unit:asset.unit,endpoint,status:deviceStatus(endpoint)};
+    return {kind:"asset",assetId:asset.id,endpointId:endpoint?.id || null,name:asset.name,inventoryNumber:asset.inventory_number,hostname:endpoint?.hostname || null,building:asset.building,floor:asset.floor,room:asset.room,organization:asset.organization,category:asset.category,trackingMode:asset.tracking_mode,quantity:asset.quantity,unit:asset.unit,endpoint,status:deviceStatus(endpoint,asset)};
   });
   state.endpoints.filter((endpoint) => !linkedEndpointIds.has(endpoint.id)).forEach((endpoint) => devices.push({kind:"endpoint",assetId:null,endpointId:endpoint.id,name:endpoint.hostname || "Непривязанное устройство",inventoryNumber:null,hostname:endpoint.hostname,building:null,floor:null,room:null,organization:null,endpoint,status:deviceStatus(endpoint)}));
   state.devices = devices;
@@ -77,7 +78,7 @@ function renderIncidentSpotlight() {
   const body = $("incident-spotlight-body"), status = $("incident-spotlight-status");
   if (!incident) {
     status.textContent = "Нет инцидентов"; status.className = "status-pill ok";
-    body.innerHTML = '<div class="spotlight-empty"><div><strong>Agent не обнаружил расхождений</strong><p>Когда состав устройства изменится относительно эталона, здесь появятся причина и доказательства.</p></div><a href="#agent-workflow">Как это работает →</a></div>';
+    body.innerHTML = state.endpoints.length ? '<div class="spotlight-empty"><div><strong>Новых расхождений пока нет</strong><p>Если состав компьютера изменится относительно подтверждённого эталона, здесь появятся причина и доказательства.</p></div><a href="#agent-workflow">Как это работает →</a></div>' : '<div class="spotlight-empty"><div><strong>Компьютеры с Agent пока не подключены</strong><p>После первого отчёта и подтверждения эталона AssetGuard сможет показывать реальные изменения.</p></div><a href="#agent-workflow">Посмотреть, как подключить →</a></div>';
     return;
   }
   const device = deviceForEndpoint(incident.endpoint_id), change = state.changes.find((item) => item.id === incident.change_event_id);
@@ -88,15 +89,18 @@ function renderIncidentSpotlight() {
 }
 function renderDashboard() {
   const devices = state.devices;
+  renderSetupGuide();
   const online = devices.filter((item) => item.status === "OK").length;
   const attention = devices.filter((item) => ["ATTENTION","ANOMALY"].includes(item.status));
   const unchecked = devices.filter((item) => item.status === "UNCHECKED");
-  $("devices-count").textContent = devices.length; $("online-count").textContent = online; $("attention-count").textContent = attention.length; $("unchecked-count").textContent = unchecked.length;
+  $("devices-count").textContent = state.assets.length; $("online-count").textContent = online; $("attention-count").textContent = attention.length; $("unchecked-count").textContent = unchecked.length;
   const banner = $("attention-banner");
-  if (!attention.length && !unchecked.length) {
-    banner.className = "attention-banner ok"; banner.innerHTML = '<span class="attention-icon">✓</span><div><strong>Все устройства работают штатно</strong><p>Открытых изменений и устройств без актуальной проверки нет.</p></div>';
+  if (!devices.length) {
+    banner.className = "attention-banner is-loading"; banner.innerHTML = '<span class="attention-icon">1</span><div><strong>Начните с настройки школы</strong><p>Создайте кабинеты и добавьте имущество. Agent подключайте, если нужно автоматически следить за компьютерами.</p></div>';
+  } else if (!attention.length && !unchecked.length) {
+    banner.className = "attention-banner ok"; banner.innerHTML = '<span class="attention-icon">✓</span><div><strong>Новых проблем не обнаружено</strong><p>У компьютеров с Agent нет открытых изменений. Остальное имущество учитывается в реестре вручную.</p></div>';
   } else {
-    banner.className = "attention-banner"; banner.innerHTML = `<span class="attention-icon">!</span><div><strong>${attention.length ? `${attention.length} ${attention.length === 1 ? "устройство требует" : "устройства требуют"} внимания` : "Есть устройства без актуальной проверки"}</strong><p>${unchecked.length ? `Без актуальных данных: ${unchecked.length}. ` : ""}Откройте карточку, чтобы увидеть причину и сравнение с эталоном.</p></div>`;
+    banner.className = "attention-banner"; banner.innerHTML = `<span class="attention-icon">!</span><div><strong>${attention.length ? `${attention.length} ${attention.length === 1 ? "компьютер требует" : "компьютера требуют"} внимания` : "Есть компьютеры без данных Agent"}</strong><p>${unchecked.length ? `Без отчёта или эталона: ${unchecked.length}. ` : ""}Откройте карточку компьютера — там будет причина и следующий шаг.</p></div>`;
   }
   const priority = [...attention, ...unchecked].slice(0, 6);
   $("attention-badge").textContent = priority.length ? String(priority.length) : "Всё спокойно"; $("attention-badge").className = `status-pill ${priority.length ? "warning" : "ok"}`;
@@ -104,16 +108,33 @@ function renderDashboard() {
   const activity = state.changes.slice(0, 5);
   $("activity-list").innerHTML = activity.length ? activity.map((change) => { const device = deviceForEndpoint(change.endpoint_id); return `<article><time>${dateTime(change.detected_at)}</time><div><b>${escapeHtml(eventLabels[change.type] || change.type)}</b><p>${escapeHtml(device?.name || "Устройство")} · ${escapeHtml(componentLabels[change.component_type] || change.component_type)}</p></div></article>`; }).join("") : '<p class="empty">Изменений не обнаружено. Последние проверки завершились штатно.</p>';
   const latest = devices.map((item) => item.endpoint?.last_seen_at).filter(Boolean).sort().at(-1); $("last-activity").textContent = latest ? `Последняя проверка ${relativeTime(latest)}` : "Проверок пока нет";
-  const locations = new Map(); devices.forEach((item) => { const key = locationLabel(item) || "Расположение не указано"; locations.set(key, (locations.get(key) || 0) + 1); });
-  $("location-summary").innerHTML = [...locations.entries()].map(([name,count]) => `<span class="tag">${escapeHtml(name)} <strong>${count}</strong></span>`).join("") || '<p class="empty">Добавьте кабинет в карточке актива.</p>';
-  const full = devices.filter((item) => item.endpoint?.current_snapshot?.type === "FULL").length;
-  $("inventory-summary").innerHTML = `<div class="summary-line"><span>Успешно обработано</span><strong>${devices.filter((item) => item.endpoint?.current_snapshot).length} из ${devices.length}</strong></div><div class="summary-line"><span>Полная инвентаризация</span><strong>${full}</strong></div><div class="summary-line"><span>Последняя активность</span><strong>${latest ? relativeTime(latest) : "—"}</strong></div>`;
+  const locations = new Map(); state.assets.forEach((item) => { const key = locationLabel(item) || "Расположение не указано"; locations.set(key, (locations.get(key) || 0) + 1); });
+  $("location-summary").innerHTML = [...locations.entries()].map(([name,count]) => `<span class="tag">${escapeHtml(name)} <strong>${count}</strong></span>`).join("") || '<p class="empty">Создайте кабинеты в разделе «Кабинеты», затем выберите их в карточках имущества.</p>';
+  const full = state.endpoints.filter((item) => item.current_snapshot?.type === "FULL").length;
+  $("inventory-summary").innerHTML = state.endpoints.length ? `<div class="summary-line"><span>Компьютеры с отчётом</span><strong>${state.endpoints.filter((item) => item.current_snapshot).length} из ${state.endpoints.length}</strong></div><div class="summary-line"><span>Полная инвентаризация</span><strong>${full}</strong></div><div class="summary-line"><span>Последняя активность Agent</span><strong>${latest ? relativeTime(latest) : "—"}</strong></div>` : '<p class="empty">Agent пока не подключён. Мебель и прочее имущество учитываются в реестре отдельно.</p>';
   renderIncidentSpotlight();
-  const reporting = devices.filter((item) => item.endpoint?.last_seen_at).length;
-  $("agent-online-badge").textContent = `${reporting} ${reporting === 1 ? "Agent на связи" : "Agent на связи"}`; $("agent-online-badge").className = `status-pill ${reporting ? "ok" : "neutral"}`;
+  const reporting = state.endpoints.filter((item) => item.last_seen_at).length;
+  $("agent-online-badge").textContent = state.endpoints.length ? `${reporting} компьютеров с Agent на связи` : "Agent не подключён"; $("agent-online-badge").className = `status-pill ${reporting ? "ok" : "neutral"}`;
   $("agent-last-signal").textContent = latest ? `Инвентаризация получена ${relativeTime(latest)}` : "Ожидаем данные Agent";
   $("agent-proof-text").textContent = latest ? `${dateTime(latest)} · отчёт принят, нормализован и сохранён в истории.` : "После первой отправки здесь появится фактическое время последней инвентаризации.";
   bindDynamicActions();
+}
+function renderSetupGuide() {
+  const guide = $("setup-guide");
+  if (!state.currentUser || state.currentUser.role !== "ADMIN") { guide.hidden = true; return; }
+  const hasRooms = state.locations.some((building) => building.floors?.some((floor) => floor.rooms?.length));
+  const hasAssets = state.assets.length > 0;
+  const hasAgent = state.endpoints.length > 0;
+  const complete = Number(hasRooms) + Number(hasAssets);
+  const steps = [
+    {done:hasRooms, title:"Создайте кабинеты", text:hasRooms ? "Структура школы готова для размещения имущества." : "Добавьте корпус, этаж и хотя бы один кабинет.", href:"#locations", action:hasRooms ? "Открыть кабинеты" : "Создать кабинеты"},
+    {done:hasAssets, title:"Добавьте имущество", text:hasAssets ? `В реестре уже ${state.assets.length} ${state.assets.length === 1 ? "запись" : "записей"}.` : "Загрузите школьную ведомость или добавьте первую запись вручную.", href:"#devices", action:hasAssets ? "Открыть реестр" : "Добавить имущество"},
+    {done:hasAgent, optional:true, title:"Подключите компьютеры (по желанию)", text:hasAgent ? `AssetGuard получает данные от ${state.endpoints.length} компьютеров.` : "Установите Agent на компьютеры, чтобы видеть их состояние и изменения.", href:"#agent-workflow", action:hasAgent ? "Посмотреть компьютеры" : "Как подключить Agent"},
+  ];
+  $("setup-progress").textContent = `${complete} из 2 основных шагов`;
+  $("setup-progress").className = `status-pill ${complete === 2 ? "ok" : "neutral"}`;
+  $("setup-steps").innerHTML = steps.map((step) => `<article class="setup-step ${step.done ? "is-done" : ""} ${step.optional ? "is-optional" : ""}"><span class="setup-check" aria-hidden="true">${step.done ? "✓" : step.optional ? "↗" : "○"}</span><div><strong>${escapeHtml(step.title)}</strong><p>${escapeHtml(step.text)}</p><a href="${step.href}">${escapeHtml(step.action)} →</a></div></article>`).join("");
+  guide.hidden = false;
 }
 function renderOperations(operations) {
   const status = $("operations-status"), summary = $("operations-summary");
@@ -134,10 +155,75 @@ function renderOperations(operations) {
 function locationContact(item) { return [item.responsible_name, item.responsible_contact].filter(Boolean).join(" · "); }
 function renderLocations(locations) {
   state.locations=locations;
-  $("location-tree").innerHTML=locations.length ? locations.map((building)=>`<div class="attention-item"><span class="attention-dot"></span><div><strong>${escapeHtml(building.name)}</strong><small>${escapeHtml(locationContact(building)||"Ответственный не назначен")}</small>${building.floors.length ? building.floors.map((floor)=>`<div class="location-floor"><b>Этаж ${escapeHtml(floor.name)}</b> <button class="button-link add-room" data-floor="${floor.id}">+ кабинет</button>${floor.rooms.length ? floor.rooms.map((room)=>`<div class="location-room"><span>каб. ${escapeHtml(room.name)}${room.purpose?` · ${escapeHtml(room.purpose)}`:""}</span><small>${room.asset_count} активов · ${escapeHtml(locationContact(room)||"ответственный не назначен")}</small><button class="button-link room-report" data-room="${room.id}">Сводка</button></div>`).join("") : '<p class="empty">Кабинетов пока нет.</p>'}</div>`).join("") : '<p class="empty">Этажей пока нет.</p>'}<button class="button-link add-floor" data-building="${building.id}">+ этаж</button></div></div>`).join("") : '<p class="empty">Создайте первый корпус. Уже заполненные в карточках локации появятся здесь после обновления базы.</p>';
-  document.querySelectorAll(".add-floor").forEach((button)=>button.onclick=async()=>{const name=prompt("Номер или название этажа","");if(!name?.trim())return;try{await api(`/admin/locations/buildings/${button.dataset.building}/floors`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name})});showToast("Этаж создан");await load(false);}catch(error){showToast(error.message,true);}});
-  document.querySelectorAll(".add-room").forEach((button)=>button.onclick=async()=>{const name=prompt("Номер кабинета","");if(!name?.trim())return;const responsible_name=prompt("Ответственный за кабинет (можно оставить пустым)","")||null;try{await api(`/admin/locations/floors/${button.dataset.floor}/rooms`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name,responsible_name})});showToast("Кабинет создан");await load(false);}catch(error){showToast(error.message,true);}});
+  const canManage=state.currentUser?.role==="ADMIN";
+  $("location-tree").innerHTML=locations.length ? locations.map((building)=>`<div class="attention-item"><span class="attention-dot"></span><div><strong>${escapeHtml(building.name)}</strong><small>${escapeHtml(locationContact(building)||"Ответственный не назначен")}</small>${building.floors.length ? building.floors.map((floor)=>`<div class="location-floor"><b>Этаж ${escapeHtml(floor.name)}</b> ${canManage?`<button class="button-link add-room" data-floor="${floor.id}">+ кабинет</button>`:""}${floor.rooms.length ? floor.rooms.map((room)=>`<div class="location-room"><span>каб. ${escapeHtml(room.name)}${room.purpose?` · ${escapeHtml(room.purpose)}`:""}</span><small>${room.asset_count} активов · ${escapeHtml(locationContact(room)||"ответственный не назначен")}</small><button class="button-link room-report" data-room="${room.id}">Сводка</button></div>`).join("") : '<p class="empty">Кабинетов пока нет.</p>'}</div>`).join("") : '<p class="empty">Этажей пока нет.</p>'}${canManage?`<button class="button-link add-floor" data-building="${building.id}">+ этаж</button>`:""}</div></div>`).join("") : '<p class="empty">Структура пока не создана. Добавьте корпус справа, затем создайте для него этажи и кабинеты.</p>';
+  document.querySelectorAll(".add-floor").forEach((button)=>button.onclick=()=>openLocationDialog("floor",button.dataset.building));
+  document.querySelectorAll(".add-room").forEach((button)=>button.onclick=()=>openLocationDialog("room",button.dataset.floor));
   document.querySelectorAll(".room-report").forEach((button)=>button.onclick=async()=>{try{const report=await api(`/admin/locations/rooms/${button.dataset.room}/report`);$("location-report").innerHTML=`<div class="summary-line"><span>Кабинет</span><strong>${escapeHtml(report.path.building||"")} · этаж ${escapeHtml(report.path.floor||"")} · ${escapeHtml(report.room.name)}</strong></div><div class="summary-line"><span>Ответственный</span><strong>${escapeHtml(locationContact(report.room)||"Не назначен")}</strong></div><div class="summary-line"><span>Оборудование</span><strong>${report.assets.length} поз.</strong></div>${report.assets.slice(0,8).map((asset)=>`<div class="summary-line"><span>${escapeHtml(asset.inventory_number)}</span><strong>${escapeHtml(asset.name)}</strong></div>`).join("")}`;}catch(error){showToast(error.message,true);}});
+}
+let locationDialogTarget=null;
+function openLocationDialog(kind,parentId) {
+  locationDialogTarget={kind,parentId};
+  const isRoom=kind==="room";
+  $("location-create-eyebrow").textContent=isRoom?"Шаг 3 · кабинет":"Шаг 2 · этаж";
+  $("location-create-title").textContent=isRoom?"Добавить кабинет":"Добавить этаж";
+  $("location-create-help").textContent=isRoom?"Укажите номер кабинета. Ответственного можно назначить сразу или позже.":"Укажите номер или название этажа в выбранном корпусе.";
+  $("location-create-name").placeholder=isRoom?"Например, 205":"Например, 2";
+  $("location-responsible-field").hidden=!isRoom;
+  $("location-contact-field").hidden=!isRoom;
+  $("location-create-submit").textContent=isRoom?"Добавить кабинет":"Добавить этаж";
+  $("location-create-form").reset(); $("location-create-dialog").showModal(); $("location-create-name").focus();
+}
+function locationScopes() {
+  const scopes=[];
+  state.locations.forEach((building)=>{scopes.push({type:"BUILDING",id:building.id,organization_id:building.organization_id,label:`Корпус · ${building.name}`});building.floors.forEach((floor)=>{scopes.push({type:"FLOOR",id:floor.id,organization_id:building.organization_id,label:`${building.name} · этаж ${floor.name}`});floor.rooms.forEach((room)=>scopes.push({type:"ROOM",id:room.id,organization_id:building.organization_id,label:`${building.name} · этаж ${floor.name} · кабинет ${room.name}`}));});});
+  return scopes;
+}
+function userRoleLabel(role) { return ({ADMIN:"Администратор школы",LOCATION_MANAGER:"Менеджер локации",INVENTORY_CLERK:"Ответственный за инвентаризацию",VIEWER:"Наблюдатель"})[role]||role; }
+function renderAdminAccessVisibility() {
+  const signedIn=Boolean(state.currentUser), isAdmin=state.currentUser?.role==="ADMIN";
+  $("location-access-nav").hidden=!signedIn; $("location-access-shortcut").hidden=!signedIn; $("location-access").hidden=!signedIn;
+  $("access-admin-content").hidden=!isAdmin; $("access-role-notice").hidden=!signedIn||isAdmin;
+  if(signedIn&&!isAdmin)$("access-role-notice").textContent=`Вы вошли как «${userRoleLabel(state.currentUser.role)}». Создавать учётные записи и назначать доступы может администратор школы.`;
+}
+function syncRoleControls() {
+  const user=state.currentUser, isAdmin=user?.role==="ADMIN", editableRooms=new Set(user?.editable_room_ids||[]), canEditAssets=isAdmin||editableRooms.size>0;
+  $("show-create").hidden=!canEditAssets;
+  if(!canEditAssets)$("create-asset").hidden=true;
+  ["export-assets","export-assets-pdf","import-assets","import-assets-file","import-assets-pdf","import-assets-pdf-file","create-building","vision-upload","vision-baseline"].forEach((id)=>$(id).hidden=!isAdmin);
+  $("registry-tools").hidden=!isAdmin;
+  const assetOrganizationId=user?.organization_id||state.organizations[0]?.id;
+  const rooms=state.locations.filter((building)=>!assetOrganizationId||building.organization_id===assetOrganizationId).flatMap((building)=>building.floors.flatMap((floor)=>floor.rooms.map((room)=>({id:room.id,label:`${building.name} · этаж ${floor.name} · кабинет ${room.name}`})))).filter((room)=>isAdmin||editableRooms.has(room.id));
+  const roomSelect=$("create-asset-room");
+  roomSelect.innerHTML=`<option value="" ${isAdmin?"":"disabled selected"}>${rooms.length?"Выберите кабинет из структуры школы":isAdmin?"Кабинеты ещё не созданы":"Вам пока не назначен кабинет"}</option>`+rooms.map((room)=>`<option value="${room.id}">${escapeHtml(room.label)}</option>`).join("");
+  roomSelect.required=!isAdmin;
+  roomSelect.disabled=!rooms.length;
+  $("asset-tracking-mode").dispatchEvent(new Event("change"));
+}
+function canEditAsset(asset) { return state.currentUser?.role==="ADMIN"||Boolean(asset?.room_id&&state.currentUser?.editable_room_ids?.includes(asset.room_id)); }
+function renderAdminAccess() {
+  const allScopes=locationScopes(), scopeLabels=new Map(allScopes.map((item)=>[`${item.type}:${item.id}`,item.label]));
+  $("user-organization").innerHTML=state.organizations.map((item)=>`<option value="${item.id}">${escapeHtml(item.name)}</option>`).join("")||'<option value="">Сначала создайте организацию</option>';
+  const currentUserId=$("access-user").value;
+  $("access-user").innerHTML=state.users.filter((item)=>item.role!=="ADMIN").map((item)=>`<option value="${item.id}">${escapeHtml(item.username)} · ${escapeHtml(userRoleLabel(item.role))}</option>`).join("")||'<option value="">Создайте пользователя</option>';
+  if(state.users.some((item)=>item.id===currentUserId))$("access-user").value=currentUserId;
+  const grantUser=state.users.find((item)=>item.id===$("access-user").value), allowedScopes=allScopes.filter((item)=>!grantUser?.organization_id||item.organization_id===grantUser.organization_id);
+  $("access-scope").innerHTML=allowedScopes.map((item)=>`<option value="${item.type}:${item.id}">${escapeHtml(item.label)}</option>`).join("")||'<option value="">Для сотрудника пока нет доступных локаций</option>';
+  const accessRows=state.locationAccess.map((item)=>`<div class="access-row"><div><strong>${escapeHtml(item.username)}</strong><small>${escapeHtml(userRoleLabel(state.users.find((user)=>user.id===item.user_id)?.role||"Сотрудник"))} · ${escapeHtml(scopeLabels.get(`${item.scope_type}:${item.scope_id}`)||"Локация удалена")}</small></div><span class="status-pill ${item.permission==="EDITOR"?"warning":"neutral"}">${item.permission==="EDITOR"?"Редактирование":"Только просмотр"}</span><button type="button" class="button-secondary revoke-location-access" data-id="${item.id}">Отозвать</button></div>`).join("");
+  const withoutAccess=state.users.filter((user)=>user.role!=="ADMIN"&&!state.locationAccess.some((item)=>item.user_id===user.id));
+  $("location-access-list").innerHTML=accessRows+(withoutAccess.length?`<p class="access-unassigned"><strong>Пока нет назначения:</strong> ${withoutAccess.map((user)=>escapeHtml(user.username)).join(", ")} — эти пользователи не видят реестр.</p>`:"")||'<p class="empty">Назначений пока нет. Сотрудники без назначения не имеют доступа к локациям.</p>';
+  document.querySelectorAll(".revoke-location-access").forEach((button)=>button.onclick=async()=>{if(!confirm("Отозвать доступ этого сотрудника к локации?"))return;try{await api(`/admin/locations/access/${button.dataset.id}`,{method:"DELETE"});showToast("Доступ отозван");await loadAdminAccess();}catch(error){showToast(error.message,true);}});
+  const grantButton=$("grant-location-access").querySelector("button[type=submit]"), createButton=$("create-user").querySelector("button[type=submit]");
+  if(grantButton)grantButton.disabled=!state.users.some((user)=>user.role!=="ADMIN")||!allowedScopes.length;
+  if(createButton)createButton.disabled=!state.organizations.length;
+  $("user-organization-hint").hidden=Boolean(state.organizations.length);
+}
+async function loadAdminAccess() {
+  renderAdminAccessVisibility();
+  if(state.currentUser?.role!=="ADMIN")return;
+  $("access-load-error").hidden=true;
+  try { const [users,locationAccess,organizations]=await Promise.all([api("/admin/users"),api("/admin/locations/access"),api("/admin/locations/organizations")]);state={...state,users,locationAccess,organizations};renderAdminAccess();syncRoleControls(); }
+  catch(error) { $("access-load-error").hidden=false;$("access-load-error").textContent=`Не удалось загрузить управление пользователями: ${error.message}. Проверьте вход именно под администратором школы.`; }
 }
 function hardwareBrief(endpoint) {
   const summary = endpoint?.hardware_summary; if (!summary) return "Нет данных";
@@ -157,15 +243,27 @@ function renderDevices() {
   const rooms = [...new Set(state.devices.map((item) => item.room).filter(Boolean))].sort(); const selectedRoom = $("device-room-filter").value;
   $("device-room-filter").innerHTML = '<option value="">Все кабинеты</option>' + rooms.map((room) => `<option value="${escapeHtml(room)}">${escapeHtml(room)}</option>`).join(""); $("device-room-filter").value = rooms.includes(selectedRoom) ? selectedRoom : "";
   const devices = filteredDevices();
-  $("assets").innerHTML = devices.length ? devices.map((item) => `<tr class="device-row" data-asset-id="${item.assetId || ""}"><td data-label="Устройство"><div class="device-name">${item.assetId ? `<button class="device-open-link open-device" data-id="${item.assetId}">${escapeHtml(item.name)}</button>` : `<strong>${escapeHtml(item.name)}</strong>`}<small>${escapeHtml([item.inventoryNumber,item.hostname].filter(Boolean).join(" · ") || "Не связано с Agent")}</small></div></td><td data-label="Расположение">${escapeHtml(locationLabel(item) || "Не указано")}</td><td data-label="Состояние">${pill(item.status)}${item.endpoint?.open_changes ? `<small>${item.endpoint.open_changes} откр. изм.</small>` : ""}</td><td data-label="Последняя проверка"><strong>${escapeHtml(item.trackingMode === "GROUPED" ? `${item.quantity} ${item.unit || "шт."}` : relativeTime(item.endpoint?.last_seen_at))}</strong><small>${escapeHtml(categoryLabels[item.category] || "Имущество")}</small></td><td data-label="Оборудование"><span class="hardware-brief">${escapeHtml(item.trackingMode === "GROUPED" ? "Групповой учёт" : hardwareBrief(item.endpoint))}</span></td><td data-label="Действие">${item.assetId ? `<button class="row-action open-device" data-id="${item.assetId}">Открыть карточку</button>` : `<button class="link-endpoint button-secondary" data-id="${item.endpointId}" data-name="${escapeHtml(item.hostname || "")}">Связать</button>`}</td></tr>`).join("") : '<tr><td colspan="6"><p class="empty">По заданным условиям устройства не найдены.</p></td></tr>';
+  const activeFilters = Number(Boolean($("device-search").value.trim())) + Number(Boolean($("device-status-filter").value)) + Number(Boolean($("device-category-filter").value)) + Number(Boolean($("device-room-filter").value)) + Number($("device-change-filter").checked);
+  $("device-active-filter-count").hidden=!activeFilters; $("device-active-filter-count").textContent=activeFilters || "";
+  const empty = state.devices.length ? `<div class="empty-state"><strong>По этим условиям ничего не найдено</strong><p>Измените поиск или сбросьте фильтры, чтобы увидеть остальные записи.</p><button id="empty-reset" class="button-secondary" type="button">Сбросить фильтры</button></div>` : state.currentUser?.role === "ADMIN" ? `<div class="empty-state"><strong>Реестр пока пуст</strong><p>Загрузите ведомость Excel/PDF или внесите первую запись. Установленные Agent-компьютеры появятся здесь автоматически.</p><button id="empty-add" type="button">Добавить имущество</button> <button id="empty-import" class="button-secondary" type="button">Открыть импорт</button></div>` : `<div class="empty-state"><strong>В доступных вам кабинетах пока нет записей</strong><p>Если вы ожидали увидеть имущество, попросите администратора проверить назначение кабинета.</p></div>`;
+  $("assets").innerHTML = devices.length ? devices.map((item) => {
+    const lastCheck = item.trackingMode === "GROUPED" ? `${item.quantity} ${item.unit || "шт."}` : !item.endpoint && item.category !== "IT" ? "Ручной учёт" : relativeTime(item.endpoint?.last_seen_at);
+    const hardwareSummary = item.trackingMode === "GROUPED" ? "Групповой учёт" : item.endpoint ? hardwareBrief(item.endpoint) : item.category === "IT" ? "Agent не подключён" : "Без Agent — физическое имущество";
+    return `<tr class="device-row" data-asset-id="${item.assetId || ""}"><td data-label="Устройство"><div class="device-name">${item.assetId ? `<button class="device-open-link open-device" data-id="${item.assetId}">${escapeHtml(item.name)}</button>` : `<strong>${escapeHtml(item.name)}</strong>`}<small>${escapeHtml([item.inventoryNumber,item.hostname].filter(Boolean).join(" · ") || (item.kind === "endpoint" ? "Нужно связать с записью учёта" : "Инвентарный номер не задан"))}</small></div></td><td data-label="Расположение">${escapeHtml(locationLabel(item) || "Не указано")}</td><td data-label="Состояние">${pill(item.status)}${item.endpoint?.open_changes ? `<small>${item.endpoint.open_changes} откр. изм.</small>` : ""}</td><td data-label="Последняя проверка"><strong>${escapeHtml(lastCheck)}</strong><small>${escapeHtml(categoryLabels[item.category] || (item.kind === "endpoint" ? "Компьютер Agent" : "Имущество"))}</small></td><td data-label="Оборудование"><span class="hardware-brief">${escapeHtml(hardwareSummary)}</span></td><td data-label="Действие">${item.assetId ? `<button class="row-action open-device" data-id="${item.assetId}">Открыть карточку</button>` : `<button class="link-endpoint button-secondary" data-id="${item.endpointId}" data-name="${escapeHtml(item.hostname || "")}">Связать с имуществом</button>`}</td></tr>`;
+  }).join("") : `<tr><td colspan="6">${empty}</td></tr>`;
   $("device-result-count").textContent = `Показано ${devices.length} из ${state.devices.length}`;
   document.querySelectorAll("tr.device-row[data-asset-id]").forEach((row) => { if (row.dataset.assetId) row.onclick = () => detail(row.dataset.assetId); }); bindDynamicActions();
+  $("empty-add")?.addEventListener("click", openAssetCreateForm);
+  $("empty-import")?.addEventListener("click", () => { $("registry-tools").open=true; $("registry-tools").scrollIntoView({behavior:"smooth",block:"center"}); });
+  $("empty-reset")?.addEventListener("click", clearDeviceFilters);
 }
+function clearDeviceFilters() { $("device-search").value=""; $("device-status-filter").value=""; $("device-category-filter").value=""; $("device-room-filter").value=""; $("device-change-filter").checked=false; renderDevices(); }
+function openAssetCreateForm() { const form=$("create-asset"); form.hidden=false; form.scrollIntoView({behavior:"smooth",block:"center"}); form.querySelector('[name="inventory_number"]').focus({preventScroll:true}); }
 function bindDynamicActions() {
   document.querySelectorAll(".open-device").forEach((button) => button.onclick = (event) => { event.stopPropagation(); detail(button.dataset.id); });
   document.querySelectorAll(".link-endpoint").forEach((button) => button.onclick = (event) => { event.stopPropagation(); openLink(button.dataset.id, button.dataset.name); });
 }
-function factRows(items) { const rows = items.filter(([,value]) => value !== null && value !== undefined && value !== ""); return rows.length ? rows.map(([label,value]) => `<dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd>`).join("") : '<p class="empty">Данные пока не получены.</p>'; }
+function factRows(items, emptyMessage = "В последнем отчёте этих сведений нет.") { const rows = items.filter(([,value]) => value !== null && value !== undefined && value !== ""); return rows.length ? rows.map(([label,value]) => `<dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd>`).join("") : `<p class="empty">${escapeHtml(emptyMessage)}</p>`; }
 function rawValue(raw, keys) { for (const key of keys) if (raw?.[key] !== undefined && raw[key] !== "") return raw[key]; return null; }
 function componentPrimary(item) { const raw = item.raw_data || {}; return item.model || rawValue(raw,["name","description","caption","chipset"]) || "Модель не определена"; }
 function componentMeta(item) {
@@ -181,8 +279,8 @@ function componentMeta(item) {
   else values.push(item.manufacturer, item.serial ? `S/N ${item.serial}` : null, item.slot);
   return values.filter(Boolean);
 }
-function hardware(items) {
-  if (!items?.length) return '<div class="panel"><p class="empty">Agent пока не передал сведения об оборудовании.</p></div>';
+function hardware(items, emptyMessage = "В отчёте Agent пока нет сведений о составе оборудования.") {
+  if (!items?.length) return `<div class="panel"><p class="empty">${escapeHtml(emptyMessage)}</p></div>`;
   const grouped = items.reduce((result,item) => { (result[item.type] ||= []).push(item); return result; }, {});
   const order = ["CPU","RAM","STORAGE","DRIVE","GPU","MOTHERBOARD","CONTROLLER","NETWORK","MONITOR"];
   const row = (item) => `<div class="component"><strong>${escapeHtml(componentPrimary(item))}</strong><div class="component-meta">${componentMeta(item).map((value) => `<span>${escapeHtml(value)}</span>`).join("") || '<span>Дополнительных характеристик нет</span>'}</div></div>`;
@@ -208,19 +306,32 @@ async function sendAction(path, payload, method = "POST", message = "Измен�
 async function detail(assetId, scroll = true) {
   try {
     $("detail").hidden = false; $("detail-title").textContent = "Загрузка…";
-    const asset = await api(`/admin/assets/${assetId}`); state.selectedAsset = assetId; const endpoint = asset.endpoint; const status = deviceStatus(endpoint);
+    const asset = await api(`/admin/assets/${assetId}`); state.selectedAsset = assetId; const endpoint = asset.endpoint; const status = deviceStatus(endpoint,asset);
     $("detail-title").textContent = asset.name; $("detail-status").innerHTML = pill(status);
     $("detail-meta").textContent = [asset.inventory_number,endpoint?.hostname,locationLabel(asset)].filter(Boolean).join(" · ") || "Карточка актива";
-    $("detail-actions").innerHTML = '<button id="edit-asset" class="button-secondary">Редактировать</button><button id="show-asset-qr" class="button-secondary">QR для обхода</button>';
-    $("edit-asset").onclick = async () => { const name = prompt("Название устройства",asset.name); if(name && name !== asset.name) await sendAction(`/admin/assets/${asset.id}`,{name},"PATCH","Название обновлено"); };
+    $("detail-actions").innerHTML = `${canEditAsset(asset)?'<button id="edit-asset" class="button-secondary">Редактировать</button>':""}<button id="show-asset-qr" class="button-secondary">QR для обхода</button>`;
+    if(canEditAsset(asset))$("edit-asset").onclick = async () => { const name = prompt("Название устройства",asset.name); if(name && name !== asset.name) await sendAction(`/admin/assets/${asset.id}`,{name},"PATCH","Название обновлено"); };
     $("show-asset-qr").onclick = async () => { try { let publicUrl=localStorage.getItem("assetguardPublicUrl")||""; if (!publicUrl && !["localhost","127.0.0.1"].includes(location.hostname)) publicUrl=location.origin; if (!publicUrl || ["localhost","127.0.0.1"].includes(new URL(publicUrl).hostname)) { publicUrl=prompt("Вставьте временный HTTPS URL Cloudflare (trycloudflare.com), чтобы QR открылся на телефоне. Для локальной печати оставьте пустым.",publicUrl)||""; } if(publicUrl){ const normalized=new URL(publicUrl); if(normalized.protocol!=="https:") throw new Error("Для QR на телефоне нужен HTTPS URL."); publicUrl=normalized.origin;localStorage.setItem("assetguardPublicUrl",publicUrl); } const suffix=publicUrl?`?public_url=${encodeURIComponent(publicUrl)}`:""; const blob = await apiBlob(`/admin/assets/${asset.id}/qr.svg${suffix}`); if (state.assetQrUrl) URL.revokeObjectURL(state.assetQrUrl); state.assetQrUrl = URL.createObjectURL(blob); const popup = window.open("", "assetguard-qr", "width=480,height=560"); if (!popup) { showToast("Разрешите всплывающее окно для QR-кода", true); return; } popup.document.write(`<title>AssetGuard QR</title><main style="font-family:system-ui;text-align:center;padding:24px"><h1>${escapeHtml(asset.name)}</h1><p>${escapeHtml(asset.inventory_number)}</p><img style="width:320px;height:320px" src="${state.assetQrUrl}" alt="QR"><p>Отсканируйте код, чтобы открыть карточку устройства.</p></main>`); popup.document.close(); } catch (error) { showToast(error.message, true); } };
+    const hasAgentSnapshot = Boolean(asset.current_snapshot || endpoint?.current_snapshot), usesAgent = asset.category === "IT";
+    const showAgentDetails = usesAgent && Boolean(endpoint && hasAgentSnapshot);
+    $("system-detail-panel").hidden = !showAgentDetails; $("identifiers-detail-panel").hidden = !showAgentDetails;
+    $("agent-inventory-heading").hidden = !showAgentDetails; $("current-hardware").hidden = !showAgentDetails; $("agent-change-control").hidden = !showAgentDetails;
+    const guidance = $("detail-agent-guidance");
+    if (!usesAgent) {
+      guidance.className="panel detail-guidance"; guidance.innerHTML='<strong>Это имущество учитывается без Agent</strong><p>Agent собирает технические сведения только с компьютеров. Эту запись используйте для школьного учёта и проверки в кабинете.</p>'; guidance.hidden=false;
+    } else if (!endpoint) {
+      guidance.className="attention-banner detail-guidance"; guidance.innerHTML='<span class="attention-icon">!</span><div><strong>Компьютер пока не связан с Agent</strong><p>Установите Agent и дождитесь первого отчёта. Когда компьютер появится в реестре как непривязанный, нажмите «Связать с имуществом».</p><a href="#agent-workflow">Как работает Agent →</a></div>'; guidance.hidden=false;
+    } else if (!hasAgentSnapshot) {
+      guidance.className="attention-banner detail-guidance"; guidance.innerHTML='<span class="attention-icon">!</span><div><strong>Компьютер связан, но отчёт ещё не получен</strong><p>Проверьте, включён ли компьютер, запущена ли служба Agent и настроен ли адрес сервера. После первой отправки здесь появятся Windows, BIOS и состав оборудования.</p><a href="#agent-workflow">Посмотреть путь данных Agent →</a></div>'; guidance.hidden=false;
+    } else { guidance.hidden=true; }
     const hardwareInfo = asset.system?.hardware || {}, bios = asset.system?.bios || {}, os = asset.system?.operating_system || {}, network = asset.system?.network_quality || {};
-    $("device-general").innerHTML = factRows([["Название",asset.name],["Категория",categoryLabels[asset.category]],["Тип",asset.asset_type],["Учёт",asset.tracking_mode === "GROUPED" ? `Групповой · ${asset.quantity} ${asset.unit || "шт."}` : "Поштучный"],["Hostname",endpoint?.hostname],["Организация",asset.organization],["Корпус",asset.building],["Этаж",asset.floor],["Кабинет",asset.room],["Статус",statusLabels[status]],["Последнее подключение",dateTime(endpoint?.last_seen_at)],["Последняя проверка",dateTime(asset.latest_inventory?.received_at)]]);
-    $("device-system").innerHTML = factRows([["Операционная система",os.full_name || os.name],["Версия",os.version],["Сборка / ядро",os.kernel_version],["Архитектура",os.arch],["BIOS",bios.bversion],["Дата BIOS",bios.bdate],["Производитель",bios.smanufacturer || bios.bmanufacturer],["Модель",bios.smodel || bios.mmodel],["Серийный номер",bios.ssn || bios.msn],["Корпус",hardwareInfo.chassis_type],["Рабочая группа",hardwareInfo.workgroup],["Сеть: цель",network.target],["Сеть: доступность",network.packet_loss_percent != null ? `${network.packet_loss_percent}% потерь` : null],["Сеть: средняя задержка",network.average_latency_ms != null ? `${network.average_latency_ms} мс` : null],["Сеть: измерено",network.measured_at]]);
-    $("device-identifiers").innerHTML = factRows((endpoint?.identifiers || []).map((item) => [({SMBIOS_UUID:"Device UUID",CHASSIS_SERIAL:"Серийный номер корпуса",MOTHERBOARD_SERIAL:"Серийный номер платы",BIOS_SERIAL:"Серийный номер BIOS",AGENT_DEVICE_ID:"ID агента",MAC:"MAC-адрес"}[item.type] || item.type),item.value]));
+    const emptySystemMessage = endpoint && hasAgentSnapshot ? "Последний отчёт не содержит этих сведений." : "Сведения появятся после первого отчёта Agent.";
+    $("device-general").innerHTML = factRows([["Инвентарный номер",asset.inventory_number],["Категория",categoryLabels[asset.category]],["Тип",asset.asset_type],["Учёт",asset.tracking_mode === "GROUPED" ? `Групповой · ${asset.quantity} ${asset.unit || "шт."}` : "Поштучный"],["Hostname",endpoint?.hostname],["Организация",asset.organization],["Корпус",asset.building],["Этаж",asset.floor],["Кабинет",asset.room],["Статус",statusLabels[status]],["Последнее подключение",dateTime(endpoint?.last_seen_at)],["Последняя проверка",dateTime(asset.latest_inventory?.received_at)]],"Заполните карточку или выберите кабинет, чтобы найти имущество в реестре.");
+    $("device-system").innerHTML = factRows([["Операционная система",os.full_name || os.name],["Версия",os.version],["Сборка / ядро",os.kernel_version],["Архитектура",os.arch],["BIOS",bios.bversion],["Дата BIOS",bios.bdate],["Производитель",bios.smanufacturer || bios.bmanufacturer],["Модель",bios.smodel || bios.mmodel],["Серийный номер",bios.ssn || bios.msn],["Корпус",hardwareInfo.chassis_type],["Рабочая группа",hardwareInfo.workgroup],["Сеть: цель",network.target],["Сеть: доступность",network.packet_loss_percent != null ? `${network.packet_loss_percent}% потерь` : null],["Сеть: средняя задержка",network.average_latency_ms != null ? `${network.average_latency_ms} мс` : null],["Сеть: измерено",network.measured_at]],emptySystemMessage);
+    $("device-identifiers").innerHTML = factRows((endpoint?.identifiers || []).map((item) => [({SMBIOS_UUID:"Device UUID",CHASSIS_SERIAL:"Серийный номер корпуса",MOTHERBOARD_SERIAL:"Серийный номер платы",BIOS_SERIAL:"Серийный номер BIOS",AGENT_DEVICE_ID:"ID агента",MAC:"MAC-адрес"}[item.type] || item.type),item.value]),emptySystemMessage);
     $("snapshot-meta").textContent = asset.current_snapshot ? `${asset.current_snapshot.type === "FULL" ? "Полная" : "Частичная"} проверка · ${dateTime(asset.current_snapshot.captured_at)}` : "Данных пока нет";
     const supplemental = [...(asset.system?.drives || []).map((raw_data) => ({type:"DRIVE",raw_data,model:raw_data.description || raw_data.label})),...(asset.system?.controllers || []).map((raw_data) => ({type:"CONTROLLER",raw_data,model:raw_data.name || raw_data.caption}))];
-    $("current-hardware").innerHTML = hardware([...asset.current_hardware,...supplemental]); $("baseline-hardware").innerHTML = hardware(asset.baseline_hardware);
+    $("current-hardware").innerHTML = hardware([...asset.current_hardware,...supplemental],"Отчёт Agent получен, но компоненты оборудования в нём не найдены."); $("baseline-hardware").innerHTML = hardware(asset.baseline_hardware,"Эталон ещё не подтверждён. Сначала проверьте данные Agent и сохраните их как эталон.");
     $("baseline-summary").textContent = asset.baseline ? `Эталон подтверждён ${dateTime(asset.baseline.accepted_at)}${asset.baseline.reason ? ` · ${asset.baseline.reason}` : ""}` : "Эталонное состояние ещё не подтверждено.";
     $("baseline-action").innerHTML = asset.recommended_baseline_snapshot_id ? `<button id="accept-baseline">${asset.baseline ? "Обновить эталон" : "Подтвердить как эталон"}</button>` : "";
     if ($("accept-baseline")) $("accept-baseline").onclick = async () => { if (confirm("Подтвердить последний наблюдавшийся состав оборудования как новый эталон? Это действие не удаляет историю изменений.")) await sendAction(`/admin/snapshots/${asset.recommended_baseline_snapshot_id}/baseline`,{reason:"Подтверждено оператором в карточке устройства"},"POST","Эталонное состояние подтверждено"); };
@@ -244,7 +355,7 @@ async function incidentAction(id,resolve) {
   const comment = prompt(resolve ? "Комментарий к решению" : "Что необходимо проверить?","") || null;
   await sendAction(`/admin/incidents/${id}/${resolve ? "resolve" : "decision"}`,{classification,comment},"POST",resolve ? "Решение сохранено" : "Обращение взято на проверку");
 }
-function openLink(endpointId,hostname) { state.linkingEndpoint=endpointId; $("link-target").textContent=`Устройство: ${hostname || endpointId}`; $("link-asset").innerHTML=state.assets.filter((asset) => !asset.endpoint_id).map((asset) => `<option value="${asset.id}">${escapeHtml(asset.inventory_number)} — ${escapeHtml(asset.name)}</option>`).join(""); if(!$("link-asset").options.length){showToast("Сначала добавьте свободный актив",true);return;} $("link-dialog").showModal(); }
+function openLink(endpointId,hostname) { state.linkingEndpoint=endpointId; $("link-target").textContent=`Найденный компьютер: ${hostname || endpointId}`; $("link-asset").innerHTML=state.assets.filter((asset) => asset.category === "IT" && !asset.endpoint_id).map((asset) => `<option value="${asset.id}">${escapeHtml(asset.inventory_number)} — ${escapeHtml(asset.name)}</option>`).join(""); if(!$("link-asset").options.length){showToast("Добавьте в реестр свободную запись компьютера, чтобы связать с ней Agent.",true);return;} $("link-dialog").showModal(); }
 
 function visionCountRows(counts) { const entries=Object.entries(counts||{}); return entries.length ? entries.map(([name,count]) => `<div class="count-row"><span>${escapeHtml(name)}</span><strong>${count}</strong></div>`).join("") : '<p class="empty">Объекты выбранных классов не найдены.</p>'; }
 async function renderVisionScan(scan,roomName) {
@@ -254,31 +365,84 @@ async function renderVisionScan(scan,roomName) {
   $("vision-baseline").textContent=scan.status==="NOT_CHECKED"?"Подтвердить как эталон":"Обновить эталон"; if(state.visionImageUrl) URL.revokeObjectURL(state.visionImageUrl); const blob=await apiBlob(scan.annotated_image_url); state.visionImageUrl=URL.createObjectURL(blob); $("vision-image").src=state.visionImageUrl;
 }
 async function loadVisionHistory(roomId) { if(!roomId){$("vision-history").innerHTML='<p class="empty">Загрузите первое фото помещения.</p>';return;} const scans=await api(`/admin/vision/rooms/${roomId}/scans`); const room=state.visionRooms.find((item)=>item.id===roomId); $("vision-history").innerHTML=scans.map((scan)=>`<button class="vision-history-item" data-id="${scan.id}"><span><b>${dateTime(scan.created_at)}</b><small>${Object.entries(scan.counts).map(([name,count])=>`${escapeHtml(name)}: ${count}`).join(" · ")||"Объекты не найдены"}</small></span>${pill(scan.status)}</button>`).join("")||'<p class="empty">История проверок пуста.</p>'; document.querySelectorAll(".vision-history-item").forEach((button)=>button.onclick=async()=>renderVisionScan(await api(`/admin/vision/scans/${button.dataset.id}`),room?.name)); }
-function renderVisionRooms(rooms) { state.visionRooms=rooms; $("vision-room-select").innerHTML=rooms.length?rooms.map((room)=>`<option value="${room.id}">${escapeHtml(room.name)}</option>`).join(""):'<option value="">Проверок пока нет</option>'; $("vision-asset-id").innerHTML='<option value="">Не привязывать к устройству</option>'+state.assets.map((asset)=>`<option value="${asset.id}">${escapeHtml(asset.name)} · ${escapeHtml(asset.inventory_number)}</option>`).join(""); if(rooms.length){const selected=rooms.find((room)=>room.id===state.visionRoomId)||rooms[0];state.visionRoomId=selected.id;$("vision-room-select").value=selected.id;loadVisionHistory(selected.id);if(!state.visionScan&&selected.latest_scan)renderVisionScan(selected.latest_scan,selected.name);}else loadVisionHistory(null); }
+function renderVisionRooms(rooms) { state.visionRooms=rooms; const locationRooms=state.locations.flatMap((building)=>building.floors.flatMap((floor)=>floor.rooms.map((room)=>({id:room.id,label:`${building.name} · этаж ${floor.name} · кабинет ${room.name}`})))); const locationSelect=$("vision-location-room"); locationSelect.innerHTML=locationRooms.length?'<option value="">Выберите кабинет</option>'+locationRooms.map((room)=>`<option value="${room.id}">${escapeHtml(room.label)}</option>`).join(""):'<option value="">Сначала создайте корпус, этаж и кабинет</option>'; locationSelect.disabled=!locationRooms.length; $("vision-run").disabled=!locationRooms.length; $("vision-room-select").innerHTML=rooms.length?rooms.map((room)=>`<option value="${room.id}">${escapeHtml(room.name)}</option>`).join(""):'<option value="">Проверок пока нет</option>'; $("vision-asset-id").innerHTML='<option value="">Не привязывать к устройству</option>'+state.assets.map((asset)=>`<option value="${asset.id}">${escapeHtml(asset.name)} · ${escapeHtml(asset.inventory_number)}</option>`).join(""); if(rooms.length){const selected=rooms.find((room)=>room.id===state.visionRoomId)||rooms[0];state.visionRoomId=selected.id;$("vision-room-select").value=selected.id;loadVisionHistory(selected.id);if(!state.visionScan&&selected.latest_scan)renderVisionScan(selected.latest_scan,selected.name);}else loadVisionHistory(null); }
 
 async function load(showLoading=true) {
   if(showLoading){$("status").textContent="Обновляем данные…";$("attention-banner").className="attention-banner is-loading";}
-  try { const [assets,endpoints,changes,incidents,visionRooms,operations,locations]=await Promise.all([api("/admin/assets"),api("/admin/endpoints"),api("/admin/changes"),api("/admin/incidents"),api("/admin/vision/rooms"),api("/admin/operations/status"),api("/admin/locations/tree")]); state={...state,assets,endpoints,changes,incidents,visionRooms,operations,locations}; buildDevices(); renderDashboard(); renderOperations(operations); renderLocations(locations); renderDevices(); renderVisionRooms(visionRooms); $("status").textContent=`Данные актуальны · ${dateTime(new Date())}`; }
+  try { const [assets,endpoints,changes,incidents,visionRooms,operations,locations,currentUser]=await Promise.all([api("/admin/assets"),api("/admin/endpoints"),api("/admin/changes"),api("/admin/incidents"),api("/admin/vision/rooms"),api("/admin/operations/status"),api("/admin/locations/tree"),api("/auth/me")]); state={...state,assets,endpoints,changes,incidents,visionRooms,operations,locations,currentUser}; syncRoleControls(); buildDevices(); renderDashboard(); renderOperations(operations); renderLocations(locations); renderDevices(); renderVisionRooms(visionRooms); await loadAdminAccess(); $("status").textContent=`Данные актуальны · ${dateTime(new Date())}`; }
   catch(error){$("status").textContent=error.message;$("attention-banner").className="attention-banner error";$("attention-banner").innerHTML=`<span class="attention-icon">!</span><div><strong>Не удалось загрузить Dashboard</strong><p>${escapeHtml(error.message)}</p></div>`;showToast(error.message,true);}
 }
 function openAssetFromHash() { const match = location.hash.match(/^#asset=([0-9a-f-]{36})$/i); if (match && token) detail(match[1]); }
 
 $("token-form").addEventListener("submit",async(event)=>{event.preventDefault();const username=$("username").value.trim(),secret=$("token").value;try{if(username){const response=await fetch("/auth/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username,password:secret})});if(!response.ok)throw new Error("Неверный логин или пароль");token=(await response.json()).access_token;}else token=secret;sessionStorage.setItem("assetguard-admin-token",token);$("token").value="";await load();openAssetFromHash();showToast("Вход выполнен");}catch(error){$("status").textContent=error.message;showToast(error.message,true);}});
-$("logout").onclick=async()=>{if(token)await fetch("/auth/logout",{method:"POST",headers:{"X-AssetGuard-Admin-Token":token}}).catch(()=>{});token="";sessionStorage.removeItem("assetguard-admin-token");state={...state,assets:[],endpoints:[],devices:[],changes:[],incidents:[]};$("status").textContent="Сессия завершена.";showToast("Вы вышли из системы");};
-$("show-create").onclick=()=>{$("create-asset").hidden=!$("create-asset").hidden;};
+$("nav-toggle").addEventListener("click",()=>{const header=document.querySelector(".app-header"),open=header.classList.toggle("nav-open");$("nav-toggle").setAttribute("aria-expanded",String(open));$("nav-toggle").setAttribute("aria-label",open?"Закрыть меню":"Открыть меню");});
+document.querySelectorAll("#main-nav a").forEach((link)=>link.addEventListener("click",()=>{document.querySelector(".app-header").classList.remove("nav-open");$("nav-toggle").setAttribute("aria-expanded","false");document.querySelectorAll("#main-nav a").forEach((item)=>item.removeAttribute("aria-current"));link.setAttribute("aria-current","location");}));
+function syncTrackingMode() { const grouped=$("asset-tracking-mode").value==="GROUPED", field=$("asset-quantity-field"), input=field.querySelector("input");field.hidden=!grouped;input.disabled=!grouped;input.required=grouped; }
+$("asset-tracking-mode").addEventListener("change",syncTrackingMode);
+$("clear-device-filters").addEventListener("click",clearDeviceFilters);
+$("logout").onclick=async()=>{if(token)await fetch("/auth/logout",{method:"POST",headers:{"X-AssetGuard-Admin-Token":token}}).catch(()=>{});token="";sessionStorage.removeItem("assetguard-admin-token");state={...state,assets:[],endpoints:[],devices:[],changes:[],incidents:[],currentUser:null};syncRoleControls();renderAdminAccessVisibility();$("status").textContent="Сессия завершена.";showToast("Вы вышли из системы");};
+$("show-create").onclick=()=>{if(!$("create-asset").hidden){$("create-asset").hidden=true;return;}openAssetCreateForm();};
+$("cancel-create").onclick=()=>{$("create-asset").hidden=true;};
 $("create-building").addEventListener("submit",async(event)=>{event.preventDefault();const form=event.currentTarget;try{await api("/admin/locations/buildings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(Object.fromEntries(new FormData(form).entries()))});form.reset();showToast("Корпус создан");await load(false);}catch(error){showToast(error.message,true);}});
+$("location-create-form").addEventListener("submit",async(event)=>{event.preventDefault();if(!locationDialogTarget)return;const button=$("location-create-submit"),{kind,parentId}=locationDialogTarget;const isRoom=kind==="room",body={name:$("location-create-name").value.trim()};if(isRoom){body.responsible_name=$("location-create-responsible").value.trim()||null;body.responsible_contact=$("location-create-contact").value.trim()||null;}button.disabled=true;try{const path=isRoom?`/admin/locations/floors/${parentId}/rooms`:`/admin/locations/buildings/${parentId}/floors`;await api(path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});$("location-create-dialog").close();showToast(isRoom?"Кабинет добавлен":"Этаж добавлен");await load(false);}catch(error){showToast(error.message,true);}finally{button.disabled=false;}});
+$("location-create-cancel").onclick=()=>$("location-create-dialog").close();
+$("create-user").addEventListener("submit",async(event)=>{event.preventDefault();const form=event.currentTarget;try{const body=Object.fromEntries(new FormData(form).entries());body.organization_id=body.organization_id||null;const created=await api("/admin/users",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});form.reset();await loadAdminAccess();if(created.role!=="ADMIN"){$("access-user").value=created.id;renderAdminAccess();showToast("Пользователь создан. Теперь назначьте ему кабинет и права.");$("assign-user-panel").scrollIntoView({behavior:"smooth",block:"center"});$("access-scope").focus({preventScroll:true});}else showToast("Учётная запись администратора создана.");}catch(error){showToast(error.message,true);}});
+$("grant-location-access").addEventListener("submit",async(event)=>{event.preventDefault();const form=event.currentTarget;try{const body=Object.fromEntries(new FormData(form).entries());const [scope_type,scope_id]=body.scope.split(":");await api("/admin/locations/access",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({user_id:body.user_id,scope_type,scope_id,permission:body.permission})});showToast("Назначение сохранено");await loadAdminAccess();}catch(error){showToast(error.message,true);}});
+$("access-user").addEventListener("change",renderAdminAccess);
+$("refresh-access").onclick=loadAdminAccess;
 $("export-assets").onclick = async () => { try { const blob = await apiBlob("/admin/assets/export.xlsx"); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = "assetguard-assets.xlsx"; link.click(); URL.revokeObjectURL(url); } catch (error) { showToast(error.message, true); } };
 $("export-assets-pdf").onclick = async () => { try { const blob = await apiBlob("/admin/assets/export.pdf"); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = "assetguard-assets.pdf"; link.click(); URL.revokeObjectURL(url); } catch (error) { showToast(error.message, true); } };
+function confirmAssetImport(file,format,preview) {
+  $("import-preview-file").textContent=`${file.name} · ${format.toUpperCase()}`;
+  const items=preview.items||preview.samples||[], selected=new Set(items.map((_,index)=>index)), pageSize=25;
+  const table=$("import-preview-samples"), search=$("import-preview-search"), selectPage=$("import-preview-select-page"), applyButton=$("apply-import-preview");
+  const update=()=>{
+    const query=search.value.trim().toLocaleLowerCase("ru"), filtered=items.map((item,index)=>({item,index})).filter(({item})=>!query||[item.inventory_number,item.name,item.asset_type,item.building,item.floor,item.room].some((value)=>String(value||"").toLocaleLowerCase("ru").includes(query)));
+    const pageCount=Math.max(1,Math.ceil(filtered.length/pageSize));state.importPreviewPage=Math.min(Math.max(state.importPreviewPage||0,0),pageCount-1);
+    const start=state.importPreviewPage*pageSize, visible=filtered.slice(start,start+pageSize), visibleIndices=visible.map(({index})=>index);
+    const chosen=items.map((item,index)=>selected.has(index)?item:null).filter(Boolean);
+    $("import-preview-rows").textContent=chosen.length;
+    $("import-preview-creates").textContent=chosen.filter((item)=>item.action!=="update").length;
+    $("import-preview-updates").textContent=chosen.filter((item)=>item.action==="update").length;
+    $("import-preview-page-info").textContent=filtered.length?`Позиции ${start+1}–${start+visible.length} из ${filtered.length} · всего в файле ${items.length}`:`Совпадений нет · всего в файле ${items.length}`;
+    $("import-preview-prev").disabled=state.importPreviewPage===0;$("import-preview-next").disabled=state.importPreviewPage>=pageCount-1;
+    const checkedCount=visibleIndices.filter((index)=>selected.has(index)).length;selectPage.checked=visibleIndices.length>0&&checkedCount===visibleIndices.length;selectPage.indeterminate=checkedCount>0&&checkedCount<visibleIndices.length;
+    applyButton.disabled=chosen.length===0;
+    table.innerHTML=visible.length?'<table><thead><tr><th scope="col">В импорт</th><th scope="col">№</th><th scope="col">Инв. №</th><th scope="col">Наименование</th><th scope="col">Тип</th><th scope="col">Кабинет</th><th scope="col">Действие</th><th scope="col">OCR</th></tr></thead><tbody>'+visible.map(({item,index})=>`<tr><td><input type="checkbox" data-import-row="${index}" aria-label="Импортировать строку ${index+1}" ${selected.has(index)?"checked":""}></td><td>${index+1}</td><td>${escapeHtml(item.inventory_number||"—")}</td><td>${escapeHtml(item.name||"—")}</td><td>${escapeHtml(item.asset_type||"—")}</td><td>${escapeHtml([item.building,item.floor,item.room].filter(Boolean).join(" · ")||"—")}</td><td><span class="import-action ${item.action==="update"?"is-update":"is-create"}">${item.action==="update"?"Обновится":"Новая"}</span></td><td>${Number.isFinite(item.confidence)?`${item.confidence}%`:"—"}</td></tr>`).join("")+'</tbody></table>':'<p class="empty">'+(items.length?"По этому запросу ничего не найдено.":"Строки для импорта не найдены.")+'</p>';
+  };
+  state.importPreviewPage=0;search.value="";
+  $("import-preview-note").textContent=(preview.source||"").toLowerCase().includes("ocr")?"Это скан: текст распознан OCR, процент — ориентир, а не гарантия точности. Сверьте названия и номера с оригиналом и снимите галочку у ошибочных строк.":"Сопоставление с реестром выполняется по инвентарному номеру. Все строки включены по умолчанию: снимите галочку у тех, которые не нужно добавлять или обновлять.";
+  search.oninput=()=>{state.importPreviewPage=0;update();};
+  $("import-preview-prev").onclick=()=>{state.importPreviewPage--;update();};$("import-preview-next").onclick=()=>{state.importPreviewPage++;update();};
+  selectPage.onchange=()=>{const query=search.value.trim().toLocaleLowerCase("ru"), filtered=items.map((item,index)=>({item,index})).filter(({item})=>!query||[item.inventory_number,item.name,item.asset_type,item.building,item.floor,item.room].some((value)=>String(value||"").toLocaleLowerCase("ru").includes(query))),start=(state.importPreviewPage||0)*pageSize;filtered.slice(start,start+pageSize).forEach(({index})=>selectPage.checked?selected.add(index):selected.delete(index));update();};
+  table.onchange=(event)=>{const checkbox=event.target.closest("[data-import-row]");if(!checkbox)return;const index=Number(checkbox.dataset.importRow);checkbox.checked?selected.add(index):selected.delete(index);update();};
+  update();
+  const dialog=$("import-preview-dialog");
+  dialog.returnValue="";
+  return new Promise((resolve)=>{dialog.addEventListener("close",()=>{applyButton.disabled=false;resolve(dialog.returnValue==="apply"?{excludedRows:items.map((_,index)=>index).filter((index)=>!selected.has(index))}:null);},{once:true});dialog.showModal();});
+}
+async function importAssetFile(file,format) {
+  const previewForm=new FormData(); previewForm.append("file",file);
+  const preview=await api(`/admin/assets/import.${format}`,{method:"POST",body:previewForm});
+  const selection=await confirmAssetImport(file,format,preview);if(!selection)return;
+  const applyForm=new FormData(); applyForm.append("file",file);
+  selection.excludedRows.forEach((index)=>applyForm.append("exclude_row",String(index)));
+  const result=await api(`/admin/assets/import.${format}?apply=true`,{method:"POST",body:applyForm});
+  showToast(`Импорт завершён: новых записей — ${result.creates}, обновлено — ${result.updates}.`);
+  await load(false);
+}
 $("import-assets").onclick = () => $("import-assets-file").click();
-$("import-assets-file").onchange = async (event) => { const file = event.target.files?.[0]; if (!file) return; try { const form = new FormData(); form.append("file", file); const preview = await api("/admin/assets/import.xlsx", {method:"POST", body:form}); if (!confirm(`Будет добавлено: ${preview.creates}; обновлено: ${preview.updates}. Применить импорт?`)) return; const applyForm = new FormData(); applyForm.append("file", file); const result = await api("/admin/assets/import.xlsx?apply=true", {method:"POST", body:applyForm}); showToast(`Excel импортирован: ${result.rows} строк`); await load(false); } catch (error) { showToast(error.message, true); } finally { event.target.value = ""; } };
+$("import-assets-file").onchange = async (event) => { const input=event.target,file=input.files?.[0];if(!file)return;try{await importAssetFile(file,"xlsx");}catch(error){showToast(error.message,true);}finally{input.value="";}};
 $("import-assets-pdf").onclick = () => $("import-assets-pdf-file").click();
-$("import-assets-pdf-file").onchange = async (event) => { const file = event.target.files?.[0]; if (!file) return; try { const form = new FormData(); form.append("file", file); const preview = await api("/admin/assets/import.pdf", {method:"POST", body:form}); if (!confirm(`PDF: будет добавлено: ${preview.creates}; обновлено: ${preview.updates}. Применить импорт?`)) return; const applyForm = new FormData(); applyForm.append("file", file); const result = await api("/admin/assets/import.pdf?apply=true", {method:"POST", body:applyForm}); showToast(`PDF импортирован: ${result.rows} строк`); await load(false); } catch (error) { showToast(error.message, true); } finally { event.target.value = ""; } };
-$("create-asset").addEventListener("submit",async(event)=>{event.preventDefault();const form=event.currentTarget;try{await api("/admin/assets",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(Object.fromEntries(new FormData(form).entries()))});form.reset();form.hidden=true;showToast("Актив добавлен");await load(false);}catch(error){showToast(error.message,true);}});
+$("import-assets-pdf-file").onchange = async (event) => { const input=event.target,file=input.files?.[0];if(!file)return;try{await importAssetFile(file,"pdf");}catch(error){showToast(error.message,true);}finally{input.value="";}};
+$("create-asset").addEventListener("submit",async(event)=>{event.preventDefault();const form=event.currentTarget;try{const body=Object.fromEntries(new FormData(form).entries());body.room_id=body.room_id||null;body.quantity=body.quantity||1;body.category=({Desktop:"IT",Laptop:"IT",Printer:"IT",Projector:"IT",Network:"IT",Furniture:"FURNITURE",Sports:"SPORTS",Educational:"EDUCATIONAL",Other:"OTHER"})[body.asset_type]||"OTHER";await api("/admin/assets",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});form.reset();form.hidden=true;syncTrackingMode();showToast("Имущество добавлено в реестр");await load(false);}catch(error){showToast(error.message,true);}});
 $("link-form").addEventListener("submit",async(event)=>{event.preventDefault();if(!state.linkingEndpoint||!$("link-asset").value)return;try{await api(`/admin/endpoints/${state.linkingEndpoint}/asset/${$("link-asset").value}`,{method:"POST"});$("link-dialog").close();showToast("Устройство связано с активом");await load(false);}catch(error){showToast(error.message,true);}});$("link-cancel").onclick=()=>$("link-dialog").close();
 [$("device-search"),$("device-status-filter"),$("device-category-filter"),$("device-room-filter"),$("device-change-filter"),$("device-sort")].forEach((control)=>control.addEventListener(control.type==="search"?"input":"change",renderDevices));
-$("detail-back").onclick=()=>{location.hash="devices";};
-$("vision-upload").addEventListener("submit",async(event)=>{event.preventDefault();const button=$("vision-run");button.disabled=true;$("vision-progress").textContent="Анализируем фото… Первый запуск может занять несколько минут.";try{const form=new FormData(event.currentTarget);const scan=await api("/admin/vision/scans",{method:"POST",body:form});state.visionRoomId=scan.room_id;const rooms=await api("/admin/vision/rooms");renderVisionRooms(rooms);await renderVisionScan(scan,rooms.find((item)=>item.id===scan.room_id)?.name||form.get("room_name"));await loadVisionHistory(scan.room_id);$("vision-progress").textContent=`Анализ завершён: найдено объектов — ${scan.detections.length}. Проверьте результат.`;}catch(error){$("vision-progress").textContent=error.message;showToast(error.message,true);}finally{button.disabled=false;}});
+$("detail-back").onclick=()=>{state.selectedAsset=null;$("detail").hidden=true;location.hash="devices";$("devices").scrollIntoView({behavior:"smooth",block:"start"});};
+$("vision-upload").addEventListener("submit",async(event)=>{event.preventDefault();const button=$("vision-run"),selectedRoomName=$("vision-location-room").selectedOptions[0]?.textContent||"Кабинет";button.disabled=true;$("vision-progress").textContent="Анализируем фото… Первый запуск может занять несколько минут.";try{const form=new FormData(event.currentTarget);const scan=await api("/admin/vision/scans",{method:"POST",body:form});state.visionRoomId=scan.room_id;const rooms=await api("/admin/vision/rooms");renderVisionRooms(rooms);await renderVisionScan(scan,selectedRoomName);await loadVisionHistory(scan.room_id);$("vision-progress").textContent=`Анализ завершён: найдено объектов — ${scan.detections.length}. Проверьте результат.`;}catch(error){$("vision-progress").textContent=error.message;showToast(error.message,true);}finally{button.disabled=!state.locations.some((building)=>building.floors.some((floor)=>floor.rooms.length));}});
 $("vision-baseline").onclick=async()=>{if(!state.visionScan)return;if(!confirm("Подтвердить результат этой проверки как эталон кабинета?"))return;try{await api(`/admin/vision/rooms/${state.visionScan.room_id}/baseline`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({scan_id:state.visionScan.id})});const scan=await api(`/admin/vision/scans/${state.visionScan.id}`);await renderVisionScan(scan,state.visionRooms.find((room)=>room.id===scan.room_id)?.name);await loadVisionHistory(scan.room_id);$("vision-progress").textContent="Эталон подтверждён. Следующее фото будет сравнено с ним.";showToast("Эталон помещения сохранён");}catch(error){showToast(error.message,true);}};
 $("vision-room-select").onchange=async(event)=>{state.visionRoomId=event.target.value;const room=state.visionRooms.find((item)=>item.id===state.visionRoomId);state.visionScan=room?.latest_scan||null;if(state.visionScan)await renderVisionScan(state.visionScan,room.name);await loadVisionHistory(state.visionRoomId);};
-window.addEventListener("hashchange", openAssetFromHash);
+window.addEventListener("hashchange",()=>{openAssetFromHash();const target=location.hash.slice(1),link=document.querySelector(`#main-nav a[href="#${CSS.escape(target)}"]`);document.querySelectorAll("#main-nav a").forEach((item)=>item.removeAttribute("aria-current"));link?.setAttribute("aria-current","location");if(target==="devices"&&state.selectedAsset){$("detail").hidden=true;state.selectedAsset=null;}document.querySelector(".app-header").classList.remove("nav-open");$("nav-toggle").setAttribute("aria-expanded","false");});
+syncRoleControls();
+renderAdminAccessVisibility();
 if(token)load().then(openAssetFromHash);

@@ -17,11 +17,15 @@
 | Asset history | get |
 | Authentication | login, logout, list/revoke sessions |
 | Users | list, create, change role/password/active state |
+| Location access | grant/remove VIEWER or EDITOR at building/floor/room scope; location tree and room reports respect grants |
 | Vision rooms | list, scan history, get/save baseline |
 | Vision scans | multipart upload/detect, get details, original/annotated image |
+| Asset import/export | Excel and PDF export; Excel/PDF preview and confirmed selective apply |
 
 Admin actions, изменяющие baseline или incident, обязаны оставлять audit/history. Actor incident decision определяется по аутентифицированной сессии, а не доверяется полю запроса. Inventory ingest не является публичным admin API.
 
 Inventory envelope проходит version-tolerant минимальную проверку (`content` object и обязательный `deviceid` для `GLPI_AGENT`) после сохранения immutable raw evidence. Конкретные source adapters могут расширять этот контракт, не меняя canonical model.
 
-Vision endpoints находятся в существующей admin boundary `/admin/vision/*`. Upload принимает `room_name` и JPEG/PNG `image`; ответ содержит status, counts, comparison, detections с bounding boxes и защищённые URLs изображений. Создание scan и сохранение baseline требуют ADMIN, чтение rooms/scans/images допускает ADMIN или VIEWER.
+Vision endpoints находятся в существующей admin boundary `/admin/vision/*`. Upload связывает scan с кабинетом школьной иерархии и принимает JPEG/PNG `image`; результат содержит status, counts, comparison, detections с bounding boxes и защищённые URLs изображений. Доступ к scans/images проходит через локационный grant. Legacy rooms без однозначной связи видны только ADMIN.
+
+`POST /admin/assets/import.xlsx` и `/admin/assets/import.pdf` без `apply=true` возвращают read-only предпросмотр всех распознанных позиций (`items`). При подтверждении `apply=true` те же файлы отправляются повторно; multipart-поле `exclude_row` может повторяться и содержит нулевые индексы исключаемых позиций. Только этот второй запрос записывает оставшиеся строки.

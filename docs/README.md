@@ -11,8 +11,8 @@
 | [api](api/) | Реализованные REST API boundaries |
 | [data](data/) | Владение данными, хранение и retention |
 | [security](security/) | Минимальная модель безопасности и privacy |
-| [product](product/) | Demo-сценарий, [архитектура и pitch-гайд](product/pitch-guide.md), границы MVP, [чек-лист завершения](product/mvp-completion-checklist.md) и [аудит данных Dashboard](product/dashboard-data-audit.md) |
+| [product](product/) | Demo-сценарий, [архитектура и pitch-гайд](product/pitch-guide.md), границы MVP, [чек-лист завершения](product/mvp-completion-checklist.md), [аудит данных Dashboard](product/dashboard-data-audit.md) и [UX-сценарии пользователей](product/ux-workflow.md) |
 | [quality](quality/) | Фикстуры и стратегия проверки |
-| [operations](operations/) | Среда, наблюдаемость и журналирование |
+| [operations](operations/) | Среда, наблюдаемость, [PDF/OCR импорт](operations/pdf-import-ocr.md), backup и журналирование |
 
 Наблюдения реального GLPI Agent и результаты executable tests имеют приоритет над предположениями в документации. Незавершённые production и Vision-camera возможности явно перечисляются в соответствующих разделах.

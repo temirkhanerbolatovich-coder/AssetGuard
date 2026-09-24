@@ -10,7 +10,7 @@ from typing import Annotated, Literal
 from urllib.parse import urlsplit
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, UploadFile, status
 from fastapi.responses import Response, StreamingResponse
 from openpyxl import Workbook, load_workbook
 import pdfplumber
@@ -290,15 +290,18 @@ def export_assets_xlsx(session: Annotated[Session, Depends(get_session)], princi
     workbook = Workbook()
     sheet = workbook.active
     sheet.title = "Assets"
-    headers = ["inventory_number", "name", "asset_type", "status", "organization", "building", "floor", "room", "notes"]
+    headers = ["inventory_number", "name", "asset_type", "category", "status", "organization", "building", "floor", "room", "notes"]
     sheet.append(headers)
     statement = select(AssetRecord).order_by(AssetRecord.inventory_number)
     if principal.organization_id:
         statement = statement.where(AssetRecord.organization_id == principal.organization_id)
+    allowed_rooms = permitted_room_ids(session, principal)
+    if allowed_rooms is not None:
+        statement = statement.where(AssetRecord.room_id.in_(allowed_rooms))
     for asset in session.scalars(statement):
         organization = session.get(OrganizationRecord, asset.organization_id)
         sheet.append([
-            asset.inventory_number, asset.name, asset.asset_type, asset.status,
+            asset.inventory_number, asset.name, asset.asset_type, asset.category, asset.status,
             organization.name if organization else "", asset.building or "", asset.floor or "",
             asset.room or "", asset.notes or "",
         ])
@@ -320,6 +323,9 @@ def _assets_for_principal(session: Session, principal: AuthPrincipal) -> list[tu
     statement = select(AssetRecord).order_by(AssetRecord.inventory_number)
     if principal.organization_id:
         statement = statement.where(AssetRecord.organization_id == principal.organization_id)
+    allowed_rooms = permitted_room_ids(session, principal)
+    if allowed_rooms is not None:
+        statement = statement.where(AssetRecord.room_id.in_(allowed_rooms))
     result = []
     for asset in session.scalars(statement):
         organization = session.get(OrganizationRecord, asset.organization_id)
@@ -358,15 +364,15 @@ def _export_assets_pdf(assets: list[tuple[AssetRecord, str]]) -> BytesIO:
         Paragraph(f"Сформировано: {datetime.now().astimezone().strftime('%d.%m.%Y %H:%M')} · Позиций: {len(assets)}", subtitle),
         Spacer(1, 5 * mm),
     ]
-    headings = ["Инв. №", "Наименование", "Тип", "Статус", "Организация", "Корпус", "Этаж", "Кабинет", "Примечание"]
+    headings = ["Инв. №", "Наименование", "Тип", "Категория", "Статус", "Организация", "Корпус", "Этаж", "Кабинет", "Примечание"]
     table_data = [[Paragraph(escape(value), header) for value in headings]]
     for asset, organization_name in assets:
         values = [
-            asset.inventory_number, asset.name, asset.asset_type, asset.status, organization_name,
+            asset.inventory_number, asset.name, asset.asset_type, asset.category, asset.status, organization_name,
             asset.building or "", asset.floor or "", asset.room or "", asset.notes or "",
         ]
         table_data.append([Paragraph(escape(str(value)).replace("\n", "<br/>"), cell) for value in values])
-    table = Table(table_data, colWidths=[22 * mm, 38 * mm, 22 * mm, 21 * mm, 32 * mm, 22 * mm, 13 * mm, 18 * mm, 48 * mm], repeatRows=1)
+    table = Table(table_data, colWidths=[21 * mm, 34 * mm, 19 * mm, 20 * mm, 18 * mm, 29 * mm, 21 * mm, 12 * mm, 17 * mm, 43 * mm], repeatRows=1)
     table.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#173b69")),
         ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#cbd5e1")),
@@ -391,6 +397,7 @@ IMPORT_COLUMN_ALIASES = {
     "inventory_number": {"inventory_number", "inventory number", "инвентарный номер", "инв. номер", "инв номер", "инв. №", "инв №", "инвентарный№"},
     "name": {"name", "название", "наименование", "оборудование", "устройство"},
     "asset_type": {"asset_type", "asset type", "тип", "тип оборудования", "вид оборудования"},
+    "category": {"category", "категория", "категория имущества"},
     "status": {"status", "статус", "состояние"},
     "organization": {"organization", "организация", "учреждение", "школа"},
     "building": {"building", "корпус", "здание"},
@@ -416,21 +423,55 @@ def _asset_type_from_import(value: str | None) -> str | None:
     if not value:
         return value
     normalized = value.lower().replace("ё", "е").strip()
-    if normalized in {"desktop", "пк", "компьютер", "стационарный", "стационарный компьютер"} or "компьютер" in normalized or "системный блок" in normalized:
+    if normalized in {"desktop", "пк", "pc", "computer", "workstation", "компьютер", "стационарный", "стационарный компьютер"} or "computer" in normalized or "workstation" in normalized or "компьютер" in normalized or "системный блок" in normalized:
         return "Desktop"
     if normalized in {"laptop", "ноутбук"} or "ноутбук" in normalized:
         return "Laptop"
+    if "принтер" in normalized or "мфу" in normalized:
+        return "Printer"
+    if "проектор" in normalized:
+        return "Projector"
+    if any(word in normalized for word in ("маршрутизатор", "роутер", "коммутатор", "switch", "router", "точка доступа", "network", "сетев")):
+        return "Network"
+    if any(word in normalized for word in ("парта", "стол", "стул", "кресло", "шкаф", "мебел", "доска", "тумба", "полка", "furniture", "chair", "desk", "table", "cabinet", "bookcase")):
+        return "Furniture"
+    if any(word in normalized for word in ("мяч", "ракетка", "скакалка", "обруч", "гантел", "спортинвентар", "спортивн", "sports", "ball", "racket", "rope", "dumbbell", "hoop")):
+        return "Sports"
+    if any(word in normalized for word in ("микроскоп", "лаборатор", "учебн", "наглядное пособие", "глобус", "телескоп", "educational")):
+        return "Educational"
     return "Other" if normalized not in {"other", "прочее", "другое"} else "Other"
+
+
+def _asset_category_from_import(value: str | None, asset_type: str | None) -> str:
+    normalized = (value or "").lower().replace("ё", "е").strip()
+    explicit = {
+        "it": "IT", "компьютеры и it": "IT", "it-оборудование": "IT", "компьютерное оборудование": "IT",
+        "furniture": "FURNITURE", "мебель": "FURNITURE",
+        "sports": "SPORTS", "спорт": "SPORTS", "спортинвентарь": "SPORTS", "спортивный инвентарь": "SPORTS",
+        "educational": "EDUCATIONAL", "учебное": "EDUCATIONAL", "учебное оборудование": "EDUCATIONAL",
+        "other": "OTHER", "прочее": "OTHER", "другое": "OTHER", "другое имущество": "OTHER",
+    }
+    if normalized in explicit:
+        return explicit[normalized]
+    return {
+        "Desktop": "IT", "Laptop": "IT", "Printer": "IT", "Projector": "IT", "Network": "IT",
+        "Furniture": "FURNITURE", "Sports": "SPORTS", "Educational": "EDUCATIONAL", "Other": "OTHER",
+    }.get(asset_type or "", "OTHER")
 
 
 def _import_row_values(row: dict[str, object], row_number: int) -> dict[str, str | None]:
     required = ("inventory_number", "name", "asset_type")
     result = {key: (str(row.get(key)).strip() if row.get(key) is not None else None) for key in (
-        "inventory_number", "name", "asset_type", "status", "organization", "building", "floor", "room", "notes",
+        "inventory_number", "name", "asset_type", "category", "status", "organization", "building", "floor", "room", "notes",
     )}
     if any(not result[key] for key in required):
         raise ValueError(f"Row {row_number}: inventory_number, name and asset_type are required.")
     result["asset_type"] = _asset_type_from_import(result["asset_type"])
+    if result["asset_type"] == "Other":
+        name_type = _asset_type_from_import(result["name"])
+        if name_type and name_type != "Other":
+            result["asset_type"] = name_type
+    result["category"] = _asset_category_from_import(result["category"], result["asset_type"])
     if len(result["inventory_number"] or "") > 128 or len(result["name"] or "") > 255:
         raise ValueError(f"Row {row_number}: inventory_number or name is too long.")
     return result
@@ -453,35 +494,68 @@ def _parse_import_rows(header: tuple[object, ...] | list[object], rows: object, 
     return parsed
 
 
-def _import_assets(parsed: list[dict[str, str | None]], session: Session, principal: AuthPrincipal, apply: bool, source: str) -> dict[str, int | bool]:
+def _import_assets(
+    parsed: list[dict[str, str | int | None]],
+    session: Session,
+    principal: AuthPrincipal,
+    apply: bool,
+    source: str,
+    excluded_rows: set[int] | None = None,
+) -> dict:
+    excluded_rows = excluded_rows or set()
+    invalid_rows = sorted(index for index in excluded_rows if index < 0 or index >= len(parsed))
+    if invalid_rows:
+        raise HTTPException(422, "Некорректные номера строк предпросмотра.")
+    selected = [(index, item) for index, item in enumerate(parsed) if index not in excluded_rows]
+    if apply and not selected:
+        raise HTTPException(422, "Выберите хотя бы одну строку для импорта.")
     scoped_organization = session.get(OrganizationRecord, principal.organization_id) if principal.organization_id else None
-    if scoped_organization and any((item["organization"] or scoped_organization.name) != scoped_organization.name for item in parsed):
+    if scoped_organization and any((item.get("organization") or scoped_organization.name) != scoped_organization.name for _, item in selected):
         raise HTTPException(403, "A tenant user may import assets only for their organization.")
     existing = {(organization.name, asset.inventory_number): asset for asset in session.scalars(select(AssetRecord).join(OrganizationRecord)) for organization in [session.get(OrganizationRecord, asset.organization_id)] if organization}
-    creates = sum(1 for item in parsed if (item["organization"] or "Default Organization", item["inventory_number"]) not in existing)
-    updates = len(parsed) - creates
+    actions = [
+        "update" if ((item.get("organization") or "Default Organization"), item["inventory_number"]) in existing else "create"
+        for _, item in selected
+    ]
+    creates = sum(action == "create" for action in actions)
+    updates = len(selected) - creates
     if not apply:
-        return {"rows": len(parsed), "creates": creates, "updates": updates, "applied": False}
+        return {
+            "rows": len(selected), "total_rows": len(parsed), "creates": creates, "updates": updates, "applied": False,
+            "source": source,
+                "samples": [{key: item.get(key) for key in ("inventory_number", "name", "asset_type", "building", "floor", "room")} for item in parsed[:10]],
+            "items": [
+                {
+                    "row": index + 1,
+                    "action": "update" if ((item.get("organization") or "Default Organization"), item["inventory_number"]) in existing else "create",
+                    "confidence": item.get("_ocr_confidence"),
+                    **{key: item.get(key) for key in ("inventory_number", "name", "asset_type", "building", "floor", "room")},
+                }
+                for index, item in enumerate(parsed)
+            ],
+        }
     now = datetime.now(UTC)
-    for item in parsed:
+    for _, item in selected:
         organization = _organization_for_name(session, item["organization"] or "Default Organization")
         asset = existing.get((organization.name, item["inventory_number"]))
+        imported_category = item.get("category") or _asset_category_from_import(None, item.get("asset_type"))
         if asset is None:
-            asset = AssetRecord(organization_id=organization.id, inventory_number=item["inventory_number"] or "", name=item["name"] or "", asset_type=item["asset_type"] or "Other", status=item["status"] or "ACTIVE", building=item["building"], floor=item["floor"], room=item["room"], notes=item["notes"], created_at=now, updated_at=now)
+            asset = AssetRecord(organization_id=organization.id, inventory_number=item["inventory_number"] or "", name=item["name"] or "", asset_type=item["asset_type"] or "Other", category=imported_category, status=item["status"] or "ACTIVE", building=item["building"], floor=item["floor"], room=item["room"], notes=item["notes"], created_at=now, updated_at=now)
             session.add(asset); session.flush()
             append_asset_history(session, asset_id=asset.id, event_type="ASSET_CREATED", related_entity_type="Asset", related_entity_id=asset.id, message=f"Asset imported from {source}.", metadata={"inventory_number": asset.inventory_number, "source": source})
         else:
             for key in ("name", "asset_type", "building", "floor", "room", "notes"):
                 setattr(asset, key, item[key])
+            asset.category = imported_category
             if item["status"]:
                 asset.status = item["status"]
             asset.updated_at = now
             append_asset_history(session, asset_id=asset.id, event_type="ASSET_UPDATED", related_entity_type="Asset", related_entity_id=asset.id, message=f"Asset imported from {source}.", metadata={"source": source})
     session.commit()
-    return {"rows": len(parsed), "creates": creates, "updates": updates, "applied": True}
+    return {"rows": len(selected), "creates": creates, "updates": updates, "applied": True}
 
 
-def _government_inventory_rows(table: list[list[str | None]], filename: str | None) -> list[dict[str, str | None]]:
+def _government_inventory_rows(table: list[list[str | None]], filename: str | None, page_number: int | None = None) -> list[dict[str, str | None]]:
     """Map the standard Kazakhstan accounting inventory statement to AssetGuard rows.
 
     A statement row can describe several identical items. It becomes one grouped AssetGuard
@@ -511,7 +585,7 @@ def _government_inventory_rows(table: list[list[str | None]], filename: str | No
         if total:
             notes.append(f"Сумма: {total} тг.")
         parsed.append({
-            "inventory_number": f"PDF-{safe_stem}-{values[0]}",
+            "inventory_number": f"PDF-{safe_stem}-{values[0]}" if page_number is None else f"PDF-{safe_stem}-P{page_number}-{values[0]}",
             "name": name,
             "asset_type": _asset_type_from_import(name),
             "status": "ACTIVE",
@@ -521,12 +595,90 @@ def _government_inventory_rows(table: list[list[str | None]], filename: str | No
     return parsed
 
 
+def _ocr_government_inventory_pdf(content: bytes, filename: str | None) -> list[dict[str, str | None]]:
+    """OCR only strict itemized rows: a repeated row number must bracket a readable name."""
+    try:
+        import pypdfium2 as pdfium
+        import pytesseract
+        from pytesseract import Output
+    except ImportError as error:
+        raise RuntimeError("Для OCR установите runtime-компоненты AssetGuard: pypdfium2, pytesseract и Tesseract OCR с языками rus/kaz/eng.") from error
+
+    safe_stem = re.sub(r"[^A-Za-z0-9_-]+", "-", Path(filename or "inventory").stem).strip("-") or "inventory"
+    tesseract_cmd = get_settings().tesseract_cmd
+    if tesseract_cmd:
+        pytesseract.pytesseract.tesseract_cmd = tesseract_cmd
+    units = {"шт", "шт.", "штук", "компл", "компл.", "комплект", "кг", "м", "м2", "л", "упак", "пара"}
+    parsed: list[dict[str, str | None]] = []
+    try:
+        document = pdfium.PdfDocument(content)
+        if len(document) > 30:
+            raise ValueError("Сканированный PDF превышает лимит OCR: не более 30 страниц за импорт.")
+        ocr_config = "--psm 6"
+        tessdata_dir = get_settings().tesseract_data_dir
+        if tessdata_dir:
+            ocr_config += f" --tessdata-dir {tessdata_dir}"
+        for page_index in range(len(document)):
+            image = document[page_index].render(scale=2).to_pil()
+            data = pytesseract.image_to_data(image, lang="rus+kaz+eng", config=ocr_config, output_type=Output.DICT)
+            lines: dict[tuple[int, int, int, int], list[tuple[int, str, float]]] = {}
+            for index, raw_text in enumerate(data["text"]):
+                word = str(raw_text).strip()
+                try:
+                    confidence = float(data["conf"][index])
+                except (TypeError, ValueError):
+                    continue
+                if not word or confidence < 45:
+                    continue
+                key = (data["page_num"][index], data["block_num"][index], data["par_num"][index], data["line_num"][index])
+                lines.setdefault(key, []).append((int(data["left"][index]), word, confidence))
+            seen_sequences: set[str] = set()
+            for words in lines.values():
+                words.sort(key=lambda item: item[0])
+                tokens = [word for _, word, _ in words]
+                if len(tokens) < 4 or not re.fullmatch(r"\d{1,4}", tokens[0]) or tokens[-1] != tokens[0]:
+                    continue
+                confidence = sum(value for _, _, value in words) / len(words)
+                if confidence < 70 or tokens[0] in seen_sequences:
+                    continue
+                seen_sequences.add(tokens[0])
+                middle = tokens[1:-1]
+                metadata_index = next((i for i, token in enumerate(middle) if re.fullmatch(r"\d{5,}", token)), None)
+                if metadata_index is None:
+                    metadata_index = next((i for i, token in enumerate(middle) if token.lower().strip(".,") in units), None)
+                if metadata_index is None:
+                    # Without a recognizable accounting number or unit boundary we cannot
+                    # separate the item name from neighboring table columns safely.
+                    continue
+                name = " ".join(middle[:metadata_index]).strip(" .,:;|-")
+                if len(re.findall(r"[A-Za-zА-Яа-яӘәҒғҚқҢңӨөҰұҮүҺһІі]", name)) < 3:
+                    continue
+                inventory_number = f"PDF-{safe_stem}-P{page_index + 1}-{tokens[0]}"
+                parsed.append({
+                    "inventory_number": inventory_number, "name": name,
+                    "asset_type": _asset_type_from_import(name), "status": "ACTIVE",
+                    "organization": None, "building": None, "floor": None, "room": None,
+                    "notes": f"Распознано OCR из скана ({round(confidence)}%); сверьте с оригиналом перед использованием.",
+                    "_ocr_confidence": round(confidence),
+                })
+    except ValueError:
+        raise
+    except Exception as error:
+        if error.__class__.__name__ in {"TesseractNotFoundError", "TesseractError"}:
+            raise RuntimeError("OCR не запущен: установите Tesseract OCR и языковые пакеты rus, kaz и eng.") from error
+        if isinstance(error, UnicodeDecodeError):
+            raise RuntimeError("OCR в Windows требует ASCII-путь во временном каталоге и каталоге языковых моделей. Укажите ASSETGUARD_OCR_TEMP_DIR и ASSETGUARD_TESSDATA_DIR, затем перезапустите API.") from error
+        raise RuntimeError("Не удалось выполнить OCR этого PDF. Проверьте файл и доступность Tesseract OCR.") from error
+    return parsed
+
+
 @router.post("/assets/import.xlsx")
 def import_assets_xlsx(
     file: Annotated[UploadFile, File()],
     session: Annotated[Session, Depends(get_session)],
     principal: Annotated[AuthPrincipal, Depends(require_admin)],
     apply: bool = Query(default=False),
+    exclude_row: list[int] = Form(default=[]),
 ):
     if file.content_type not in {
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -542,7 +694,7 @@ def import_assets_xlsx(
     header = next(rows, None)
     if not header:
         raise HTTPException(422, "The workbook is empty.")
-    return _import_assets(_parse_import_rows(header, rows), session, principal, apply, "xlsx")
+    return _import_assets(_parse_import_rows(header, rows), session, principal, apply, "xlsx", set(exclude_row if isinstance(exclude_row, list) else []))
 
 
 @router.post("/assets/import.pdf")
@@ -551,6 +703,7 @@ def import_assets_pdf(
     session: Annotated[Session, Depends(get_session)],
     principal: Annotated[AuthPrincipal, Depends(require_admin)],
     apply: bool = Query(default=False),
+    exclude_row: list[int] = Form(default=[]),
 ):
     if file.content_type not in {"application/pdf", "application/octet-stream"} and not (file.filename or "").lower().endswith(".pdf"):
         raise HTTPException(415, "Upload a .pdf file.")
@@ -559,25 +712,36 @@ def import_assets_pdf(
         raise HTTPException(413, "The PDF must be no larger than 10 MB.")
     try:
         with pdfplumber.open(BytesIO(content)) as document:
-            tables = [table for page in document.pages for table in page.extract_tables() if table]
+            pages = [(page_number, [table for table in page.extract_tables() if table]) for page_number, page in enumerate(document.pages, start=1)]
     except Exception as error:
         raise HTTPException(422, "The uploaded file is not a valid readable PDF.") from error
-    for table in tables:
-        header, *rows = table
-        if not header:
-            continue
-        try:
-            parsed = _parse_import_rows(header, rows)
-        except HTTPException as error:
-            if error.status_code == 422 and error.detail.startswith("Required columns"):
-                continue
-            raise
-        return _import_assets(parsed, session, principal, apply, "pdf")
-    for table in tables:
-        parsed = _government_inventory_rows(table, file.filename)
-        if parsed:
-            return _import_assets(parsed, session, principal, apply, "government PDF inventory statement")
-    raise HTTPException(422, "No supported table was found. Import supports AssetGuard tables and Kazakhstan accounting inventory statements with selectable text. A scanned PDF needs OCR first; a blank form cannot be imported as equipment.")
+    generic_rows: list[dict[str, str | None]] = []
+    government_rows: list[dict[str, str | None]] = []
+    for page_number, tables in pages:
+        for table in tables:
+            header, *rows = table
+            if header:
+                try:
+                    generic_rows.extend(_parse_import_rows(header, rows))
+                except HTTPException as error:
+                    if error.status_code != 422 or not error.detail.startswith("Required columns"):
+                        raise
+            government_rows.extend(_government_inventory_rows(table, file.filename, page_number))
+    if generic_rows:
+        deduplicated = {(item.get("organization"), item["inventory_number"]): item for item in generic_rows}
+        return _import_assets(list(deduplicated.values()), session, principal, apply, "pdf", set(exclude_row if isinstance(exclude_row, list) else []))
+    if government_rows:
+        deduplicated = {(item.get("organization"), item["inventory_number"]): item for item in government_rows}
+        return _import_assets(list(deduplicated.values()), session, principal, apply, "government PDF inventory statement", set(exclude_row if isinstance(exclude_row, list) else []))
+    try:
+        ocr_rows = _ocr_government_inventory_pdf(content, file.filename)
+    except RuntimeError as error:
+        raise HTTPException(503, str(error)) from error
+    except ValueError as error:
+        raise HTTPException(422, str(error)) from error
+    if ocr_rows:
+        return _import_assets(ocr_rows, session, principal, apply, "OCR government PDF inventory statement", set(exclude_row if isinstance(exclude_row, list) else []))
+    raise HTTPException(422, "Не найдена поддерживаемая ведомость с построчными данными. Пустой бланк и сводное поле без отдельных позиций не импортируются; для скана нужны читаемые строки ведомости.")
 
 
 @router.get("/assets/{asset_id}/qr.svg")
@@ -602,7 +766,7 @@ def asset_qr_svg(
 
 
 @router.post("/assets", status_code=status.HTTP_201_CREATED)
-def create_asset(body: AssetCreate, session: Annotated[Session, Depends(get_session)], principal: Annotated[AuthPrincipal, Depends(require_admin)]):
+def create_asset(body: AssetCreate, session: Annotated[Session, Depends(get_session)], principal: Annotated[AuthPrincipal, Depends(require_viewer)]):
     organization = session.get(OrganizationRecord, principal.organization_id) if principal.organization_id else session.scalar(select(OrganizationRecord).order_by(OrganizationRecord.created_at))
     if not organization:
         organization = OrganizationRecord(name="Default Organization", created_at=datetime.now(UTC))
@@ -623,6 +787,7 @@ def create_asset(body: AssetCreate, session: Annotated[Session, Depends(get_sess
     _apply_room_location(asset, body.room_id, session, organization.id)
     if body.room_id is None:
         _ensure_room_for_legacy_location(asset, session)
+    require_room_access(session, asset.room_id, principal, write=True)
     session.add(asset)
     session.flush()
     append_asset_history(
@@ -636,8 +801,9 @@ def create_asset(body: AssetCreate, session: Annotated[Session, Depends(get_sess
 
 
 @router.patch("/assets/{asset_id}")
-def update_asset(asset_id: UUID, body: AssetUpdate, session: Annotated[Session, Depends(get_session)], principal: Annotated[AuthPrincipal, Depends(require_admin)]):
+def update_asset(asset_id: UUID, body: AssetUpdate, session: Annotated[Session, Depends(get_session)], principal: Annotated[AuthPrincipal, Depends(require_viewer)]):
     asset = _scoped_asset(session, asset_id, principal)
+    require_room_access(session, asset.room_id, principal, write=True)
     changes = body.model_dump(exclude_unset=True)
     if "inventory_number" in changes:
         duplicate = session.scalar(select(AssetRecord).where(
@@ -653,6 +819,7 @@ def update_asset(asset_id: UUID, body: AssetUpdate, session: Annotated[Session, 
         setattr(asset, field, value)
     if "room_id" not in body.model_fields_set and {"building", "floor", "room"} & set(changes):
         _ensure_room_for_legacy_location(asset, session)
+    require_room_access(session, asset.room_id, principal, write=True)
     asset.updated_at = datetime.now(UTC)
     append_asset_history(
         session, asset_id=asset.id, event_type="ASSET_UPDATED",

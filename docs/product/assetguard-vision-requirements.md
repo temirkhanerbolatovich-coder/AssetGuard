@@ -2,7 +2,7 @@
 
 Источник: ТЗ пользователя от 2026-09-23. Статус: **демонстрационный vertical slice реализован**.
 
-Реализован согласованный сценарий `Upload → Detection → Bounding Boxes → Object count → Baseline → повторный Scan → Comparison → WARNING`. Иерархия Institution/Building/Floor, RTSP, `ANOMALY`, связь detection с endpoint и production object storage намеренно оставлены за пределами сегодняшнего MVP.
+Реализован согласованный сценарий `Upload → Detection → Bounding Boxes → Object count → Baseline → повторный Scan → Comparison → WARNING`. Каноническая иерархия организации/корпуса/этажа/кабинета и привязка Vision-комнаты к кабинету реализованы; неразрешённые неоднозначные старые комнаты остаются admin-only. RTSP, `ANOMALY`, привязка каждой detection к endpoint/asset и production object storage остаются за пределами MVP.
 
 ## Цель и границы
 
@@ -28,8 +28,8 @@ MVP: загрузка фотографии через Dashboard, обработ�
 
 ## UI и интеграция
 
-- Новый раздел: Institution → Building → Floor → Room.
-- Карточка room: Physical inventory, Digital inventory от существующих Agents, последнее annotated image, history.
+- Раздел локаций: организация → корпус → этаж → кабинет; Vision scan выбирает кабинет из этой структуры.
+- Vision показывает последнее annotated image, историю и сравнение baseline. Сводная карточка кабинета с физической сверкой имущества и цифровыми данными Agent остаётся будущим улучшением.
 - Данные Vision и Windows Agent показываются рядом, но в MVP не связывают конкретный физический объект с конкретным endpoint.
 - Нужны действия: upload/Run scan, View image, History, Save/Update baseline.
 

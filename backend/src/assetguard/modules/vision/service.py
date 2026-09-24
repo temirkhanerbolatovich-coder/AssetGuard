@@ -16,6 +16,7 @@ from assetguard.modules.vision.detector import Detection, Detector
 from assetguard.modules.vision.models import (
     VisionBaselineRecord, VisionDetectionRecord, VisionRoomRecord, VisionScanRecord,
 )
+from assetguard.modules.assets.models import BuildingRecord, FloorRecord, RoomRecord
 
 logger = logging.getLogger("assetguard.vision")
 COLORS = ("#4f8cff", "#35c987", "#f6b84a", "#ff6b7a", "#b48cff", "#41c7d9")
@@ -33,18 +34,38 @@ def read_image(payload: bytes) -> Image.Image:
 
 
 def create_scan(
-    session: Session, *, room_name: str, payload: bytes, detector: Detector, asset_id: UUID | None = None, organization_id: UUID | None = None,
+    session: Session, *, payload: bytes, detector: Detector, asset_id: UUID | None = None,
+    organization_id: UUID | None = None, room_name: str | None = None, room_id: UUID | None = None,
 ) -> VisionScanRecord:
     settings = get_settings()
     image = read_image(payload)
-    normalized_room = " ".join(room_name.strip().split())
-    if not normalized_room:
-        raise ValueError("Room name is required.")
-    room = session.scalar(select(VisionRoomRecord).where(VisionRoomRecord.name == normalized_room, VisionRoomRecord.organization_id == organization_id))
-    if room is None:
-        room = VisionRoomRecord(name=normalized_room, organization_id=organization_id, created_at=datetime.now(UTC))
-        session.add(room)
-        session.flush()
+    if room_id is not None:
+        location_room = session.get(RoomRecord, room_id)
+        floor = session.get(FloorRecord, location_room.floor_id) if location_room else None
+        building = session.get(BuildingRecord, floor.building_id) if floor else None
+        if not location_room or not floor or not building or (organization_id and building.organization_id != organization_id):
+            raise ValueError("Выбранный кабинет не найден в вашей организации.")
+        organization_id = building.organization_id
+        normalized_room = f"{building.name} / {floor.name} / {location_room.name}"
+        room = session.scalar(select(VisionRoomRecord).where(VisionRoomRecord.location_room_id == location_room.id))
+        if room is None:
+            room = VisionRoomRecord(
+                name=normalized_room, organization_id=organization_id,
+                location_room_id=location_room.id, created_at=datetime.now(UTC),
+            )
+            session.add(room)
+            session.flush()
+    else:
+        normalized_room = " ".join((room_name or "").strip().split())
+        if not normalized_room:
+            raise ValueError("Выберите кабинет из структуры школы.")
+        room = session.scalar(select(VisionRoomRecord).where(VisionRoomRecord.name == normalized_room, VisionRoomRecord.organization_id == organization_id))
+        if room is None:
+            # Legacy scans can still be opened by administrators, but remain deliberately
+            # unlinked and therefore invisible to location-scoped staff.
+            room = VisionRoomRecord(name=normalized_room, organization_id=organization_id, created_at=datetime.now(UTC))
+            session.add(room)
+            session.flush()
     scan_id = uuid4()
     storage = settings.vision_storage_root.resolve()
     storage.mkdir(parents=True, exist_ok=True)

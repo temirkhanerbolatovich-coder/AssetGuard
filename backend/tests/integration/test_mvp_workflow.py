@@ -66,7 +66,13 @@ async def _complete_mvp_workflow() -> None:
         assert location_update.json()["floor"] == "2"
         location_tree = await client.get("/admin/locations/tree", headers=admin_headers())
         assert location_tree.status_code == 200
-        room = location_tree.json()[0]["floors"][0]["rooms"][0]
+        room = next(
+            room
+            for building in location_tree.json()
+            for floor in building["floors"]
+            for room in floor["rooms"]
+            if room["name"] == "205"
+        )
         assert room["name"] == "205"
         assert room["asset_count"] == 1
         room_report = await client.get(f"/admin/locations/rooms/{room['id']}/report", headers=admin_headers())
@@ -84,7 +90,11 @@ async def _complete_mvp_workflow() -> None:
             "file": ("assetguard-assets.pdf", pdf_export.content, "application/pdf"),
         })
         assert pdf_preview.status_code == 200
-        assert pdf_preview.json() == {"rows": 1, "creates": 0, "updates": 1, "applied": False}
+        assert pdf_preview.json()["rows"] == 1
+        assert pdf_preview.json()["creates"] == 0
+        assert pdf_preview.json()["updates"] == 1
+        assert pdf_preview.json()["applied"] is False
+        assert pdf_preview.json()["samples"][0]["inventory_number"] == "PC-E2E-001"
         qr = await client.get(f"/admin/assets/{asset_id}/qr.svg?public_url=https://demo.trycloudflare.com", headers=admin_headers())
         assert qr.status_code == 200
         assert qr.headers["content-type"].startswith("image/svg+xml")
@@ -92,12 +102,21 @@ async def _complete_mvp_workflow() -> None:
         worksheet = workbook.active
         worksheet.append(["inventory_number", "name", "asset_type", "organization", "building", "floor", "room"])
         worksheet.append(["XLSX-001", "Imported workstation", "Desktop", "Imported Organization", "Корпус Б", "3", "301"])
+        worksheet.append(["XLSX-002", "Second imported workstation", "Desktop", "Imported Organization", "Корпус Б", "3", "302"])
         stream = BytesIO(); workbook.save(stream)
-        imported = await client.post("/admin/assets/import.xlsx?apply=true", headers=admin_headers(), files={
+        xlsx_preview = await client.post("/admin/assets/import.xlsx", headers=admin_headers(), files={
+            "file": ("assets.xlsx", stream.getvalue(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+        })
+        assert xlsx_preview.status_code == 200
+        assert [item["inventory_number"] for item in xlsx_preview.json()["items"]] == ["XLSX-001", "XLSX-002"]
+        imported = await client.post("/admin/assets/import.xlsx?apply=true", headers=admin_headers(), data={"exclude_row": "0"}, files={
             "file": ("assets.xlsx", stream.getvalue(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
         })
         assert imported.status_code == 200
         assert imported.json()["creates"] == 1
+        imported_assets = (await client.get("/admin/assets", headers=admin_headers())).json()
+        assert "XLSX-001" not in {asset["inventory_number"] for asset in imported_assets}
+        assert "XLSX-002" in {asset["inventory_number"] for asset in imported_assets}
         russian_workbook = Workbook()
         russian_sheet = russian_workbook.active
         russian_sheet.append(["Инвентарный номер", "Наименование", "Тип оборудования", "Корпус", "Этаж", "Кабинет"])
@@ -107,7 +126,11 @@ async def _complete_mvp_workflow() -> None:
             "file": ("school-register.xlsx", russian_stream.getvalue(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
         })
         assert russian_preview.status_code == 200
-        assert russian_preview.json() == {"rows": 1, "creates": 1, "updates": 0, "applied": False}
+        assert russian_preview.json()["rows"] == 1
+        assert russian_preview.json()["creates"] == 1
+        assert russian_preview.json()["updates"] == 0
+        assert russian_preview.json()["applied"] is False
+        assert russian_preview.json()["samples"][0]["inventory_number"] == "RU-XLSX-001"
         russian_applied = await client.post("/admin/assets/import.xlsx?apply=true", headers=admin_headers(), files={
             "file": ("school-register.xlsx", russian_stream.getvalue(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
         })
@@ -190,4 +213,4 @@ async def _complete_mvp_workflow() -> None:
         assert (await client.get("/admin/assets", headers=viewer_headers)).status_code == 200
         assert (await client.post("/admin/assets", headers=viewer_headers, json={
             "inventory_number": "DENIED", "name": "Denied", "asset_type": "Other",
-        })).status_code == 401
+        })).status_code == 404

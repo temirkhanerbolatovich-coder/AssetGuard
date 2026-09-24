@@ -11,26 +11,32 @@
 <body>
 <header class="app-header">
   <a class="brand" href="#overview" aria-label="AssetGuard, на главную"><span class="brand-mark" aria-hidden="true">A</span><span><strong>AssetGuard</strong><small>Контроль IT-активов</small></span></a>
-  <nav class="main-nav" aria-label="Основная навигация"><a href="#overview">Обзор</a><a href="#locations">Локации</a><a href="#devices">Устройства</a><a href="#agent-workflow">Как работает Agent</a><a href="#vision">Vision</a></nav>
+  <button id="nav-toggle" class="nav-toggle button-secondary" type="button" aria-expanded="false" aria-controls="main-nav" aria-label="Открыть меню">☰ <span>Разделы</span></button>
+  <nav id="main-nav" class="main-nav" aria-label="Основная навигация"><a href="#overview">Обзор</a><a href="#locations">Кабинеты</a><a href="#location-access" id="location-access-nav" hidden>Сотрудники</a><a href="#devices">Имущество и компьютеры</a><a href="#agent-workflow">Как работает Agent</a><a href="#vision">Проверка по фото</a></nav>
   <form id="token-form" class="token-form">
-    <input id="username" autocomplete="username" placeholder="Логин">
-    <input id="token" type="password" autocomplete="current-password" placeholder="Пароль или токен" required>
+    <label class="sr-only" for="username">Логин сотрудника</label><input id="username" autocomplete="username" placeholder="Логин">
+    <label class="sr-only" for="token">Пароль сотрудника или ключ администратора</label><input id="token" type="password" autocomplete="current-password" placeholder="Пароль / ключ администратора" required>
     <button>Войти</button><button id="logout" type="button" class="button-quiet">Выйти</button>
+    <small class="login-help">Сотрудник: логин и пароль. Для входа по ключу администратора оставьте логин пустым.</small>
   </form>
 </header>
 
 <main>
-  <div class="page-intro"><div><span class="eyebrow">Состояние инфраструктуры</span><h1>Центр контроля</h1></div><p id="status" class="status" role="status">Войдите, чтобы загрузить актуальные данные.</p></div>
+  <div class="page-intro"><div><span class="eyebrow">Состояние инфраструктуры</span><div class="title-line"><h1>Центр контроля</h1><a id="location-access-shortcut" class="access-shortcut" href="#location-access" hidden>Пользователи и доступы</a></div></div><p id="status" class="status" role="status">Войдите, чтобы загрузить актуальные данные.</p></div>
 
   <section id="overview" class="page-section overview-section">
     <div id="attention-banner" class="attention-banner is-loading"><span class="attention-icon" aria-hidden="true">…</span><div><strong>Загружаем состояние устройств</strong><p>Проверяем последнюю инвентаризацию и открытые изменения.</p></div></div>
+    <section id="setup-guide" class="panel setup-guide" aria-live="polite" hidden>
+      <div class="section-heading"><div><span class="eyebrow">Быстрый старт</span><h2>Подготовьте AssetGuard к работе</h2><p>Выполните первые шаги. Компьютеры можно подключить позже — ручной учёт имущества тоже работает.</p></div><span id="setup-progress" class="status-pill neutral">0 из 3</span></div>
+      <div id="setup-steps" class="setup-steps"></div>
+    </section>
     <div class="metrics" aria-label="Ключевые показатели">
-      <article><span>Под контролем</span><strong id="devices-count">—</strong><small>устройств</small></article>
-      <article><span>В норме</span><strong id="online-count">—</strong><small>актуальная связь</small></article>
-      <article><span>Требуют внимания</span><strong id="attention-count">—</strong><small>изменения или обращения</small></article>
-      <article><span>Не проверено</span><strong id="unchecked-count">—</strong><small>нет связи или эталона</small></article>
+      <article><span>В реестре</span><strong id="devices-count">—</strong><small>позиций имущества</small></article>
+      <article><span>Компьютеры на связи</span><strong id="online-count">—</strong><small>последний отчёт актуален</small></article>
+      <article><span>Требуют внимания</span><strong id="attention-count">—</strong><small>изменения на компьютерах</small></article>
+      <article><span>Нет данных Agent</span><strong id="unchecked-count">—</strong><small>компьютеры без актуального отчёта</small></article>
     </div>
-    <article class="panel operations-panel"><div class="section-heading"><div><span class="eyebrow">Эксплуатация</span><h2>Состояние сервиса</h2></div><span id="operations-status" class="status-pill neutral">Загрузка…</span></div><div id="operations-summary" class="summary-lines"><div class="skeleton"></div></div></article>
+    <details class="panel operations-panel"><summary class="operations-summary"><span><span class="eyebrow">Для IT-специалиста</span><strong>Техническое состояние сервиса</strong></span><span id="operations-status" class="status-pill neutral">Загрузка…</span></summary><div id="operations-summary" class="summary-lines"><div class="skeleton"></div></div></details>
     <article id="incident-spotlight" class="panel incident-spotlight">
       <div class="section-heading"><div><span class="eyebrow">Реальный кейс из данных Agent</span><h2>Последний инцидент</h2></div><span id="incident-spotlight-status" class="status-pill neutral">—</span></div>
       <div id="incident-spotlight-body"><div class="skeleton"></div></div>
@@ -46,42 +52,58 @@
   </section>
 
   <section id="locations" class="page-section">
-    <div class="section-heading page-heading"><div><span class="eyebrow">Структура школы</span><h2>Локации</h2><p>Корпуса, этажи и кабинеты теперь являются отдельными объектами. У кабинета можно указать ответственного и открыть сводку закреплённого оборудования.</p></div></div>
+    <div class="section-heading page-heading"><div><span class="eyebrow">Структура школы</span><h2>Кабинеты</h2><p>Сначала создайте корпус, затем этаж и кабинеты. В кабинете можно назначить ответственного и посмотреть закреплённое имущество.</p></div></div>
     <div class="overview-grid">
       <article class="panel"><div class="section-heading"><div><span class="eyebrow">Иерархия</span><h3>Организация → корпус → этаж → кабинет</h3></div></div><div id="location-tree" class="stack-list"><div class="skeleton"></div></div></article>
-      <article class="panel"><span class="eyebrow">Добавить корпус</span><h3>Новая локация</h3><form id="create-building" class="create-form"><label>Название корпуса<input name="name" placeholder="Главный корпус" required></label><label>Ответственный<input name="responsible_name" placeholder="ФИО"></label><label>Контакт<input name="responsible_contact" placeholder="Телефон или email"></label><button>Создать корпус</button></form><div id="location-report" class="summary-lines"><p class="empty">Откройте сводку кабинета в дереве.</p></div></article>
+      <article class="panel"><span class="eyebrow">Шаг 1 · структура школы</span><h3>Добавить корпус</h3><p class="form-intro">Создайте корпус — затем добавьте этажи и кабинеты в дереве слева.</p><form id="create-building" class="create-form"><label>Название корпуса<input name="name" placeholder="Например, Главный корпус" required></label><label>Ответственный<input name="responsible_name" placeholder="ФИО (необязательно)"></label><label>Контакт<input name="responsible_contact" placeholder="Телефон или почта"></label><button>Добавить корпус</button></form><div id="location-report" class="summary-lines"><p class="empty">Выберите кабинет в структуре слева, чтобы посмотреть его сводку.</p></div></article>
+    </div>
+  </section>
+
+  <section id="location-access" class="page-section" hidden>
+    <div id="access-role-notice" class="attention-banner" hidden></div>
+    <div id="access-admin-content">
+    <div class="section-heading page-heading"><div><span class="eyebrow">Администрирование</span><h2>Сотрудники и доступ</h2><p>Сначала создайте учётную запись, затем выберите, какие кабинеты сотрудник увидит и сможет редактировать.</p></div></div>
+    <p id="access-load-error" class="attention-banner error" hidden></p>
+    <div class="overview-grid access-grid">
+      <article class="panel"><span class="eyebrow">Шаг 1 из 2</span><h3>Создать сотрудника</h3><p class="form-intro">Задайте логин, временный пароль и роль. После создания выберите кабинеты для доступа.</p><p id="user-organization-hint" class="access-hint" hidden>Сначала создайте корпус во вкладке «Кабинеты» — организация появится в этом списке.</p><form id="create-user" class="access-form"><label>Логин<input name="username" autocomplete="off" required maxlength="128"></label><label>Временный пароль<input name="password" type="password" minlength="12" autocomplete="new-password" required><small>Не менее 12 символов. Передайте сотруднику безопасным способом.</small></label><label>Школа<select name="organization_id" id="user-organization" required></select></label><label>Роль<select name="role"><option value="INVENTORY_CLERK">Ответственный за инвентаризацию</option><option value="LOCATION_MANAGER">Менеджер локации</option><option value="VIEWER">Наблюдатель</option><option value="ADMIN">Администратор школы</option></select></label><button type="submit">Создать пользователя</button></form></article>
+      <article id="assign-user-panel" class="panel"><span class="eyebrow">Шаг 2 из 2</span><h3>Назначить кабинеты и права</h3><p class="form-intro">Сотрудник увидит только выбранную область школы. Назначение можно изменить или отозвать позже.</p><form id="grant-location-access" class="access-form"><label>Сотрудник<select name="user_id" id="access-user" required></select></label><label>Корпус, этаж или кабинет<select name="scope" id="access-scope" required></select></label><label>Права<select name="permission"><option value="VIEWER">Только просмотр</option><option value="EDITOR">Просмотр и редактирование имущества</option></select></label><button type="submit">Назначить доступ</button></form><p class="meta access-hint">Роль описывает должность сотрудника; эти права задают, что ему можно делать в выбранной области.</p></article>
+    </div>
+    <article class="panel"><div class="section-heading"><div><span class="eyebrow">Контроль доступа</span><h3>Текущие назначения</h3></div><button id="refresh-access" class="button-secondary" type="button">Обновить</button></div><div id="location-access-list" class="access-list"><p class="empty">Загрузка пользователей и назначений…</p></div></article>
     </div>
   </section>
 
   <section id="devices" class="page-section">
-    <div class="section-heading page-heading"><div><span class="eyebrow">Реестр</span><h2>Устройства</h2><p>Нажмите на название устройства или кнопку «Открыть карточку», чтобы увидеть данные Agent, оборудование и историю изменений.</p></div><div class="actions"><button id="export-assets" class="button-secondary">Экспорт Excel</button><button id="export-assets-pdf" class="button-secondary">Экспорт PDF</button><button id="import-assets" class="button-secondary">Импорт Excel</button><input id="import-assets-file" type="file" accept=".xlsx" hidden><button id="import-assets-pdf" class="button-secondary">Импорт PDF</button><input id="import-assets-pdf-file" type="file" accept=".pdf,application/pdf" hidden><button id="show-create">Добавить актив</button></div></div>
+    <div class="section-heading page-heading"><div><span class="eyebrow">Реестр школы</span><h2>Имущество и компьютеры</h2><p>Ищите оборудование школы и открывайте карточку. Компьютеры Agent появятся здесь автоматически; если компьютер не связан с записью учёта, его можно привязать.</p></div><div class="actions registry-actions"><details id="registry-tools" class="registry-tools"><summary>Импорт и экспорт</summary><div class="registry-tools-menu"><button id="import-assets" class="button-secondary" type="button">Загрузить Excel</button><input id="import-assets-file" type="file" accept=".xlsx" hidden><button id="import-assets-pdf" class="button-secondary" type="button">Загрузить PDF</button><input id="import-assets-pdf-file" type="file" accept=".pdf,application/pdf" hidden><hr><button id="export-assets" class="button-secondary" type="button">Скачать Excel</button><button id="export-assets-pdf" class="button-secondary" type="button">Скачать PDF</button></div></details><button id="show-create" type="button">Добавить имущество</button></div></div>
     <form id="create-asset" class="create-form panel" hidden>
-      <label>Инвентарный номер<input name="inventory_number" required></label><label>Название<input name="name" required></label>
-      <label>Категория<select name="category"><option value="IT">IT-оборудование</option><option value="FURNITURE">Мебель</option><option value="SPORTS">Спортинвентарь</option><option value="EDUCATIONAL">Учебное оборудование</option><option value="OTHER">Другое имущество</option></select></label>
-      <label>Тип<select name="asset_type"><option value="Desktop">Стационарный ПК</option><option value="Laptop">Ноутбук</option><option value="Printer">Принтер</option><option value="Projector">Проектор</option><option value="Network">Сеть</option><option value="Furniture">Мебель</option><option value="Sports">Спортинвентарь</option><option value="Educational">Учебное</option><option value="Other">Другое</option></select></label><label>Учёт<select name="tracking_mode"><option value="INDIVIDUAL">Поштучный</option><option value="GROUPED">Групповой</option></select></label><label>Количество<input name="quantity" type="number" min="1" value="1" required></label>
-      <label>Корпус<input name="building" placeholder="Корпус А"></label><label>Этаж<input name="floor" placeholder="2"></label><label>Кабинет<input name="room" placeholder="205"></label><button>Создать</button>
+      <div class="form-heading"><div><span class="eyebrow">Новая запись</span><h3>Добавить имущество школы</h3><p>Укажите номер и тип. Если это групповой учёт, задайте общее количество.</p></div><button id="cancel-create" class="button-secondary" type="button">Отмена</button></div>
+      <label>Инвентарный номер<input name="inventory_number" required placeholder="Например, INV-205-014"></label><label>Название<input name="name" required placeholder="Например, Ноутбук Lenovo"></label>
+      <label>Тип имущества<select name="asset_type" id="asset-type"><optgroup label="Компьютеры и IT"><option value="Desktop">Стационарный компьютер</option><option value="Laptop">Ноутбук</option><option value="Printer">Принтер</option><option value="Projector">Проектор</option><option value="Network">Сетевое оборудование</option></optgroup><optgroup label="Остальное имущество"><option value="Furniture">Мебель</option><option value="Sports">Спортинвентарь</option><option value="Educational">Учебное оборудование</option><option value="Other">Другое</option></optgroup></select></label><label>Способ учёта<select name="tracking_mode" id="asset-tracking-mode"><option value="INDIVIDUAL">Поштучно</option><option value="GROUPED">Группой (одинаковые предметы)</option></select></label><label id="asset-quantity-field" hidden>Количество<input name="quantity" type="number" min="1" value="1" required></label>
+      <label class="room-select-field">Кабинет<select name="room_id" id="create-asset-room"></select><small>Выберите кабинет из структуры школы, чтобы отчёты и доступы работали корректно.</small></label><div class="form-actions"><button type="submit">Сохранить имущество</button></div>
     </form>
     <div class="device-toolbar panel">
       <label class="search-field"><span class="sr-only">Поиск устройств</span><input id="device-search" type="search" placeholder="Поиск устройств…"></label>
-      <label><span>Статус</span><select id="device-status-filter"><option value="">Все статусы</option><option value="OK">В норме</option><option value="ATTENTION">Требует внимания</option><option value="UNCHECKED">Не проверено</option></select></label>
-      <label><span>Категория</span><select id="device-category-filter"><option value="">Все категории</option><option value="IT">IT</option><option value="FURNITURE">Мебель</option><option value="SPORTS">Спорт</option><option value="EDUCATIONAL">Учебное</option><option value="OTHER">Другое</option></select></label><label><span>Кабинет</span><select id="device-room-filter"><option value="">Все кабинеты</option></select></label>
-      <label class="checkbox-filter"><input id="device-change-filter" type="checkbox"> Только с изменениями</label>
-      <label><span>Сортировка</span><select id="device-sort"><option value="recent">Сначала активные</option><option value="attention">Сначала проблемные</option><option value="name">По названию</option></select></label>
+      <details class="device-filters"><summary>Фильтры <span id="device-active-filter-count" class="filter-count" hidden></span></summary><div class="device-filter-grid">
+        <label>Статус<select id="device-status-filter"><option value="">Все статусы</option><option value="OK">В норме</option><option value="ATTENTION">Требует внимания</option><option value="UNCHECKED">Не проверено</option></select></label>
+        <label>Категория<select id="device-category-filter"><option value="">Все категории</option><option value="IT">Компьютеры и IT</option><option value="FURNITURE">Мебель</option><option value="SPORTS">Спорт</option><option value="EDUCATIONAL">Учебное</option><option value="OTHER">Другое</option></select></label><label>Кабинет<select id="device-room-filter"><option value="">Все кабинеты</option></select></label>
+        <label class="checkbox-filter"><input id="device-change-filter" type="checkbox"> Только с изменениями</label>
+        <label>Сортировка<select id="device-sort"><option value="recent">Сначала активные</option><option value="attention">Сначала проблемные</option><option value="name">По названию</option></select></label>
+      </div><button id="clear-device-filters" class="button-link" type="button">Сбросить фильтры</button></details>
     </div>
     <div class="panel table-panel"><div class="table-wrap"><table><thead><tr><th>Устройство</th><th>Расположение</th><th>Состояние</th><th>Последняя проверка</th><th>Оборудование</th><th>Действие</th></tr></thead><tbody id="assets"><tr><td colspan="6"><div class="skeleton"></div></td></tr></tbody></table></div><p id="device-result-count" class="table-footer"></p></div>
   </section>
 
   <section id="detail" class="page-section detail-section" hidden>
-    <button id="detail-back" class="button-link">← Ко всем устройствам</button>
-    <div class="device-hero panel"><div><span class="eyebrow">Карточка устройства</span><div class="title-line"><h2 id="detail-title">Устройство</h2><span id="detail-status"></span></div><p id="detail-meta"></p></div><div id="detail-actions" class="actions"></div></div>
+    <button id="detail-back" class="button-link">← Ко всему имуществу</button>
+    <div class="device-hero panel"><div><span class="eyebrow">Карточка имущества</span><div class="title-line"><h2 id="detail-title">Устройство</h2><span id="detail-status"></span></div><p id="detail-meta"></p></div><div id="detail-actions" class="actions"></div></div>
+    <div id="detail-agent-guidance" class="attention-banner" hidden></div>
     <div class="detail-overview-grid">
       <article class="panel"><span class="eyebrow">Общая информация</span><h3>Устройство</h3><dl id="device-general" class="facts"></dl></article>
-      <article class="panel"><span class="eyebrow">Система</span><h3>Windows и BIOS</h3><dl id="device-system" class="facts"></dl></article>
-      <article class="panel"><span class="eyebrow">Идентификация</span><h3>Надёжные идентификаторы</h3><dl id="device-identifiers" class="facts"></dl></article>
+      <article id="system-detail-panel" class="panel"><span class="eyebrow">Система</span><h3>Windows и BIOS</h3><dl id="device-system" class="facts"></dl></article>
+      <article id="identifiers-detail-panel" class="panel"><span class="eyebrow">Идентификация</span><h3>Надёжные идентификаторы</h3><dl id="device-identifiers" class="facts"></dl></article>
     </div>
-    <div class="section-heading subsection-heading"><div><span class="eyebrow">Последняя инвентаризация</span><h2>Состав оборудования</h2></div><span id="snapshot-meta" class="meta"></span></div>
+    <div id="agent-inventory-heading" class="section-heading subsection-heading"><div><span class="eyebrow">Последняя инвентаризация Agent</span><h2>Состав компьютера</h2></div><span id="snapshot-meta" class="meta"></span></div>
     <div id="current-hardware" class="hardware-grid"></div>
-    <article class="panel baseline-panel">
+    <article id="agent-change-control" class="panel baseline-panel">
       <div class="section-heading"><div><span class="eyebrow">Контроль изменений</span><h2>Эталон и изменения</h2><p id="baseline-summary"></p></div><div id="baseline-action"></div></div>
       <div id="detail-changes" class="change-list"></div>
       <details class="baseline-details"><summary>Показать эталонный состав</summary><div id="baseline-hardware" class="hardware-grid"></div></details>
@@ -104,7 +126,7 @@
     <div class="section-heading page-heading"><div><span class="eyebrow">Физическая инвентаризация</span><h2>AssetGuard Vision</h2><p>AI показывает расхождения с эталоном. Итоговое решение принимает человек.</p></div><span id="vision-status-badge" class="status-pill neutral">Не проверено</span></div>
     <div class="panel">
       <ol class="stepper" aria-label="Этапы инвентаризации"><li class="active">Выберите кабинет</li><li>Загрузите фото</li><li>Проверьте результат</li><li>Подтвердите эталон</li></ol>
-      <form id="vision-upload" class="vision-upload"><label>Кабинет<input id="vision-room-name" name="room_name" value="Room 305" maxlength="255" required></label><label>Связанный актив <select id="vision-asset-id" name="asset_id"><option value="">Не привязывать к устройству</option></select></label><label>Фото помещения<input id="vision-file" name="image" type="file" accept="image/jpeg,image/png" required></label><button id="vision-run">Провести анализ</button></form>
+      <form id="vision-upload" class="vision-upload"><label>Кабинет из структуры школы<select id="vision-location-room" name="location_room_id" required><option value="">Сначала создайте корпус, этаж и кабинет</option></select></label><label>Связанный актив <select id="vision-asset-id" name="asset_id"><option value="">Не привязывать к устройству</option></select></label><label>Фото помещения<input id="vision-file" name="image" type="file" accept="image/jpeg,image/png" required></label><button id="vision-run">Провести анализ</button></form>
       <p id="vision-progress" class="meta" role="status">Первый анализ может занять больше времени: модель загружается и инициализируется.</p>
       <div id="vision-result" class="vision-result" hidden><div class="vision-image-panel"><img id="vision-image" alt="Результат анализа помещения"></div><div><div class="section-heading"><div><span class="eyebrow">Результат</span><h3 id="vision-room-title">Кабинет</h3></div><button id="vision-baseline" class="button-secondary">Подтвердить как эталон</button></div><div class="vision-detail-grid"><div><h4>Обнаружено</h4><div id="vision-counts"></div></div><div><h4>Сравнение с эталоном</h4><div id="vision-comparison"></div></div></div></div></div>
       <div class="section-heading vision-history-heading"><h3>История проверок</h3><select id="vision-room-select"><option value="">Проверок пока нет</option></select></div><div id="vision-history" class="vision-history"></div>
@@ -112,7 +134,9 @@
   </section>
 </main>
 
-<dialog id="link-dialog"><form id="link-form" method="dialog"><span class="eyebrow">Привязка</span><h2>Связать устройство с активом</h2><p id="link-target"></p><select id="link-asset" required></select><div class="actions"><button id="link-cancel" type="button" class="button-secondary">Отмена</button><button id="link-confirm" value="default">Связать</button></div></form></dialog>
+<dialog id="import-preview-dialog"><span class="eyebrow">Предварительная проверка</span><h2>Проверьте позиции импорта</h2><p id="import-preview-file" class="form-intro"></p><div class="import-preview-counts"><div><span>Выбрано к импорту</span><strong id="import-preview-rows">—</strong></div><div><span>Новые записи</span><strong id="import-preview-creates">—</strong></div><div><span>Будут обновлены</span><strong id="import-preview-updates">—</strong></div></div><p id="import-preview-note" class="import-preview-note"></p><div class="import-preview-toolbar"><label>Найти позицию<input id="import-preview-search" type="search" placeholder="Инвентарный номер или название"></label><label class="import-preview-select-page"><input id="import-preview-select-page" type="checkbox" checked> Выбрать строки на странице</label><span id="import-preview-page-info" class="meta" aria-live="polite"></span><div class="import-preview-pagination"><button id="import-preview-prev" class="button-secondary" type="button">Назад</button><button id="import-preview-next" class="button-secondary" type="button">Далее</button></div></div><div id="import-preview-samples" class="import-preview-samples"></div><form id="import-preview-form" method="dialog" class="actions"><button id="cancel-import-preview" class="button-secondary" value="cancel">Отмена</button><button id="apply-import-preview" value="apply">Импортировать выбранные</button></form></dialog>
+<dialog id="location-create-dialog"><form id="location-create-form"><span id="location-create-eyebrow" class="eyebrow">Структура школы</span><h2 id="location-create-title">Новая локация</h2><p id="location-create-help" class="form-intro"></p><label>Название<input id="location-create-name" name="name" required maxlength="255" placeholder="Например, 205"></label><label id="location-responsible-field" hidden>Ответственный за кабинет<input id="location-create-responsible" name="responsible_name" maxlength="255" placeholder="ФИО (необязательно)"></label><label id="location-contact-field" hidden>Контакт ответственного<input id="location-create-contact" name="responsible_contact" maxlength="255" placeholder="Телефон или почта"></label><div class="actions"><button id="location-create-cancel" type="button" class="button-secondary">Отмена</button><button id="location-create-submit" type="submit">Создать</button></div></form></dialog>
+<dialog id="link-dialog"><form id="link-form" method="dialog"><span class="eyebrow">Привязка</span><h2>Связать компьютер с имуществом</h2><p id="link-target"></p><label>Запись школьного учёта<select id="link-asset" required></select></label><div class="actions"><button id="link-cancel" type="button" class="button-secondary">Отмена</button><button id="link-confirm" value="default">Связать</button></div></form></dialog>
 <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 <script src="/app.js"></script>
 </body>

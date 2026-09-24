@@ -14,6 +14,7 @@ from assetguard.infrastructure.config import get_settings
 from assetguard.infrastructure.database import get_session
 from assetguard.interfaces.http.admin_assets import require_admin, require_viewer
 from assetguard.modules.identity.auth import AuthPrincipal
+from assetguard.modules.identity.location_access import permitted_room_ids, require_room_access
 from assetguard.modules.vision.detector import get_detector
 from assetguard.modules.vision.models import (
     VisionBaselineRecord, VisionDetectionRecord, VisionRoomRecord, VisionScanRecord,
@@ -33,6 +34,11 @@ def scoped_room(session: Session, room_id: UUID, principal: AuthPrincipal) -> Vi
     room = session.get(VisionRoomRecord, room_id)
     if not room or (principal.organization_id and room.organization_id != principal.organization_id):
         raise HTTPException(404, "Vision room was not found.")
+    allowed_rooms = permitted_room_ids(session, principal)
+    if allowed_rooms is not None:
+        if room.location_room_id is None:
+            raise HTTPException(404, "Vision room was not found.")
+        require_room_access(session, room.location_room_id, principal)
     return room
 
 
@@ -49,6 +55,13 @@ def scan_view(session: Session, scan: VisionScanRecord) -> dict:
         VisionDetectionRecord.scan_id == scan.id,
     ).order_by(VisionDetectionRecord.class_name, VisionDetectionRecord.confidence.desc())))
     asset = session.get(AssetRecord, scan.asset_id) if scan.asset_id else None
+    room = session.get(VisionRoomRecord, scan.room_id)
+    if asset and room and room.location_room_id is not None and (
+        asset.organization_id != room.organization_id or asset.room_id != room.location_room_id
+    ):
+        # Older uploads could link any asset from a tenant to a named Vision room.
+        # Do not expose that cross-room reference after the room is access-scoped.
+        asset = None
     return {
         "id": str(scan.id), "room_id": str(scan.room_id), "created_at": scan.created_at,
         "asset": None if asset is None else {
@@ -67,11 +80,12 @@ def scan_view(session: Session, scan: VisionScanRecord) -> dict:
 
 @router.post("/scans", status_code=201)
 def upload_scan(
-    room_name: Annotated[str, Form(min_length=1, max_length=255)],
     image: Annotated[UploadFile, File()],
     session: Annotated[Session, Depends(get_session)],
     principal: Annotated[AuthPrincipal, Depends(require_admin)],
     asset_id: Annotated[UUID | None, Form()] = None,
+    location_room_id: Annotated[UUID | None, Form()] = None,
+    room_name: Annotated[str | None, Form(max_length=255)] = None,
 ):
     settings = get_settings()
     if image.content_type not in {"image/jpeg", "image/png"}:
@@ -83,11 +97,16 @@ def upload_scan(
         asset = session.get(AssetRecord, asset_id) if asset_id else None
         if asset_id and (not asset or (principal.organization_id and asset.organization_id != principal.organization_id)):
             raise HTTPException(404, "Asset was not found.")
-        scan = create_scan(session, room_name=room_name, payload=payload, detector=get_detector(), asset_id=asset_id, organization_id=principal.organization_id)
+        if asset_id and location_room_id is not None and asset.room_id != location_room_id:
+            raise HTTPException(422, "Связанный актив должен находиться в выбранном кабинете.")
+        scan = create_scan(
+            session, room_name=room_name, room_id=location_room_id, payload=payload,
+            detector=get_detector(), asset_id=asset_id, organization_id=principal.organization_id,
+        )
     except ValueError as error:
         raise HTTPException(422, str(error)) from error
     except RuntimeError as error:
-        logger.exception("vision_scan_runtime_error room=%s", room_name)
+        logger.exception("vision_scan_runtime_error room=%s", location_room_id or room_name)
         raise HTTPException(503, str(error)) from error
     return scan_view(session, scan)
 
@@ -98,6 +117,9 @@ def rooms(session: Annotated[Session, Depends(get_session)], principal: Annotate
     query = select(VisionRoomRecord).order_by(VisionRoomRecord.name)
     if principal.organization_id:
         query = query.where(VisionRoomRecord.organization_id == principal.organization_id)
+    allowed_rooms = permitted_room_ids(session, principal)
+    if allowed_rooms is not None:
+        query = query.where(VisionRoomRecord.location_room_id.in_(allowed_rooms))
     for room in session.scalars(query):
         latest = session.scalar(select(VisionScanRecord).where(
             VisionScanRecord.room_id == room.id,
