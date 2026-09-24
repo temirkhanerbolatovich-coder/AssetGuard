@@ -227,6 +227,42 @@ def export_assets_xlsx(session: Annotated[Session, Depends(get_session)]):
     )
 
 
+IMPORT_COLUMN_ALIASES = {
+    "inventory_number": {"inventory_number", "inventory number", "инвентарный номер", "инв. номер", "инв номер", "инвентарный№"},
+    "name": {"name", "название", "наименование", "оборудование", "устройство"},
+    "asset_type": {"asset_type", "asset type", "тип", "тип оборудования", "вид оборудования"},
+    "status": {"status", "статус", "состояние"},
+    "organization": {"organization", "организация", "учреждение", "школа"},
+    "building": {"building", "корпус", "здание"},
+    "floor": {"floor", "этаж"},
+    "room": {"room", "кабинет", "аудитория", "помещение"},
+    "notes": {"notes", "примечание", "комментарий"},
+}
+
+
+def _normalize_import_header(value: object) -> str:
+    return " ".join(str(value).strip().lower().replace("ё", "е").split())
+
+
+def _canonical_import_columns(header: tuple[object, ...]) -> dict[str, int]:
+    raw = {_normalize_import_header(value): index for index, value in enumerate(header) if value is not None}
+    return {
+        field: next((raw[alias] for alias in aliases if alias in raw), None)
+        for field, aliases in IMPORT_COLUMN_ALIASES.items()
+    }
+
+
+def _asset_type_from_import(value: str | None) -> str | None:
+    if not value:
+        return value
+    normalized = value.lower().replace("ё", "е").strip()
+    if normalized in {"desktop", "пк", "компьютер", "стационарный", "стационарный компьютер"}:
+        return "Desktop"
+    if normalized in {"laptop", "ноутбук"}:
+        return "Laptop"
+    return "Other" if normalized not in {"other", "прочее", "другое"} else "Other"
+
+
 def _import_row_values(row: dict[str, object], row_number: int) -> dict[str, str | None]:
     required = ("inventory_number", "name", "asset_type")
     result = {key: (str(row.get(key)).strip() if row.get(key) is not None else None) for key in (
@@ -234,8 +270,7 @@ def _import_row_values(row: dict[str, object], row_number: int) -> dict[str, str
     )}
     if any(not result[key] for key in required):
         raise ValueError(f"Row {row_number}: inventory_number, name and asset_type are required.")
-    if result["asset_type"] not in {"Desktop", "Laptop", "Other"}:
-        raise ValueError(f"Row {row_number}: asset_type must be Desktop, Laptop or Other.")
+    result["asset_type"] = _asset_type_from_import(result["asset_type"])
     if len(result["inventory_number"] or "") > 128 or len(result["name"] or "") > 255:
         raise ValueError(f"Row {row_number}: inventory_number or name is too long.")
     return result
@@ -261,16 +296,16 @@ def import_assets_xlsx(
     header = next(rows, None)
     if not header:
         raise HTTPException(422, "The workbook is empty.")
-    columns = {str(value).strip(): index for index, value in enumerate(header) if value is not None}
+    columns = _canonical_import_columns(header)
     required_columns = {"inventory_number", "name", "asset_type"}
-    if not required_columns <= columns.keys():
-        raise HTTPException(422, "Required columns: inventory_number, name, asset_type.")
+    if any(columns[column] is None for column in required_columns):
+        raise HTTPException(422, "Required columns: inventory_number, name, asset_type (or Russian equivalents).")
     parsed: list[dict[str, str | None]] = []
     try:
         for row_number, values in enumerate(rows, start=2):
             if not any(value not in (None, "") for value in values):
                 continue
-            parsed.append(_import_row_values({name: values[index] if index < len(values) else None for name, index in columns.items()}, row_number))
+            parsed.append(_import_row_values({name: values[index] if index is not None and index < len(values) else None for name, index in columns.items()}, row_number))
     except ValueError as error:
         raise HTTPException(422, str(error)) from error
     existing = {(organization.name, asset.inventory_number): asset for asset in session.scalars(select(AssetRecord).join(OrganizationRecord)) for organization in [session.get(OrganizationRecord, asset.organization_id)] if organization}

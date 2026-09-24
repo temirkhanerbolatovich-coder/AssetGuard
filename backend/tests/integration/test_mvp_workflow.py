@@ -80,6 +80,16 @@ async def _complete_mvp_workflow() -> None:
         })
         assert imported.status_code == 200
         assert imported.json()["creates"] == 1
+        russian_workbook = Workbook()
+        russian_sheet = russian_workbook.active
+        russian_sheet.append(["Инвентарный номер", "Наименование", "Тип оборудования", "Корпус", "Этаж", "Кабинет"])
+        russian_sheet.append(["RU-XLSX-001", "Школьный ноутбук", "Ноутбук", "Корпус В", "1", "101"])
+        russian_stream = BytesIO(); russian_workbook.save(russian_stream)
+        russian_preview = await client.post("/admin/assets/import.xlsx?apply=false", headers=admin_headers(), files={
+            "file": ("school-register.xlsx", russian_stream.getvalue(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+        })
+        assert russian_preview.status_code == 200
+        assert russian_preview.json() == {"rows": 1, "creates": 1, "updates": 0, "applied": False}
         assert (await client.post(f"/admin/endpoints/{endpoint_id}/asset/{asset_id}", headers=admin_headers())).status_code == 200
         asset_detail = await client.get(f"/admin/assets/{asset_id}", headers=admin_headers())
         assert asset_detail.json()["system"]["network_quality"]["average_latency_ms"] == 22.5
