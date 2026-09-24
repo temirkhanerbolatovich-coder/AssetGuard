@@ -9,7 +9,7 @@ Upstream GLPI Agent устанавливается отдельно: AssetGuard 
 - `install-background-demo.ps1` / `uninstall-background-demo.ps1` — управляют demo Scheduled Tasks;
 - `install-pilot-agent-schedule.ps1` — ставит отдельное расписание Agent на каждом pilot-компьютере; поддерживает необязательные измерения packet loss и задержки до указанной цели;
 - `install-assetguard-agent-service.ps1` / `uninstall-assetguard-agent-service.ps1` — ставят upstream GLPI Agent как обычную Windows-службу с автозапуском, recovery и защищённым минимальным AssetGuard profile. Это рекомендуемый путь для pilot-PC;
-- `build-agent-installer.ps1` — собирает `AssetGuard-Agent-Setup-0.1.2.exe`: мастер установки для передачи на другие Windows-компьютеры;
+- `build-agent-installer.ps1` — собирает `AssetGuard-Agent-Setup-0.1.3.exe`: мастер установки для передачи на другие Windows-компьютеры;
 - `start-free-public-demo.ps1` — поднимает контейнерный demo и временный публичный Cloudflare HTTPS URL;
 - `install-quick-tunnel-watchdog.ps1` / `uninstall-quick-tunnel-watchdog.ps1` — поддерживают Quick Tunnel после сбоя и при следующем входе в Windows; текущий URL находится в `%LOCALAPPDATA%\AssetGuard\quick-tunnel.json`;
 - `backup-database.ps1` / `restore-database.ps1` — создают AES-256-GCM encrypted backup, опционально копируют его на внешний диск или `rclone` remote и восстанавливают БД;
@@ -47,7 +47,7 @@ winget install --id JRSoftware.InnoSetup --exact --source winget
 .\scripts\windows\build-agent-installer.ps1
 ```
 
-Готовый файл появится в `installer-output\AssetGuard-Agent-Setup-0.1.2.exe` (эта папка намеренно не попадает в Git). Рядом передайте SHA-256, который покажет команда сборки. Для production-пилота перед распространением подпишите EXE сертификатом code signing: без подписи Windows SmartScreen может попросить дополнительное подтверждение.
+Готовый файл появится в `installer-output\AssetGuard-Agent-Setup-0.1.3.exe` (эта папка намеренно не попадает в Git). Рядом передайте SHA-256, который покажет команда сборки. Для production-пилота перед распространением подпишите EXE сертификатом code signing: без подписи Windows SmartScreen может попросить дополнительное подтверждение.
 
 На каждом целевом ПК:
 
@@ -58,7 +58,7 @@ winget install --id JRSoftware.InnoSetup --exact --source winget
 
 Установщик требует Windows x64, доступ к интернету и WinGet. На ПК без WinGet сначала установите официальный GLPI Agent 1.19 вручную; затем можно выполнить обычный service-скрипт с параметром `-SkipUpstreamInstall`.
 
-Откройте PowerShell **от имени администратора**. Установщик при необходимости использует официальный пакет `GLPI-Project.GLPI-Agent` из WinGet, но не модифицирует код GLPI Agent. Он создаёт только `etc/conf.d/99-assetguard.cfg`: профиль отключает processes, users, software, USB и прочие не нужные для инвентаризации категории; файл доступен лишь `SYSTEM` и локальным Administrators.
+Откройте PowerShell **от имени администратора**. Установщик при необходимости использует официальный пакет `GLPI-Project.GLPI-Agent` из WinGet, но не модифицирует код GLPI Agent. Он записывает профиль в используемый Windows-службой раздел реестра `HKLM\SOFTWARE\GLPI-Agent`: профиль отключает processes, users, software, USB и прочие не нужные для инвентаризации категории. Учётные данные доступны лишь `SYSTEM` и локальным Administrators; исходный ACL сохраняется и восстанавливается при удалении AssetGuard-конфигурации.
 
 ```powershell
 $secret = Read-Host 'Inventory secret' -AsSecureString

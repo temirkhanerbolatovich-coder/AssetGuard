@@ -3,12 +3,12 @@
 Installs or configures the upstream GLPI Agent as the AssetGuard Windows service.
 
 .DESCRIPTION
-The script installs the official GLPI Agent from WinGet when necessary, writes one
-AssetGuard-owned configuration fragment with a minimal hardware-only profile, and
-starts the upstream glpi-agent service. The inventory password is stored only in
-the local service configuration, protected with an ACL for SYSTEM and local
-Administrators. It is never written to a command line, Scheduled Task, log, or
-this repository.
+The script installs the official GLPI Agent from WinGet when necessary, writes an
+AssetGuard-owned profile to the Windows configuration backend used by the upstream
+service, and starts the upstream glpi-agent service. The inventory password is
+stored only in that local configuration, protected with an ACL for SYSTEM and
+local Administrators. It is never written to a command line, Scheduled Task, log,
+or this repository.
 
 Run from an elevated PowerShell window. An Administrator can intentionally stop,
 reconfigure, or remove the service; the script does not attempt to bypass Windows
@@ -33,7 +33,10 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $serviceName = 'glpi-agent'
-$managedFileName = '99-assetguard.cfg'
+$registryPath = 'HKLM:\SOFTWARE\GLPI-Agent'
+$registryAclBackupPath = Join-Path $env:ProgramData 'AssetGuard\glpi-agent-registry-acl.sddl'
+$legacyConfigPath = Join-Path $AgentRoot 'etc\conf.d\99-assetguard.cfg'
+$managedRegistryValues = @('server', 'user', 'password', 'no-category', 'no-compression', 'no-httpd', 'delaytime')
 
 function Test-Administrator {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -45,6 +48,32 @@ function Assert-SafeConfigValue([string]$Value, [string]$Name) {
     if ([string]::IsNullOrWhiteSpace($Value) -or $Value -match "[\r\n]") {
         throw "$Name must be a non-empty single-line value."
     }
+}
+
+function Protect-AgentRegistryConfiguration {
+    if (-not (Test-Path -LiteralPath $registryAclBackupPath)) {
+        $originalSddl = (Get-Acl -LiteralPath $registryPath).Sddl
+        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $registryAclBackupPath) | Out-Null
+        Set-Content -LiteralPath $registryAclBackupPath -Value $originalSddl -Encoding ascii -NoNewline
+        & icacls.exe $registryAclBackupPath '/inheritance:r' '/grant:r' '*S-1-5-18:(F)' '*S-1-5-32-544:(F)' | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "Could not protect '$registryAclBackupPath' with Windows ACLs." }
+    }
+
+    $acl = Get-Acl -LiteralPath $registryPath
+    $acl.SetAccessRuleProtection($true, $false)
+    foreach ($rule in @($acl.Access)) { [void]$acl.RemoveAccessRuleSpecific($rule) }
+    foreach ($sidValue in @('S-1-5-18', 'S-1-5-32-544')) {
+        $sid = [Security.Principal.SecurityIdentifier]::new($sidValue)
+        $rule = [Security.AccessControl.RegistryAccessRule]::new(
+            $sid,
+            [Security.AccessControl.RegistryRights]::FullControl,
+            [Security.AccessControl.InheritanceFlags]::None,
+            [Security.AccessControl.PropagationFlags]::None,
+            [Security.AccessControl.AccessControlType]::Allow
+        )
+        $acl.AddAccessRule($rule)
+    }
+    Set-Acl -LiteralPath $registryPath -AclObject $acl
 }
 
 if (-not (Test-Administrator)) {
@@ -88,31 +117,27 @@ try {
         }
     }
 
-    $configDirectory = Join-Path $AgentRoot 'etc\conf.d'
-    $configPath = Join-Path $configDirectory $managedFileName
-    $logDirectory = Join-Path $env:ProgramData 'AssetGuard\logs'
+    $upstreamLogPath = Join-Path $AgentRoot 'logs\glpi-agent.log'
     $excludedCategories = 'accesslog,antivirus,battery,database,environment,firewall,input,licenseinfo,local_group,local_user,lvm,modem,port,printer,process,provider,psu,registry,remote_mgmt,rudder,slot,software,sound,usb,user,virtualmachine'
-    $config = @"
-# Managed by AssetGuard. Remove with uninstall-assetguard-agent-service.ps1.
-# Upstream GLPI Agent remains unmodified; this file is loaded after agent.cfg.
-server = $($GatewayUri.AbsoluteUri)
-user = $AgentUsername
-password = $plainSecret
-no-category = $excludedCategories
-no-compression = 1
-no-httpd = 1
-delaytime = 60
-logger = File
-logfile = $logDirectory\glpi-agent.log
-"@
+    $configValues = @{
+        'server' = $GatewayUri.AbsoluteUri
+        'user' = $AgentUsername
+        'password' = $plainSecret
+        'no-category' = $excludedCategories
+        'no-compression' = '1'
+        'no-httpd' = '1'
+        'delaytime' = '60'
+    }
 
-    if ($PSCmdlet.ShouldProcess($configPath, 'Write protected AssetGuard hardware-only profile')) {
-        New-Item -ItemType Directory -Force -Path $configDirectory, $logDirectory | Out-Null
-        Set-Content -LiteralPath $configPath -Value $config -Encoding ascii -NoNewline
-        # Well-known SIDs work on every Windows language; localized group names
-        # such as "Administrators" do not resolve on a Russian installation.
-        & icacls.exe $configPath '/inheritance:r' '/grant:r' '*S-1-5-18:(F)' '*S-1-5-32-544:(F)' | Out-Null
-        if ($LASTEXITCODE -ne 0) { throw "Could not protect '$configPath' with Windows ACLs." }
+    if ($PSCmdlet.ShouldProcess($registryPath, 'Write protected AssetGuard hardware-only profile')) {
+        Protect-AgentRegistryConfiguration
+        foreach ($name in $managedRegistryValues) {
+            Set-ItemProperty -LiteralPath $registryPath -Name $name -Value $configValues[$name] -Type String
+        }
+        if (Test-Path -LiteralPath $legacyConfigPath) {
+            $firstLine = Get-Content -LiteralPath $legacyConfigPath -TotalCount 1 -ErrorAction Stop
+            if ($firstLine -match '^# Managed by AssetGuard\.') { Remove-Item -LiteralPath $legacyConfigPath -Force }
+        }
     }
 
     $service = Get-Service -Name $serviceName -ErrorAction Stop
@@ -126,7 +151,7 @@ logfile = $logDirectory\glpi-agent.log
         # Do not let the service and the foreground process post two initial scans at once.
         if ((Get-Service -Name $serviceName).Status -eq 'Running') { Stop-Service -Name $serviceName -Force }
         & $launcher '--force' '--logger=stderr'
-        if ($LASTEXITCODE -ne 0) { throw "Immediate GLPI inventory failed with exit code $LASTEXITCODE. Review $logDirectory\glpi-agent.log." }
+        if ($LASTEXITCODE -ne 0) { throw "Immediate GLPI inventory failed with exit code $LASTEXITCODE. Review $upstreamLogPath." }
     }
     if ($PSCmdlet.ShouldProcess($serviceName, 'Start configured upstream GLPI Agent service')) {
         $currentService = Get-Service -Name $serviceName
@@ -138,7 +163,7 @@ logfile = $logDirectory\glpi-agent.log
         StartupType = 'Automatic'
         GatewayUri = $GatewayUri.AbsoluteUri
         AgentUsername = $AgentUsername
-        ConfigPath = $configPath
+        ConfigPath = $registryPath
         PrivacyProfile = 'hardware-only; users, software, processes, USB and browser-related categories disabled'
         TemporaryTunnel = $GatewayUri.Host -like '*.trycloudflare.com'
     }
