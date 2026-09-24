@@ -37,6 +37,8 @@ $secret = Read-Host 'Inventory secret' -AsSecureString
   -InventorySecret $secret
 ```
 
+Для нового per-device credential сначала создайте его через `POST /admin/agent-credentials` под ADMIN token. API вернёт `username` и `secret` только один раз; передайте их установщику как `-AgentUsername` и `-InventorySecret`. После первого inventory credential автоматически привяжется к endpoint; отзыв через `POST /admin/agent-credentials/{id}/revoke` сразу запретит новые отправки этого Agent.
+
 Служба `GLPI Agent` запускается автоматически при включении Windows и перезапускается при трёх последовательных сбоях. Обычный пользователь не может остановить или отредактировать её; администратор может — это намеренная и безопасная модель Windows. Для немедленной первой отправки добавьте `-RunInventoryNow`.
 
 До покупки домена для короткой демонстрации допустим действующий Quick Tunnel, но адрес меняется после перезапуска туннеля:

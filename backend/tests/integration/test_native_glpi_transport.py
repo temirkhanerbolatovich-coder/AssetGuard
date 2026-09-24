@@ -29,6 +29,10 @@ def test_native_glpi_agent_prolog_and_inventory() -> None:
     asyncio.run(_exercise_native_transport())
 
 
+def test_per_agent_credential_binds_and_can_be_revoked() -> None:
+    asyncio.run(_exercise_per_agent_credential())
+
+
 async def _exercise_native_transport() -> None:
     credentials = base64.b64encode(
         f"assetguard:{get_settings().inventory_shared_secret}".encode()
@@ -53,3 +57,24 @@ async def _exercise_native_transport() -> None:
         endpoints = (await client.get("/admin/endpoints", headers=admin)).json()
         native_endpoints = [item for item in endpoints if item["source_agent_id"] == "native-fixture-pc"]
         assert len(native_endpoints) == 1
+
+
+async def _exercise_per_agent_credential() -> None:
+    admin = {"X-AssetGuard-Admin-Token": get_settings().admin_shared_secret}
+    transport = httpx.ASGITransport(app=app)
+    unique_inventory = INVENTORY.replace(b"native-fixture-pc", b"credential-fixture-pc").replace(b"NATIVE-UUID", b"CREDENTIAL-UUID")
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        created = await client.post("/admin/agent-credentials", headers=admin)
+        assert created.status_code == 201
+        issued = created.json()
+        assert issued["username"].startswith("ag-")
+        assert len(issued["secret"]) >= 32
+        encoded = base64.b64encode(f"{issued['username']}:{issued['secret']}".encode()).decode()
+        headers = {"Authorization": f"Basic {encoded}", "Content-Type": "application/xml"}
+        assert (await client.post("/glpi-agent", headers=headers, content=unique_inventory)).status_code == 200
+        credentials = (await client.get("/admin/agent-credentials", headers=admin)).json()
+        record = next(item for item in credentials if item["id"] == issued["id"])
+        assert record["endpoint_id"] is not None
+        assert "secret" not in record
+        assert (await client.post(f"/admin/agent-credentials/{issued['id']}/revoke", headers=admin)).status_code == 200
+        assert (await client.post("/glpi-agent", headers=headers, content=PROLOG)).status_code == 401

@@ -9,6 +9,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from fastapi.responses import Response
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from assetguard.infrastructure.config import get_settings
@@ -21,6 +22,8 @@ from assetguard.modules.inventory.adapters import (
 )
 from assetguard.modules.inventory.service import ingest_raw_inventory
 from assetguard.modules.snapshots.models import ManagedEndpointRecord
+from assetguard.modules.identity.auth import verify_password
+from assetguard.modules.identity.models import AgentCredentialRecord
 from assetguard.modules.snapshots.normalizer import normalize_raw_inventory
 
 router = APIRouter(prefix="/glpi-agent", tags=["inventory"])
@@ -29,24 +32,30 @@ AUTH_CHALLENGE = {"WWW-Authenticate": 'Basic realm="AssetGuard"'}
 
 
 def require_glpi_basic_auth(
+    session: Annotated[Session, Depends(get_session)],
     authorization: Annotated[str | None, Header(alias="Authorization")] = None,
-) -> None:
+) -> AgentCredentialRecord | None:
     if not authorization or not authorization.startswith("Basic "):
         raise HTTPException(401, "GLPI Agent credentials are required.", headers=AUTH_CHALLENGE)
     try:
         username, password = base64.b64decode(authorization[6:], validate=True).decode("utf-8").split(":", 1)
     except (ValueError, UnicodeDecodeError):
         raise HTTPException(401, "Invalid GLPI Agent credentials.", headers=AUTH_CHALLENGE)
+    credential = session.scalar(select(AgentCredentialRecord).where(AgentCredentialRecord.username == username))
+    if credential and credential.status == "ACTIVE" and verify_password(password, credential.secret_hash):
+        return credential
     settings = get_settings()
     valid = [settings.inventory_shared_secret, settings.previous_inventory_shared_secret]
     if username != "assetguard" or not any(candidate and secrets.compare_digest(password, candidate) for candidate in valid):
         raise HTTPException(401, "Invalid GLPI Agent credentials.", headers=AUTH_CHALLENGE)
+    return None
 
 
-@router.post("", dependencies=[Depends(require_glpi_basic_auth)])
+@router.post("")
 async def receive_glpi_agent(
     request: Request,
     session: Annotated[Session, Depends(get_session)],
+    credential: Annotated[AgentCredentialRecord | None, Depends(require_glpi_basic_auth)],
 ) -> Response:
     limit = get_settings().max_inventory_payload_bytes
     declared = request.headers.get("content-length")
@@ -82,6 +91,11 @@ async def receive_glpi_agent(
     else:
         try:
             snapshot = normalize_raw_inventory(session, ingested.raw_inventory)
+            if credential and credential.managed_endpoint_id is None:
+                credential.managed_endpoint_id = snapshot.managed_endpoint_id
+                session.commit()
+            elif credential and credential.managed_endpoint_id != snapshot.managed_endpoint_id:
+                raise HTTPException(status.HTTP_409_CONFLICT, "Agent credential is bound to another endpoint.")
             events = detect_changes(session, snapshot)
             create_incidents_for_events(session, events)
         except ValueError as error:

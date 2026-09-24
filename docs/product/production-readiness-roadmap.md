@@ -4,8 +4,9 @@
 
 ## Этап 1: изоляция доступа
 
-- [ ] Agent credential records: отдельный username + secret для каждого устройства, хранение только password hash.
-- [ ] One-time выдача credential администратору, revoke и безопасный re-enrolment без смены ключей других устройств.
+- [x] Agent credential records: отдельный username + secret для каждого устройства, хранение только password hash.
+- [x] One-time выдача credential администратору и revoke без смены ключей других устройств.
+- [ ] Self-service re-enrolment flow с подтверждением администратора.
 - [ ] Migration от legacy общего inventory secret с датой отключения fallback.
 - [ ] Tenant model: school/organisation, membership пользователя в tenant, роли `TENANT_ADMIN`, `OPERATOR`, `VIEWER`.
 - [ ] Tenant filtering на assets, endpoints, raw inventories, incidents, Vision и Excel import/export.

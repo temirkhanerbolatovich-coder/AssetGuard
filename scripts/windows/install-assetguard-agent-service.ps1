@@ -22,6 +22,9 @@ param(
     [Parameter(Mandatory)]
     [Security.SecureString]$InventorySecret,
 
+    [ValidatePattern('^[A-Za-z0-9-]{3,128}$')]
+    [string]$AgentUsername = 'assetguard',
+
     [string]$AgentRoot = "$env:ProgramFiles\GLPI-Agent",
     [switch]$AllowTemporaryTunnel,
     [switch]$SkipUpstreamInstall,
@@ -93,7 +96,7 @@ try {
 # Managed by AssetGuard. Remove with uninstall-assetguard-agent-service.ps1.
 # Upstream GLPI Agent remains unmodified; this file is loaded after agent.cfg.
 server = $($GatewayUri.AbsoluteUri)
-user = assetguard
+user = $AgentUsername
 password = $plainSecret
 no-category = $excludedCategories
 no-compression = 1
@@ -132,6 +135,7 @@ logfile = $logDirectory\glpi-agent.log
         Service = $serviceName
         StartupType = 'Automatic'
         GatewayUri = $GatewayUri.AbsoluteUri
+        AgentUsername = $AgentUsername
         ConfigPath = $configPath
         PrivacyProfile = 'hardware-only; users, software, processes, USB and browser-related categories disabled'
         TemporaryTunnel = $GatewayUri.Host -like '*.trycloudflare.com'

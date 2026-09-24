@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+import secrets
 from typing import Annotated, Literal
 from uuid import UUID
 
@@ -10,7 +11,7 @@ from sqlalchemy.orm import Session
 from assetguard.infrastructure.database import get_session
 from assetguard.interfaces.http.admin_assets import require_admin
 from assetguard.modules.identity.auth import create_session, hash_password, revoke_session_token, verify_password
-from assetguard.modules.identity.models import AuthSessionRecord, UserRecord
+from assetguard.modules.identity.models import AgentCredentialRecord, AuthSessionRecord, UserRecord
 
 router = APIRouter(tags=["authentication"])
 
@@ -104,3 +105,38 @@ def revoke_session(session_id: UUID, session: Annotated[Session, Depends(get_ses
     session.delete(auth_session)
     session.commit()
     return Response(status_code=204)
+
+
+@router.get("/admin/agent-credentials", dependencies=[Depends(require_admin)])
+def agent_credentials(session: Annotated[Session, Depends(get_session)]):
+    return [{
+        "id": str(item.id), "username": item.username, "status": item.status,
+        "endpoint_id": str(item.managed_endpoint_id) if item.managed_endpoint_id else None,
+        "issued_at": item.issued_at, "revoked_at": item.revoked_at,
+    } for item in session.scalars(select(AgentCredentialRecord).order_by(AgentCredentialRecord.issued_at.desc()))]
+
+
+@router.post("/admin/agent-credentials", dependencies=[Depends(require_admin)], status_code=201)
+def create_agent_credential(session: Annotated[Session, Depends(get_session)]):
+    # The raw secret is returned exactly once and is never persisted in plaintext.
+    username = f"ag-{secrets.token_hex(8)}"
+    secret = secrets.token_urlsafe(32)
+    credential = AgentCredentialRecord(
+        username=username, secret_hash=hash_password(secret), status="ACTIVE",
+        issued_at=datetime.now(UTC), revoked_at=None, managed_endpoint_id=None,
+    )
+    session.add(credential)
+    session.commit()
+    return {"id": str(credential.id), "username": username, "secret": secret, "status": "ACTIVE"}
+
+
+@router.post("/admin/agent-credentials/{credential_id}/revoke", dependencies=[Depends(require_admin)])
+def revoke_agent_credential(credential_id: UUID, session: Annotated[Session, Depends(get_session)]):
+    credential = session.get(AgentCredentialRecord, credential_id)
+    if not credential:
+        raise HTTPException(404, "Agent credential was not found.")
+    if credential.status != "REVOKED":
+        credential.status = "REVOKED"
+        credential.revoked_at = datetime.now(UTC)
+        session.commit()
+    return {"id": str(credential.id), "status": credential.status, "revoked_at": credential.revoked_at}
