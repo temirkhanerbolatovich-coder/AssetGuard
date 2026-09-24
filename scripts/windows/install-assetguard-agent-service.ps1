@@ -34,6 +34,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $serviceName = 'glpi-agent'
 $registryPath = 'HKLM:\SOFTWARE\GLPI-Agent'
+$registrySubKey = 'SOFTWARE\GLPI-Agent'
 $registryAclBackupPath = Join-Path $env:ProgramData 'AssetGuard\glpi-agent-registry-acl.sddl'
 $legacyConfigPath = Join-Path $AgentRoot 'etc\conf.d\99-assetguard.cfg'
 $managedRegistryValues = @('server', 'user', 'password', 'no-category', 'no-compression', 'no-httpd', 'delaytime')
@@ -50,30 +51,42 @@ function Assert-SafeConfigValue([string]$Value, [string]$Name) {
     }
 }
 
+function Open-AgentRegistryKey {
+    $key = [Microsoft.Win32.Registry]::LocalMachine.OpenSubKey($registrySubKey, $true)
+    if ($null -eq $key) { throw "The GLPI Agent registry key '$registrySubKey' was not found." }
+    return $key
+}
+
 function Protect-AgentRegistryConfiguration {
     if (-not (Test-Path -LiteralPath $registryAclBackupPath)) {
-        $originalSddl = (Get-Acl -LiteralPath $registryPath).Sddl
+        $originalKey = Open-AgentRegistryKey
+        try { $originalSddl = $originalKey.GetAccessControl().Sddl }
+        finally { $originalKey.Dispose() }
         New-Item -ItemType Directory -Force -Path (Split-Path -Parent $registryAclBackupPath) | Out-Null
         Set-Content -LiteralPath $registryAclBackupPath -Value $originalSddl -Encoding ascii -NoNewline
         & icacls.exe $registryAclBackupPath '/inheritance:r' '/grant:r' '*S-1-5-18:(F)' '*S-1-5-32-544:(F)' | Out-Null
         if ($LASTEXITCODE -ne 0) { throw "Could not protect '$registryAclBackupPath' with Windows ACLs." }
     }
 
-    $acl = Get-Acl -LiteralPath $registryPath
-    $acl.SetAccessRuleProtection($true, $false)
-    foreach ($rule in @($acl.Access)) { [void]$acl.RemoveAccessRuleSpecific($rule) }
-    foreach ($sidValue in @('S-1-5-18', 'S-1-5-32-544')) {
-        $sid = [Security.Principal.SecurityIdentifier]::new($sidValue)
-        $rule = [Security.AccessControl.RegistryAccessRule]::new(
-            $sid,
-            [Security.AccessControl.RegistryRights]::FullControl,
-            [Security.AccessControl.InheritanceFlags]::None,
-            [Security.AccessControl.PropagationFlags]::None,
-            [Security.AccessControl.AccessControlType]::Allow
-        )
-        $acl.AddAccessRule($rule)
+    $protectedKey = Open-AgentRegistryKey
+    try {
+        $acl = $protectedKey.GetAccessControl()
+        $acl.SetAccessRuleProtection($true, $false)
+        foreach ($rule in @($acl.Access)) { [void]$acl.RemoveAccessRuleSpecific($rule) }
+        foreach ($sidValue in @('S-1-5-18', 'S-1-5-32-544')) {
+            $sid = [Security.Principal.SecurityIdentifier]::new($sidValue)
+            $rule = [Security.AccessControl.RegistryAccessRule]::new(
+                $sid,
+                [Security.AccessControl.RegistryRights]::FullControl,
+                [Security.AccessControl.InheritanceFlags]::None,
+                [Security.AccessControl.PropagationFlags]::None,
+                [Security.AccessControl.AccessControlType]::Allow
+            )
+            $acl.AddAccessRule($rule)
+        }
+        $protectedKey.SetAccessControl($acl)
     }
-    Set-Acl -LiteralPath $registryPath -AclObject $acl
+    finally { $protectedKey.Dispose() }
 }
 
 if (-not (Test-Administrator)) {
@@ -131,9 +144,13 @@ try {
 
     if ($PSCmdlet.ShouldProcess($registryPath, 'Write protected AssetGuard hardware-only profile')) {
         Protect-AgentRegistryConfiguration
-        foreach ($name in $managedRegistryValues) {
-            Set-ItemProperty -LiteralPath $registryPath -Name $name -Value $configValues[$name] -Type String
+        $configuredKey = Open-AgentRegistryKey
+        try {
+            foreach ($name in $managedRegistryValues) {
+                $configuredKey.SetValue($name, [string]$configValues[$name], [Microsoft.Win32.RegistryValueKind]::String)
+            }
         }
+        finally { $configuredKey.Dispose() }
         if (Test-Path -LiteralPath $legacyConfigPath) {
             $firstLine = Get-Content -LiteralPath $legacyConfigPath -TotalCount 1 -ErrorAction Stop
             if ($firstLine -match '^# Managed by AssetGuard\.') { Remove-Item -LiteralPath $legacyConfigPath -Force }

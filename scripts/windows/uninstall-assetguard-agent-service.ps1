@@ -9,6 +9,7 @@ $ErrorActionPreference = 'Stop'
 $serviceName = 'glpi-agent'
 $legacyConfigPath = Join-Path $AgentRoot 'etc\conf.d\99-assetguard.cfg'
 $registryPath = 'HKLM:\SOFTWARE\GLPI-Agent'
+$registrySubKey = 'SOFTWARE\GLPI-Agent'
 $registryAclBackupPath = Join-Path $env:ProgramData 'AssetGuard\glpi-agent-registry-acl.sddl'
 $managedRegistryValues = @('server', 'user', 'password', 'no-category', 'no-compression', 'no-httpd', 'delaytime')
 
@@ -16,6 +17,12 @@ function Test-Administrator {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = [Security.Principal.WindowsPrincipal]::new($identity)
     return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
+function Open-AgentRegistryKey {
+    $key = [Microsoft.Win32.Registry]::LocalMachine.OpenSubKey($registrySubKey, $true)
+    if ($null -eq $key) { throw "The GLPI Agent registry key '$registrySubKey' was not found." }
+    return $key
 }
 
 if (-not (Test-Administrator)) { throw 'Run this uninstaller from an elevated PowerShell window.' }
@@ -31,13 +38,15 @@ if ($PSCmdlet.ShouldProcess($serviceName, 'Stop and disable GLPI Agent service')
     Set-Service -Name $serviceName -StartupType Disabled -ErrorAction SilentlyContinue
 }
 if (Test-Path -LiteralPath $registryAclBackupPath -and $PSCmdlet.ShouldProcess($registryPath, 'Remove AssetGuard registry configuration and its stored credential')) {
-    foreach ($name in $managedRegistryValues) {
-        Remove-ItemProperty -LiteralPath $registryPath -Name $name -ErrorAction SilentlyContinue
+    $configuredKey = Open-AgentRegistryKey
+    try {
+        foreach ($name in $managedRegistryValues) { $configuredKey.DeleteValue($name, $false) }
+        $originalSddl = Get-Content -LiteralPath $registryAclBackupPath -Raw -ErrorAction Stop
+        $acl = $configuredKey.GetAccessControl()
+        $acl.SetSecurityDescriptorSddlForm($originalSddl.Trim())
+        $configuredKey.SetAccessControl($acl)
     }
-    $originalSddl = Get-Content -LiteralPath $registryAclBackupPath -Raw -ErrorAction Stop
-    $acl = Get-Acl -LiteralPath $registryPath
-    $acl.SetSecurityDescriptorSddlForm($originalSddl.Trim())
-    Set-Acl -LiteralPath $registryPath -AclObject $acl
+    finally { $configuredKey.Dispose() }
     Remove-Item -LiteralPath $registryAclBackupPath -Force
 }
 if (Test-Path -LiteralPath $legacyConfigPath -and $PSCmdlet.ShouldProcess($legacyConfigPath, 'Remove legacy AssetGuard configuration')) {
