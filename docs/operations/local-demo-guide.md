@@ -19,6 +19,8 @@
 
 При нажатии **«QR для обхода»** Dashboard попросит вставить полученный HTTPS URL и запомнит его только в браузере. Поэтому не нужно перезапускать API и менять `.env`; QR будет открывать карточку через этот адрес после входа пользователя. `ASSETGUARD_PUBLIC_URL` остаётся fallback для постоянного домена.
 
+Для устойчивости временного адреса на компьютере презентации один раз выполните `pwsh -File .\scripts\windows\install-quick-tunnel-watchdog.ps1`. Watchdog автоматически восстановит Tunnel при сбое и при следующем входе в Windows. После восстановления прочитайте новый URL из `%LOCALAPPDATA%\AssetGuard\quick-tunnel.json` и заново создайте QR: Quick Tunnel не сохраняет адрес между соединениями.
+
 Для Vision загрузите `demo/vision/room-305-baseline.png`, сохраните scan как baseline и затем загрузите `demo/vision/room-305-warning.png`. Первый scan может быть медленнее: Grounding DINO weights скачиваются в локальный Hugging Face cache и модель инициализируется на CPU/GPU. Подробности находятся в `demo/vision/README.md`.
 
 ## Границы поставки

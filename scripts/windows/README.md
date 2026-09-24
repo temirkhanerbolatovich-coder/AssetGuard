@@ -9,6 +9,7 @@ Upstream GLPI Agent устанавливается отдельно: AssetGuard 
 - `install-background-demo.ps1` / `uninstall-background-demo.ps1` — управляют demo Scheduled Tasks;
 - `install-pilot-agent-schedule.ps1` — ставит отдельное расписание Agent на каждом pilot-компьютере; поддерживает необязательные измерения packet loss и задержки до указанной цели;
 - `start-free-public-demo.ps1` — поднимает контейнерный demo и временный публичный Cloudflare HTTPS URL;
+- `install-quick-tunnel-watchdog.ps1` / `uninstall-quick-tunnel-watchdog.ps1` — поддерживают Quick Tunnel после сбоя и при следующем входе в Windows; текущий URL находится в `%LOCALAPPDATA%\AssetGuard\quick-tunnel.json`;
 - `backup-database.ps1` / `restore-database.ps1` — создают AES-256-GCM encrypted backup, опционально копируют его на внешний диск или `rclone` remote и восстанавливают БД.
 
 Скрипты не отключают TLS, не записывают secrets в исходники и не меняют baseline автоматически.
