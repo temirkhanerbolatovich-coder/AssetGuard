@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from assetguard.infrastructure.database import get_session
-from assetguard.interfaces.http.admin_assets import require_admin, require_viewer
+from assetguard.interfaces.http.admin_assets import require_admin, require_viewer, scoped_endpoint
 from assetguard.modules.baselines.models import BaselineRecord
 from assetguard.modules.baselines.service import accept_snapshot_as_baseline
 from assetguard.modules.changes.models import ChangeEventRecord
@@ -18,7 +18,7 @@ from assetguard.modules.incidents.models import (
 )
 from assetguard.modules.incidents.service import decide_incident
 from assetguard.modules.identity.auth import AuthPrincipal
-from assetguard.modules.snapshots.models import ComponentObservationRecord, HardwareSnapshotRecord
+from assetguard.modules.snapshots.models import ComponentObservationRecord, HardwareSnapshotRecord, ManagedEndpointRecord
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_viewer)])
 Classification = Literal[
@@ -43,7 +43,8 @@ def missing() -> None:
 
 
 @router.get("/endpoints/{endpoint_id}/snapshots")
-def snapshots(endpoint_id: UUID, session: Annotated[Session, Depends(get_session)]):
+def snapshots(endpoint_id: UUID, session: Annotated[Session, Depends(get_session)], principal: Annotated[AuthPrincipal, Depends(require_viewer)]):
+    scoped_endpoint(session, endpoint_id, principal)
     return [{
         "id": str(item.id), "captured_at": item.captured_at, "type": item.snapshot_type,
         "completeness": item.completeness, "normalizer_version": item.normalizer_version,
@@ -53,10 +54,11 @@ def snapshots(endpoint_id: UUID, session: Annotated[Session, Depends(get_session
 
 
 @router.get("/snapshots/{snapshot_id}")
-def snapshot(snapshot_id: UUID, session: Annotated[Session, Depends(get_session)]):
+def snapshot(snapshot_id: UUID, session: Annotated[Session, Depends(get_session)], principal: Annotated[AuthPrincipal, Depends(require_viewer)]):
     item = session.get(HardwareSnapshotRecord, snapshot_id)
     if not item:
         missing()
+    scoped_endpoint(session, item.managed_endpoint_id, principal)
     components = list(session.scalars(select(ComponentObservationRecord).where(
         ComponentObservationRecord.hardware_snapshot_id == item.id,
     )))
@@ -76,7 +78,8 @@ def snapshot(snapshot_id: UUID, session: Annotated[Session, Depends(get_session)
 
 
 @router.get("/endpoints/{endpoint_id}/baseline")
-def baseline(endpoint_id: UUID, session: Annotated[Session, Depends(get_session)]):
+def baseline(endpoint_id: UUID, session: Annotated[Session, Depends(get_session)], principal: Annotated[AuthPrincipal, Depends(require_viewer)]):
+    scoped_endpoint(session, endpoint_id, principal)
     item = session.scalar(select(BaselineRecord).where(
         BaselineRecord.managed_endpoint_id == endpoint_id,
         BaselineRecord.status == "ACTIVE",
@@ -88,7 +91,7 @@ def baseline(endpoint_id: UUID, session: Annotated[Session, Depends(get_session)
 
 
 @router.post("/snapshots/{snapshot_id}/baseline", dependencies=[Depends(require_admin)])
-def accept_baseline(snapshot_id: UUID, body: BaselineAccept, session: Annotated[Session, Depends(get_session)]):
+def accept_baseline(snapshot_id: UUID, body: BaselineAccept, session: Annotated[Session, Depends(get_session)], principal: Annotated[AuthPrincipal, Depends(require_admin)]):
     item = session.get(HardwareSnapshotRecord, snapshot_id)
     if not item:
         missing()
@@ -97,9 +100,12 @@ def accept_baseline(snapshot_id: UUID, body: BaselineAccept, session: Annotated[
 
 
 @router.get("/changes")
-def changes(session: Annotated[Session, Depends(get_session)], endpoint_id: UUID | None = None):
+def changes(session: Annotated[Session, Depends(get_session)], principal: Annotated[AuthPrincipal, Depends(require_viewer)], endpoint_id: UUID | None = None):
     query = select(ChangeEventRecord).order_by(ChangeEventRecord.detected_at.desc())
+    if principal.organization_id:
+        query = query.join(ManagedEndpointRecord).where(ManagedEndpointRecord.organization_id == principal.organization_id)
     if endpoint_id:
+        scoped_endpoint(session, endpoint_id, principal)
         query = query.where(ChangeEventRecord.managed_endpoint_id == endpoint_id)
     return [{
         "id": str(item.id), "endpoint_id": str(item.managed_endpoint_id),
@@ -111,10 +117,12 @@ def changes(session: Annotated[Session, Depends(get_session)], endpoint_id: UUID
 
 
 @router.get("/changes/{change_id}")
-def change(change_id: UUID, session: Annotated[Session, Depends(get_session)]):
+def change(change_id: UUID, session: Annotated[Session, Depends(get_session)], principal: Annotated[AuthPrincipal, Depends(require_viewer)]):
     item = session.get(ChangeEventRecord, change_id)
     if not item:
         missing()
+    scoped_endpoint(session, item.managed_endpoint_id, principal)
+    scoped_endpoint(session, item.managed_endpoint_id, principal)
     return {
         "id": str(item.id), "endpoint_id": str(item.managed_endpoint_id),
         "type": item.event_type, "component_type": item.component_type,
@@ -125,9 +133,12 @@ def change(change_id: UUID, session: Annotated[Session, Depends(get_session)]):
 
 
 @router.get("/incidents")
-def incidents(session: Annotated[Session, Depends(get_session)], endpoint_id: UUID | None = None):
+def incidents(session: Annotated[Session, Depends(get_session)], principal: Annotated[AuthPrincipal, Depends(require_viewer)], endpoint_id: UUID | None = None):
     query = select(IncidentRecord).order_by(IncidentRecord.created_at.desc())
+    if principal.organization_id:
+        query = query.join(ManagedEndpointRecord).where(ManagedEndpointRecord.organization_id == principal.organization_id)
     if endpoint_id:
+        scoped_endpoint(session, endpoint_id, principal)
         query = query.where(IncidentRecord.managed_endpoint_id == endpoint_id)
     return [{
         "id": str(item.id), "endpoint_id": str(item.managed_endpoint_id),
@@ -138,10 +149,11 @@ def incidents(session: Annotated[Session, Depends(get_session)], endpoint_id: UU
 
 
 @router.get("/incidents/{incident_id}")
-def incident(incident_id: UUID, session: Annotated[Session, Depends(get_session)]):
+def incident(incident_id: UUID, session: Annotated[Session, Depends(get_session)], principal: Annotated[AuthPrincipal, Depends(require_viewer)]):
     item = session.get(IncidentRecord, incident_id)
     if not item:
         missing()
+    scoped_endpoint(session, item.managed_endpoint_id, principal)
     change_event = session.get(ChangeEventRecord, item.change_event_id)
     decisions = list(session.scalars(select(IncidentDecisionRecord).where(
         IncidentDecisionRecord.incident_id == item.id,
@@ -168,6 +180,7 @@ def decision(
     item = session.get(IncidentRecord, incident_id)
     if not item:
         missing()
+    scoped_endpoint(session, item.managed_endpoint_id, principal)
     result = decide_incident(session, item, body.classification, principal.username, body.comment, False)
     return {"id": str(result.id), "incident_status": item.status}
 
@@ -181,12 +194,14 @@ def resolve(
     item = session.get(IncidentRecord, incident_id)
     if not item:
         missing()
+    scoped_endpoint(session, item.managed_endpoint_id, principal)
     result = decide_incident(session, item, body.classification, principal.username, body.comment, True)
     return {"id": str(result.id), "incident_status": item.status}
 
 
 @router.get("/endpoints/{endpoint_id}/history")
-def history(endpoint_id: UUID, session: Annotated[Session, Depends(get_session)]):
+def history(endpoint_id: UUID, session: Annotated[Session, Depends(get_session)], principal: Annotated[AuthPrincipal, Depends(require_viewer)]):
+    scoped_endpoint(session, endpoint_id, principal)
     return [{
         "id": str(item.id), "type": item.event_type, "occurred_at": item.occurred_at,
         "entity_type": item.related_entity_type, "entity_id": str(item.related_entity_id),
