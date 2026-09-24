@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import secrets
+import re
 from html import escape
 from io import BytesIO
 from datetime import UTC, datetime
@@ -357,9 +358,9 @@ def _asset_type_from_import(value: str | None) -> str | None:
     if not value:
         return value
     normalized = value.lower().replace("ё", "е").strip()
-    if normalized in {"desktop", "пк", "компьютер", "стационарный", "стационарный компьютер"}:
+    if normalized in {"desktop", "пк", "компьютер", "стационарный", "стационарный компьютер"} or "компьютер" in normalized or "системный блок" in normalized:
         return "Desktop"
-    if normalized in {"laptop", "ноутбук"}:
+    if normalized in {"laptop", "ноутбук"} or "ноутбук" in normalized:
         return "Laptop"
     return "Other" if normalized not in {"other", "прочее", "другое"} else "Other"
 
@@ -422,6 +423,46 @@ def _import_assets(parsed: list[dict[str, str | None]], session: Session, princi
     return {"rows": len(parsed), "creates": creates, "updates": updates, "applied": True}
 
 
+def _government_inventory_rows(table: list[list[str | None]], filename: str | None) -> list[dict[str, str | None]]:
+    """Map the standard Kazakhstan accounting inventory statement to AssetGuard rows.
+
+    A statement row can describe several identical items. It becomes one grouped AssetGuard
+    record, while the original quantity, price and accounting number remain in its notes.
+    """
+    safe_stem = re.sub(r"[^A-Za-z0-9_-]+", "-", Path(filename or "inventory").stem).strip("-") or "inventory"
+    parsed: list[dict[str, str | None]] = []
+    for row in table:
+        values = [str(value or "").strip() for value in row]
+        if len(values) < 9 or not re.fullmatch(r"\d+", values[0]):
+            continue
+        # The official form repeats the sequence number in the last column. This prevents
+        # captions, page footers and multi-row headers from being treated as equipment.
+        if values[-1] and values[-1] != values[0]:
+            continue
+        name = values[1]
+        if not name or "\ufffd" in name:
+            continue
+        accounting_number, unit, price, quantity, total = values[2], values[3], values[4], values[7], values[8]
+        notes = [f"Импорт из инвентаризационной ведомости: {filename or 'PDF'}."]
+        if accounting_number:
+            notes.append(f"Номенклатурный номер: {accounting_number}.")
+        if quantity:
+            notes.append(f"Количество по ведомости: {quantity} {unit or 'шт.'}.")
+        if price:
+            notes.append(f"Цена: {price} тг.")
+        if total:
+            notes.append(f"Сумма: {total} тг.")
+        parsed.append({
+            "inventory_number": f"PDF-{safe_stem}-{values[0]}",
+            "name": name,
+            "asset_type": _asset_type_from_import(name),
+            "status": "ACTIVE",
+            "organization": None, "building": None, "floor": None, "room": None,
+            "notes": " ".join(notes),
+        })
+    return parsed
+
+
 @router.post("/assets/import.xlsx")
 def import_assets_xlsx(
     file: Annotated[UploadFile, File()],
@@ -474,7 +515,11 @@ def import_assets_pdf(
                 continue
             raise
         return _import_assets(parsed, session, principal, apply, "pdf")
-    raise HTTPException(422, "No supported table was found. PDF import works with a selectable text table and columns inventory_number, name, asset_type (or Russian equivalents); scanned PDFs need OCR first.")
+    for table in tables:
+        parsed = _government_inventory_rows(table, file.filename)
+        if parsed:
+            return _import_assets(parsed, session, principal, apply, "government PDF inventory statement")
+    raise HTTPException(422, "No supported table was found. Import supports AssetGuard tables and Kazakhstan accounting inventory statements with selectable text. A scanned PDF needs OCR first; a blank form cannot be imported as equipment.")
 
 
 @router.get("/assets/{asset_id}/qr.svg")
