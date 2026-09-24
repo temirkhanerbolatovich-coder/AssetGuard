@@ -140,3 +140,18 @@ ASSETGUARD_TELEGRAM_CHAT_ID=<chat_id>
 Монитор молчит, когда всё в норме. При сохранении одинаковой проблемы повторное сообщение придёт не чаще чем раз в четыре часа; это защищает чат от спама. Telegram Bot API принимает HTTPS-запросы к `sendMessage`; скрипт использует JSON POST и проверяет поле `ok` в ответе. [Официальная документация Telegram](https://core.telegram.org/bots/api#sendmessage).
 
 Для локального Vision demo Python environment должен быть установлен с extras `backend[dev,vision]`. Модель загружается при первом scan; demo-изображения находятся в `demo/vision/`.
+
+## Локальный Vision для питча
+
+Для питча запускайте Vision на ноутбуке, а не на Oracle Free сервере: модель Grounding DINO требует больше памяти, чем доступно в бесплатной VM. Скрипт поднимает изолированную локальную Docker-среду, не использует публичный сервер и не требует Cloudflare:
+
+```powershell
+.\scripts\windows\start-local-vision-demo.ps1 -OpenBrowser
+.\scripts\windows\test-local-vision-demo.ps1
+```
+
+Второй скрипт выполняет реальную модель на двух подготовленных фотографиях: загружает baseline, сохраняет его, загружает кадр с изменением и требует `WARNING` с объяснимой разницей. Первый запуск скачивает модель и может занять несколько минут; Docker cache сохраняет её для повторного показа. После успешного теста откройте `http://127.0.0.1:8010`, войдите локальным администратором и покажите блок **«Проверка по фото»**. Остановить только локальную среду можно командой:
+
+```powershell
+docker compose --project-name assetguard-vision-demo --env-file .env -f infra/containers/docker-compose.free-demo.yml down
+```
