@@ -13,6 +13,7 @@ Upstream GLPI Agent устанавливается отдельно: AssetGuard 
 - `install-quick-tunnel-watchdog.ps1` / `uninstall-quick-tunnel-watchdog.ps1` — поддерживают Quick Tunnel после сбоя и при следующем входе в Windows; текущий URL находится в `%LOCALAPPDATA%\AssetGuard\quick-tunnel.json`;
 - `backup-database.ps1` / `restore-database.ps1` — создают AES-256-GCM encrypted backup, опционально копируют его на внешний диск или `rclone` remote и восстанавливают БД;
 - `verify-backup-restore.ps1` — безопасно репетирует restore в отдельном одноразовом PostgreSQL контейнере, не затрагивая рабочую БД.
+- `set-backup-passphrase.ps1` / `install-backup-schedule.ps1` — сохраняют пароль backup через Windows DPAPI и устанавливают daily backup + weekly isolated restore rehearsal для текущего Windows-пользователя.
 
 Скрипты не отключают TLS, не записывают secrets в исходники и не меняют baseline автоматически.
 
@@ -68,5 +69,16 @@ $passphrase = Read-Host 'Backup passphrase' -AsSecureString
 ```
 
 `-CompareWithCurrentDatabase` нужен только для свежесозданного backup: он read-only сравнивает количество восстановленных assets, endpoints, inventories, snapshots, incidents и Vision scans с текущей БД. Для старого off-site backup запускайте без этого флага — старый снимок может корректно отличаться от сегодняшних данных.
+
+## Автоматический backup и rehearsal
+
+На pilot-компьютере с запущенным Docker Desktop сначала один раз сохраните пароль. Это DPAPI-blob: он читается только этим Windows-пользователем на этом компьютере и не передаётся в Task Scheduler как открытый аргумент.
+
+```powershell
+.\scripts\windows\set-backup-passphrase.ps1
+.\scripts\windows\install-backup-schedule.ps1 -BackupTime '02:00' -RehearsalTime '03:00'
+```
+
+Появятся две задачи: ежедневный `AssetGuard Daily Encrypted Backup` и воскресный `AssetGuard Weekly Restore Rehearsal`. Они запускаются лишь когда данный пользователь вошёл в Windows — это осознанное ограничение desktop-pilot, потому что и Docker Desktop, и DPAPI принадлежат интерактивному пользователю. Для постоянного сервера следующим шагом нужен отдельный service account и secret manager.
 
 Для локального Vision demo Python environment должен быть установлен с extras `backend[dev,vision]`. Модель загружается при первом scan; demo-изображения находятся в `demo/vision/`.

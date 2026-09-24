@@ -12,11 +12,24 @@ function Get-AssetGuardPassphraseBytes {
 }
 
 function Get-AssetGuardBackupPassphrase {
-    param([Security.SecureString]$Passphrase)
+    param(
+        [Security.SecureString]$Passphrase,
+        [string]$SavedPassphrasePath,
+        [switch]$NonInteractive
+    )
     if ($Passphrase) { return $Passphrase }
+    if ($SavedPassphrasePath -and (Test-Path -LiteralPath $SavedPassphrasePath)) {
+        $protected = Get-Content -LiteralPath $SavedPassphrasePath -Raw
+        if (-not [string]::IsNullOrWhiteSpace($protected)) {
+            # ConvertTo-SecureString uses Windows DPAPI here: only this Windows
+            # user on this computer can recover the stored passphrase.
+            return ConvertTo-SecureString $protected
+        }
+    }
     if ($env:ASSETGUARD_BACKUP_PASSPHRASE) {
         return ConvertTo-SecureString $env:ASSETGUARD_BACKUP_PASSPHRASE -AsPlainText -Force
     }
+    if ($NonInteractive) { throw 'No DPAPI-protected backup passphrase is configured for this scheduled run.' }
     return Read-Host 'Backup passphrase (minimum 16 characters)' -AsSecureString
 }
 

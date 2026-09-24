@@ -3,7 +3,9 @@ param(
     [string]$RepositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')),
     [string]$OutputDirectory = (Join-Path $RepositoryRoot '.local\backups'),
     [Security.SecureString]$Passphrase,
-    [string]$OffsiteTarget
+    [string]$OffsiteTarget,
+    [string]$SavedPassphrasePath = (Join-Path $env:LOCALAPPDATA 'AssetGuard\backup-passphrase.dpapi'),
+    [switch]$NonInteractive
 )
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'backup-crypto.ps1')
@@ -17,7 +19,7 @@ $temporarySql = Join-Path ([IO.Path]::GetTempPath()) "assetguard-$([Guid]::NewGu
 try {
     docker compose --env-file $envPath -f (Join-Path $RepositoryRoot 'infra\containers\docker-compose.yml') exec -T postgres pg_dump -U $env:ASSETGUARD_POSTGRES_USER -d $env:ASSETGUARD_POSTGRES_DB --format=plain --no-owner | Out-File -LiteralPath $temporarySql -Encoding utf8NoBOM
     if ($LASTEXITCODE -ne 0) { throw 'Database backup failed.' }
-    $Passphrase = Get-AssetGuardBackupPassphrase $Passphrase
+    $Passphrase = Get-AssetGuardBackupPassphrase -Passphrase $Passphrase -SavedPassphrasePath $SavedPassphrasePath -NonInteractive:$NonInteractive
     Protect-AssetGuardBackup -InputFile $temporarySql -OutputFile $destination -Passphrase $Passphrase
 } finally {
     if (Test-Path -LiteralPath $temporarySql) { Remove-Item -LiteralPath $temporarySql -Force }

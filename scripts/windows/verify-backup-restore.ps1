@@ -15,6 +15,8 @@ param(
 
     [string]$RepositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')),
     [Security.SecureString]$Passphrase,
+    [string]$SavedPassphrasePath = (Join-Path $env:LOCALAPPDATA 'AssetGuard\backup-passphrase.dpapi'),
+    [switch]$NonInteractive,
     [switch]$CompareWithCurrentDatabase,
     [ValidateRange(10, 180)]
     [int]$StartupTimeoutSeconds = 60
@@ -69,7 +71,7 @@ $temporarySql = Join-Path ([IO.Path]::GetTempPath()) "assetguard-rehearsal-$([Gu
 $sourceCounts = $null
 
 try {
-    $Passphrase = Get-AssetGuardBackupPassphrase $Passphrase
+    $Passphrase = Get-AssetGuardBackupPassphrase -Passphrase $Passphrase -SavedPassphrasePath $SavedPassphrasePath -NonInteractive:$NonInteractive
     Unprotect-AssetGuardBackup -InputFile $resolvedBackup -OutputFile $temporarySql -Passphrase $Passphrase
     if ((Get-Item -LiteralPath $temporarySql).Length -eq 0) { throw 'Decryption produced an empty SQL file.' }
 

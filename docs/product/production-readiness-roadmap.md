@@ -8,16 +8,16 @@
 - [x] One-time выдача credential администратору и revoke без смены ключей других устройств.
 - [ ] Self-service re-enrolment flow с подтверждением администратора.
 - [ ] Migration от legacy общего inventory secret с датой отключения fallback.
-- [ ] Tenant model: school/organisation, membership пользователя в tenant, роли `TENANT_ADMIN`, `OPERATOR`, `VIEWER`.
-- [ ] Tenant filtering на assets, endpoints, raw inventories, incidents, Vision и Excel import/export.
+- [~] Tenant model: school/organisation и tenant-bound users/credentials есть; отдельные роли `TENANT_ADMIN`, `OPERATOR` ещё не выделены из текущих `ADMIN`, `VIEWER`.
+- [~] Tenant filtering внедрён на assets, endpoints, raw inventories, incidents, Vision, Excel и identity API; нужен полный matrix-тест всех admin routes перед multi-school rollout.
 - [ ] SSO/AD или хотя бы MFA для production admin accounts.
 
 ## Этап 2: надёжная эксплуатация
 
 - [ ] Постоянный сервер, домен, TLS acceptance и firewall policy.
-- [ ] Automated encrypted off-site backup с ротацией и отдельной политикой хранения ключа.
-- [ ] Регулярный isolated restore rehearsal; текущий локальный rehearsal выполнен 2026-09-24.
-- [ ] Метрики API, PostgreSQL, disk, backup age, Agent last-seen и failed ingest.
+- [~] Automated encrypted backup + weekly isolated restore rehearsal доступны через Windows Task Scheduler; off-site ротация и отдельная политика хранения ключа ещё не настроены.
+- [~] Регулярный isolated restore rehearsal готов к расписанию; текущий локальный rehearsal выполнен 2026-09-24.
+- [~] `/health` и `/health/ready` готовы; метрики API, disk, backup age, Agent last-seen и failed ingest ещё нужно агрегировать и подключить к alerting.
 - [ ] Alerting для ответственного сотрудника с правилами escalation.
 - [ ] Staging environment и rollback runbook.
 
