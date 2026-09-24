@@ -33,16 +33,16 @@ def read_image(payload: bytes) -> Image.Image:
 
 
 def create_scan(
-    session: Session, *, room_name: str, payload: bytes, detector: Detector, asset_id: UUID | None = None,
+    session: Session, *, room_name: str, payload: bytes, detector: Detector, asset_id: UUID | None = None, organization_id: UUID | None = None,
 ) -> VisionScanRecord:
     settings = get_settings()
     image = read_image(payload)
     normalized_room = " ".join(room_name.strip().split())
     if not normalized_room:
         raise ValueError("Room name is required.")
-    room = session.scalar(select(VisionRoomRecord).where(VisionRoomRecord.name == normalized_room))
+    room = session.scalar(select(VisionRoomRecord).where(VisionRoomRecord.name == normalized_room, VisionRoomRecord.organization_id == organization_id))
     if room is None:
-        room = VisionRoomRecord(name=normalized_room, created_at=datetime.now(UTC))
+        room = VisionRoomRecord(name=normalized_room, organization_id=organization_id, created_at=datetime.now(UTC))
         session.add(room)
         session.flush()
     scan_id = uuid4()
