@@ -51,6 +51,7 @@ docker compose --env-file .env -f infra/containers/docker-compose.free-demo.yml 
 - [Анализ требований](ASSETGUARD_MVP_v0.1_ANALYSIS.md)
 - [Исследование open-source основы](ASSETGUARD_TECHNICAL_RESEARCH.md)
 - [Карта документации](docs/README.md)
+- [Актуальный полный чек-лист проекта](docs/product/current-project-checklist.md)
 - [Чек-лист завершения MVP](docs/product/mvp-completion-checklist.md)
 - [Аудит данных и UX Dashboard](docs/product/dashboard-data-audit.md)
 - [Архитектура и готовый сценарий питча](docs/product/pitch-guide.md)

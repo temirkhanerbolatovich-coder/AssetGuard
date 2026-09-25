@@ -16,4 +16,4 @@
 
 ## Операционные документы
 
-Локальный запуск описан в `local-demo-guide.md`, PDF/OCR — в `pdf-import-ocr.md`, а HTTPS deployment, backup и restore — в `production-deployment.md`. Изолированная локальная репетиция восстановления зашифрованной копии успешно прошла 2026-09-24. До публичного запуска остаются deployment acceptance на целевом хосте, off-host encrypted backup и регулярная репетиция восстановления именно из off-site копии.
+Локальный запуск описан в `local-demo-guide.md`, PDF/OCR — в `pdf-import-ocr.md`, а HTTPS deployment, backup и restore — в `production-deployment.md`. Изолированная локальная репетиция восстановления зашифрованной копии успешно прошла 2026-09-24. Постоянный Oracle Cloud deployment, DuckDNS, TLS и health/readiness проверены 2026-09-25. Локальный Windows monitor умеет отправлять дедуплицированные Telegram-alerts по offline Agent, failed ingest, identity conflicts и месту на диске. До production-пилота остаются off-host encrypted backup с восстановлением именно из внешней копии и перенос мониторинга в постоянный серверный контур.

@@ -17,8 +17,8 @@
 - [x] Постоянный Oracle Cloud server, DuckDNS, публичный TLS endpoint и ограничивающие сетевые правила проверены 2026-09-25.
 - [~] Automated encrypted backup + weekly isolated restore rehearsal доступны через Windows Task Scheduler; свежая локальная копия проверена восстановлением 2026-09-24. Off-site ротация и отдельная политика хранения ключа ещё не настроены.
 - [x] Изолированная локальная restore rehearsal: зашифрованная копия восстановлена в отдельный временный PostgreSQL и сравнена с текущей БД; off-site recovery остаётся незакрытым.
-- [~] `/health` и `/health/ready` готовы; метрики API, disk, backup age, Agent last-seen и failed ingest ещё нужно агрегировать и подключить к alerting.
-- [ ] Alerting для ответственного сотрудника с правилами escalation.
+- [~] `/health` и `/health/ready` готовы; локальный Windows monitor проверяет disk, Agent last-seen, failed ingest и identity conflicts. Нужен постоянный серверный сбор метрик, включая backup age.
+- [~] Telegram alerting с дедупликацией работает из локального Windows-контура; нужны серверное расписание и правила escalation.
 - [ ] Staging environment и rollback runbook.
 
 ## Этап 3: secure software supply chain
