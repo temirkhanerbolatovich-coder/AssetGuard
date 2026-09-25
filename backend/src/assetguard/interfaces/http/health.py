@@ -1,7 +1,8 @@
 """Non-sensitive operational health endpoints."""
 
-from typing import Annotated
 import shutil
+from pathlib import Path
+from typing import Annotated
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
@@ -18,6 +19,14 @@ from assetguard.modules.snapshots.models import ManagedEndpointRecord
 
 
 router = APIRouter(tags=["operations"])
+
+
+def _existing_storage_path(storage_root: Path) -> Path:
+    """Find an existing ancestor without creating state during a health read."""
+    candidate = storage_root
+    while not candidate.exists() and candidate != candidate.parent:
+        candidate = candidate.parent
+    return candidate
 
 
 @router.get("/health")
@@ -69,7 +78,7 @@ def operations_status(
         session.rollback()
 
     storage_root = get_settings().vision_storage_root
-    usage = shutil.disk_usage(storage_root if storage_root.exists() else storage_root.parent)
+    usage = shutil.disk_usage(_existing_storage_path(storage_root))
     return {
         "database": {"status": "ready", "bytes": database_bytes},
         "storage": {"free_bytes": usage.free, "total_bytes": usage.total},
