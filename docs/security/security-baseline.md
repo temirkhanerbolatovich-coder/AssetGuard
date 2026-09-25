@@ -23,6 +23,7 @@
 - logout, административный revoke, disable user и password rotation отзывают активные sessions;
 - actor административного incident decision выводится из authenticated principal;
 - `/auth/login`, `/admin` и `/internal` защищены базовым rate limit;
+- Caddy удаляет custom admin token, `Authorization` и `Cookie` из runtime-логов до их записи;
 - raw evidence и audit history защищены append-only database triggers.
 
 До production остаются внешний proxy-level rate limit, deployment acceptance на целевом хосте, encrypted off-host backup, репетиция восстановления из off-site копии и утверждённая retention policy для Vision images. Локальная изолированная репетиция восстановления encrypted backup успешно выполнена 2026-09-24; это подтверждает процедуру восстановления, но не заменяет внешний backup.
