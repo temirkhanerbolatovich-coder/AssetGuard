@@ -36,6 +36,13 @@ function showToast(message, error = false) {
   const toast = $("toast"); toast.textContent = message; toast.className = `toast${error ? " error" : ""}`; toast.hidden = false;
   clearTimeout(showToast.timer); showToast.timer = setTimeout(() => { toast.hidden = true; }, 3500);
 }
+function setAuthenticatedUi() {
+  const signedIn = Boolean(state.currentUser);
+  $("username").disabled = signedIn; $("token").disabled = signedIn;
+  $("login").hidden = signedIn; $("logout").hidden = !signedIn;
+  $("session-state").hidden = !signedIn;
+  $("session-state").textContent = signedIn ? `${state.currentUser.username || "Администратор"} · ${userRoleLabel(state.currentUser.role)}` : "";
+}
 async function api(path, options = {}) {
   const response = await fetch(path, {...options, headers: {...options.headers, "X-AssetGuard-Admin-Token": token}});
   if (!response.ok) {
@@ -360,6 +367,7 @@ function syncRoleControls() {
   roomSelect.required=!isAdmin;
   roomSelect.disabled=!rooms.length;
   $("asset-tracking-mode").dispatchEvent(new Event("change"));
+  setAuthenticatedUi();
 }
 function canEditAsset(asset) { return state.currentUser?.role==="ADMIN"||Boolean(asset?.room_id&&state.currentUser?.editable_room_ids?.includes(asset.room_id)); }
 function renderAdminAccess() {
@@ -471,8 +479,8 @@ async function detail(assetId, scroll = true) {
     $("detail-title").textContent = asset.name; $("detail-status").innerHTML = pill(status);
     $("detail-meta").textContent = [asset.inventory_number,endpoint?.hostname,locationLabel(asset)].filter(Boolean).join(" · ") || "Карточка актива";
     $("detail-actions").innerHTML = `${canEditAsset(asset)?'<button id="edit-asset" class="button-secondary">Редактировать</button>':""}<button id="show-asset-qr" class="button-secondary">QR для обхода</button>`;
-    if(canEditAsset(asset))$("edit-asset").onclick = async () => { const name = prompt("Название устройства",asset.name); if(name && name !== asset.name) await sendAction(`/admin/assets/${asset.id}`,{name},"PATCH","Название обновлено"); };
-    $("show-asset-qr").onclick = async () => { try { let publicUrl=localStorage.getItem("assetguardPublicUrl")||""; if (!publicUrl && !["localhost","127.0.0.1"].includes(location.hostname)) publicUrl=location.origin; if (!publicUrl || ["localhost","127.0.0.1"].includes(new URL(publicUrl).hostname)) { publicUrl=prompt("Вставьте временный HTTPS URL Cloudflare (trycloudflare.com), чтобы QR открылся на телефоне. Для локальной печати оставьте пустым.",publicUrl)||""; } if(publicUrl){ const normalized=new URL(publicUrl); if(normalized.protocol!=="https:") throw new Error("Для QR на телефоне нужен HTTPS URL."); publicUrl=normalized.origin;localStorage.setItem("assetguardPublicUrl",publicUrl); } const suffix=publicUrl?`?public_url=${encodeURIComponent(publicUrl)}`:""; const blob = await apiBlob(`/admin/assets/${asset.id}/qr.svg${suffix}`); if (state.assetQrUrl) URL.revokeObjectURL(state.assetQrUrl); state.assetQrUrl = URL.createObjectURL(blob); const popup = window.open("", "assetguard-qr", "width=480,height=560"); if (!popup) { showToast("Разрешите всплывающее окно для QR-кода", true); return; } popup.document.write(`<title>AssetGuard QR</title><main style="font-family:system-ui;text-align:center;padding:24px"><h1>${escapeHtml(asset.name)}</h1><p>${escapeHtml(asset.inventory_number)}</p><img style="width:320px;height:320px" src="${state.assetQrUrl}" alt="QR"><p>Отсканируйте код, чтобы открыть карточку устройства.</p></main>`); popup.document.close(); } catch (error) { showToast(error.message, true); } };
+    if(canEditAsset(asset))$("edit-asset").onclick = () => openAssetEditDialog(asset);
+    $("show-asset-qr").onclick = () => openAssetQrDialog(asset);
     const hasAgentSnapshot = Boolean(asset.current_snapshot || endpoint?.current_snapshot), usesAgent = asset.category === "IT";
     const showAgentDetails = usesAgent && Boolean(endpoint && hasAgentSnapshot);
     $("system-detail-panel").hidden = !showAgentDetails; $("identifiers-detail-panel").hidden = !showAgentDetails;
@@ -502,6 +510,27 @@ async function detail(assetId, scroll = true) {
     $("detail-history").innerHTML = asset.history.length ? asset.history.map((entry) => `<article><time>${dateTime(entry.occurred_at)}</time><div><b>${escapeHtml(eventLabels[entry.type] || entry.type)}</b><p>${escapeHtml(historyMessage(entry))}</p></div></article>`).join("") : '<p class="empty">История появится после первой проверки или действия с устройством.</p>';
     if(scroll) $("detail").scrollIntoView({behavior:"smooth",block:"start"});
   } catch(error) { showToast(error.message,true); $("detail").hidden = true; }
+}
+function assetCategoryForType(type) { return ({Desktop:"IT",Laptop:"IT",Printer:"IT",Projector:"IT",Network:"IT",Furniture:"FURNITURE",Sports:"SPORTS",Educational:"EDUCATIONAL",Other:"OTHER"})[type] || "OTHER"; }
+function managedRoomsForAsset(asset) {
+  const organizationId = state.currentUser?.organization_id || state.organizations.find((item) => item.name === asset.organization)?.id;
+  return state.locations.filter((building) => !organizationId || building.organization_id === organizationId).flatMap((building) => building.floors.flatMap((floor) => floor.rooms.map((room) => ({id:room.id,label:`${building.name} · этаж ${floor.name} · кабинет ${room.name}`}))));
+}
+function syncAssetEditTrackingMode() { const grouped=$("asset-edit-tracking-mode").value === "GROUPED"; $("asset-edit-quantity-field").hidden=!grouped; $("asset-edit-quantity").disabled=!grouped; $("asset-edit-quantity").required=grouped; }
+function openAssetEditDialog(asset) {
+  state.editingAsset = asset;
+  $("asset-edit-inventory-number").value=asset.inventory_number || ""; $("asset-edit-name").value=asset.name || ""; $("asset-edit-type").value=asset.asset_type || "Other"; $("asset-edit-tracking-mode").value=asset.tracking_mode || "INDIVIDUAL"; $("asset-edit-quantity").value=asset.quantity || 1; $("asset-edit-unit").value=asset.unit || "шт."; $("asset-edit-notes").value=asset.notes || "";
+  const rooms=managedRoomsForAsset(asset); $("asset-edit-room").innerHTML='<option value="">Не назначать кабинет</option>'+rooms.map((room)=>`<option value="${room.id}">${escapeHtml(room.label)}</option>`).join(""); if(asset.room_id && rooms.some((room)=>room.id===asset.room_id))$("asset-edit-room").value=asset.room_id;
+  syncAssetEditTrackingMode(); $("asset-edit-dialog").showModal(); $("asset-edit-name").focus();
+}
+async function printAssetQr(asset, publicUrl) {
+  const popup=window.open("", "assetguard-qr", "width=520,height=620"); if(!popup) throw new Error("Разрешите всплывающее окно для QR-кода и повторите попытку.");
+  popup.document.write('<title>AssetGuard QR</title><main style="font-family:system-ui;text-align:center;padding:24px"><p>Готовим QR-код…</p></main>'); popup.document.close();
+  try { const suffix=publicUrl?`?public_url=${encodeURIComponent(publicUrl)}`:""; const blob=await apiBlob(`/admin/assets/${asset.id}/qr.svg${suffix}`); if(state.assetQrUrl)URL.revokeObjectURL(state.assetQrUrl);state.assetQrUrl=URL.createObjectURL(blob); popup.document.body.innerHTML=`<main style="font-family:system-ui;text-align:center;padding:24px"><h1>${escapeHtml(asset.name)}</h1><p>${escapeHtml(asset.inventory_number)}</p><img style="width:320px;height:320px" src="${state.assetQrUrl}" alt="QR"><p>Отсканируйте код, чтобы открыть карточку имущества.</p><button onclick="print()">Печать</button></main>`; }
+  catch(error) { popup.close(); throw error; }
+}
+function openAssetQrDialog(asset) {
+  state.qrAsset=asset; $("asset-qr-title").textContent=`QR · ${asset.name}`; let saved=localStorage.getItem("assetguardPublicUrl") || ""; if(!saved && !["localhost","127.0.0.1"].includes(location.hostname))saved=location.origin; $("asset-qr-public-url").value=saved; $("asset-qr-help").textContent=saved ? "Этот адрес будет записан в QR-код." : "Сейчас вы работаете локально: QR можно напечатать, но телефон его не откроет без публичного HTTPS-адреса."; $("asset-qr-dialog").showModal(); $("asset-qr-public-url").focus();
 }
 function historyMessage(entry) {
   if(entry.type === "INVENTORY_COMPLETED") return `${entry.metadata?.inventory_type === "FULL" ? "Полная" : "Частичная"} проверка завершена, данные сохранены.`;
@@ -540,8 +569,13 @@ $("nav-toggle").addEventListener("click",()=>{const header=document.querySelecto
 document.querySelectorAll("#main-nav a").forEach((link)=>link.addEventListener("click",()=>{document.querySelector(".app-header").classList.remove("nav-open");$("nav-toggle").setAttribute("aria-expanded","false");document.querySelectorAll("#main-nav a").forEach((item)=>item.removeAttribute("aria-current"));link.setAttribute("aria-current","location");}));
 function syncTrackingMode() { const grouped=$("asset-tracking-mode").value==="GROUPED", field=$("asset-quantity-field"), input=field.querySelector("input");field.hidden=!grouped;input.disabled=!grouped;input.required=grouped; }
 $("asset-tracking-mode").addEventListener("change",syncTrackingMode);
+$("asset-edit-tracking-mode").addEventListener("change",syncAssetEditTrackingMode);
+$("asset-edit-cancel").onclick=()=>$("asset-edit-dialog").close();
+$("asset-edit-form").addEventListener("submit",async(event)=>{event.preventDefault();const asset=state.editingAsset;if(!asset)return;const button=$("asset-edit-submit"),trackingMode=$("asset-edit-tracking-mode").value,roomId=$("asset-edit-room").value||null;const body={inventory_number:$("asset-edit-inventory-number").value.trim(),name:$("asset-edit-name").value.trim(),asset_type:$("asset-edit-type").value,category:assetCategoryForType($("asset-edit-type").value),tracking_mode:trackingMode,quantity:trackingMode==="GROUPED"?Number($("asset-edit-quantity").value):1,unit:$("asset-edit-unit").value.trim()||"шт.",room_id:roomId,notes:$("asset-edit-notes").value.trim()||null};button.disabled=true;try{await sendAction(`/admin/assets/${asset.id}`,body,"PATCH","Карточка имущества обновлена");$("asset-edit-dialog").close();}catch(error){showToast(error.message,true);}finally{button.disabled=false;}});
+$("asset-qr-cancel").onclick=()=>$("asset-qr-dialog").close();
+$("asset-qr-form").addEventListener("submit",async(event)=>{event.preventDefault();const asset=state.qrAsset;if(!asset)return;const raw=$("asset-qr-public-url").value.trim();let publicUrl="";try{if(raw){const normalized=new URL(raw);if(normalized.protocol!=="https:")throw new Error("Для телефона нужен HTTPS-адрес.");publicUrl=normalized.origin;localStorage.setItem("assetguardPublicUrl",publicUrl);}await printAssetQr(asset,publicUrl);$("asset-qr-dialog").close();}catch(error){showToast(error.message,true);}});
 $("clear-device-filters").addEventListener("click",clearDeviceFilters);
-$("logout").onclick=async()=>{if(token)await fetch("/auth/logout",{method:"POST",headers:{"X-AssetGuard-Admin-Token":token}}).catch(()=>{});token="";sessionStorage.removeItem("assetguard-admin-token");state={...state,assets:[],endpoints:[],devices:[],changes:[],incidents:[],currentUser:null};syncRoleControls();renderAdminAccessVisibility();$("status").textContent="Сессия завершена.";showToast("Вы вышли из системы");};
+$("logout").onclick=()=>{const previousToken=token, isNamedSession=Boolean(state.currentUser?.id);token="";sessionStorage.removeItem("assetguard-admin-token");if(state.visionImageUrl)URL.revokeObjectURL(state.visionImageUrl);if(state.assetQrUrl)URL.revokeObjectURL(state.assetQrUrl);state={assets:[],endpoints:[],devices:[],changes:[],incidents:[],operations:null,locations:[],users:[],locationAccess:[],organizations:[],agentCredentials:[],currentUser:null,visionRooms:[],selectedAsset:null,linkingEndpoint:null,visionRoomId:null,visionScan:null,visionImageUrl:null,assetQrUrl:null,roomWorkspace:null,roomTab:"overview",physicalIncidentId:null};$("detail").hidden=true;$("room-detail").hidden=true;$("create-asset").hidden=true;$("assets").innerHTML='<tr><td colspan="6"><div class="empty-state"><strong>Войдите, чтобы открыть реестр</strong><p>После входа здесь появятся доступные вам имущество и компьютеры.</p></div></td></tr>';$("location-tree").innerHTML='<p class="empty">Войдите, чтобы посмотреть структуру школы.</p>';$("attention-list").innerHTML='<p class="empty">Войдите, чтобы увидеть состояние имущества.</p>';$("activity-list").innerHTML='';$("setup-guide").hidden=true;syncRoleControls();renderAdminAccessVisibility();$("status").textContent="Сессия завершена. Войдите снова, чтобы загрузить данные.";showToast("Вы вышли из системы");if(previousToken&&isNamedSession)fetch("/auth/logout",{method:"POST",headers:{"X-AssetGuard-Admin-Token":previousToken}}).catch(()=>{});};
 $("show-create").onclick=()=>{if(!$("create-asset").hidden){$("create-asset").hidden=true;return;}openAssetCreateForm();};
 $("cancel-create").onclick=()=>{$("create-asset").hidden=true;};
 $("create-building").addEventListener("submit",async(event)=>{event.preventDefault();const form=event.currentTarget;try{await api("/admin/locations/buildings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(Object.fromEntries(new FormData(form).entries()))});form.reset();showToast("Корпус создан");await load(false);}catch(error){showToast(error.message,true);}});

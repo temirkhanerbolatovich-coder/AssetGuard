@@ -139,6 +139,16 @@ def test_admin_can_open_dashboard_and_create_asset(live_server):
         page.locator("#detail-title").filter(has_text="Browser E2E workstation").wait_for()
         assert page.get_by_text("Компьютер пока не связан с Agent").is_visible()
         assert page.get_by_role("heading", name="Состав компьютера").is_hidden()
+        page.locator("#edit-asset").click()
+        page.locator("#asset-edit-dialog").wait_for(state="visible")
+        page.locator("#asset-edit-name").fill("Browser E2E workstation updated")
+        page.locator("#asset-edit-submit").click()
+        page.locator("#asset-edit-dialog").wait_for(state="hidden")
+        page.locator("#detail-title").filter(has_text="Browser E2E workstation updated").wait_for()
+        page.locator("#show-asset-qr").click()
+        page.locator("#asset-qr-dialog").wait_for(state="visible")
+        page.locator("#asset-qr-cancel").click()
+        page.locator("#asset-qr-dialog").wait_for(state="hidden")
 
         api_headers = {"X-AssetGuard-Admin-Token": admin_secret}
         building = page.request.post(f"{base_url}/admin/locations/buildings", headers=api_headers, data={"name": "E2E корпус"}).json()
@@ -190,5 +200,10 @@ def test_admin_can_open_dashboard_and_create_asset(live_server):
         assert page.locator("#vision-asset-id option").count() == 2
         assert page.locator("#vision-asset-id option", has_text="Проектор кабинета").count() == 1
         assert page.locator("body").evaluate("element => element.scrollWidth <= element.clientWidth")
+        page.locator("#logout").click()
+        assert page.locator("#logout").is_hidden()
+        assert page.locator("#login").is_visible()
+        assert page.locator("#detail").is_hidden()
+        assert page.get_by_text("Войдите, чтобы открыть реестр").is_visible()
         assert console_errors == []
         browser.close()
