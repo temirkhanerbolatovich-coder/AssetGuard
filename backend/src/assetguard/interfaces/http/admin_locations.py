@@ -12,7 +12,10 @@ from sqlalchemy.orm import Session
 from assetguard.infrastructure.database import get_session
 from assetguard.interfaces.http.admin_assets import require_admin, require_viewer
 from assetguard.modules.baselines.models import BaselineRecord
-from assetguard.modules.incidents.models import AssetHistoryEntryRecord, EndpointHistoryEntryRecord, IncidentRecord
+from assetguard.modules.incidents.models import (
+    AssetHistoryEntryRecord, EndpointHistoryEntryRecord, IncidentRecord,
+    PhysicalIncidentDecisionRecord, PhysicalIncidentRecord,
+)
 from assetguard.modules.assets.models import (
     AssetRecord, BuildingRecord, FloorRecord, OrganizationRecord, RoomInspectionItemRecord,
     RoomInspectionRecord, RoomRecord,
@@ -65,6 +68,11 @@ class RoomInspectionItemInput(BaseModel):
 class RoomInspectionCreate(BaseModel):
     comment: str | None = Field(default=None, max_length=4000)
     items: list[RoomInspectionItemInput]
+
+
+class PhysicalIncidentDecisionInput(BaseModel):
+    action: Literal["INVESTIGATE", "MOVE", "REPAIR", "WRITE_OFF", "FALSE_POSITIVE"]
+    comment: str = Field(min_length=3, max_length=4000)
 
 
 class AccessGrant(BaseModel):
@@ -158,6 +166,28 @@ def _inspection_view(session: Session, inspection: RoomInspectionRecord) -> dict
             "result": item.result, "expected_quantity": item.expected_quantity,
             "affected_quantity": item.affected_quantity, "comment": item.comment,
         } for item in items],
+    }
+
+
+def _physical_incident_view(session: Session, incident: PhysicalIncidentRecord) -> dict:
+    asset = session.get(AssetRecord, incident.asset_id)
+    decisions = list(session.scalars(select(PhysicalIncidentDecisionRecord).where(
+        PhysicalIncidentDecisionRecord.incident_id == incident.id,
+    ).order_by(PhysicalIncidentDecisionRecord.created_at)))
+    return {
+        "id": str(incident.id), "room_id": str(incident.room_id),
+        "asset_id": str(incident.asset_id),
+        "inventory_number": asset.inventory_number if asset else None,
+        "asset_name": asset.name if asset else "Удалённая позиция",
+        "issue_type": incident.issue_type, "affected_quantity": incident.affected_quantity,
+        "status": incident.status, "severity": incident.severity,
+        "title": incident.title, "description": incident.description,
+        "created_at": incident.created_at, "resolved_at": incident.resolved_at,
+        "decisions": [{
+            "id": str(decision.id), "action": decision.action,
+            "comment": decision.comment, "actor": decision.actor,
+            "created_at": decision.created_at,
+        } for decision in decisions],
     }
 
 
@@ -266,13 +296,16 @@ def create_room_inspection(room_id: UUID, body: RoomInspectionCreate, session: A
     )
     session.add(inspection); session.flush()
     labels = {"PRESENT": "на месте", "MISSING": "отсутствует", "DAMAGED": "повреждено"}
+    inspection_items: list[tuple[RoomInspectionItemInput, RoomInspectionItemRecord]] = []
     for item in body.items:
         asset = assets_by_id[item.asset_id]
-        session.add(RoomInspectionItemRecord(
+        record = RoomInspectionItemRecord(
             inspection_id=inspection.id, asset_id=asset.id, result=item.result,
             expected_quantity=asset.quantity, affected_quantity=item.affected_quantity,
             comment=_clean(item.comment),
-        ))
+        )
+        session.add(record)
+        inspection_items.append((item, record))
         message = f"Физическая проверка: {labels[item.result]}."
         if item.affected_quantity:
             message = f"Физическая проверка: {labels[item.result]} — {item.affected_quantity} из {asset.quantity} {asset.unit}."
@@ -281,8 +314,66 @@ def create_room_inspection(room_id: UUID, body: RoomInspectionCreate, session: A
             related_entity_type="ROOM_INSPECTION", related_entity_id=inspection.id,
             message=message, metadata={"result": item.result, "affected_quantity": item.affected_quantity, "inspector": principal.username},
         )
+    session.flush()
+    for item, record in inspection_items:
+        if item.result == "PRESENT":
+            continue
+        asset = assets_by_id[item.asset_id]
+        incident = PhysicalIncidentRecord(
+            room_id=room.id, asset_id=asset.id, inspection_item_id=record.id,
+            issue_type=item.result, affected_quantity=item.affected_quantity,
+            status="OPEN", severity="HIGH" if item.result == "MISSING" else "MEDIUM",
+            title=f"{asset.name}: {labels[item.result]}",
+            description=_clean(item.comment) or f"Расхождение обнаружено при физическом обходе кабинета {room.name}.",
+            created_at=now, resolved_at=None,
+        )
+        session.add(incident); session.flush()
+        append_asset_history(
+            session, asset_id=asset.id, event_type="PHYSICAL_INCIDENT_CREATED",
+            related_entity_type="PHYSICAL_INCIDENT", related_entity_id=incident.id,
+            message=f"Создан физический инцидент: {labels[item.result]} — {item.affected_quantity} из {asset.quantity} {asset.unit}.",
+            metadata={"inspection_id": str(inspection.id), "inspection_item_id": str(record.id), "severity": incident.severity},
+        )
     session.commit(); session.refresh(inspection)
     return _inspection_view(session, inspection)
+
+
+@router.post("/physical-incidents/{incident_id}/decision")
+def decide_physical_incident(
+    incident_id: UUID, body: PhysicalIncidentDecisionInput,
+    session: Annotated[Session, Depends(get_session)],
+    principal: Annotated[AuthPrincipal, Depends(require_viewer)],
+):
+    incident = session.get(PhysicalIncidentRecord, incident_id)
+    if not incident:
+        raise HTTPException(404, "Physical incident was not found.")
+    _room(session, incident.room_id, principal)
+    require_room_access(session, incident.room_id, principal, write=True)
+    if incident.status == "RESOLVED":
+        raise HTTPException(409, "The physical incident is already resolved.")
+    now = datetime.now(UTC)
+    decision = PhysicalIncidentDecisionRecord(
+        incident_id=incident.id, action=body.action, comment=_clean(body.comment),
+        actor=principal.username, created_at=now,
+    )
+    session.add(decision)
+    resolving = body.action != "INVESTIGATE"
+    incident.status = "RESOLVED" if resolving else "UNDER_REVIEW"
+    incident.resolved_at = now if resolving else None
+    action_labels = {
+        "INVESTIGATE": "назначена дополнительная проверка", "MOVE": "принято решение о перемещении",
+        "REPAIR": "передано в ремонт", "WRITE_OFF": "принято решение о списании",
+        "FALSE_POSITIVE": "расхождение не подтвердилось",
+    }
+    append_asset_history(
+        session, asset_id=incident.asset_id,
+        event_type="PHYSICAL_INCIDENT_RESOLVED" if resolving else "PHYSICAL_INCIDENT_CLASSIFIED",
+        related_entity_type="PHYSICAL_INCIDENT", related_entity_id=incident.id,
+        message=f"Физический инцидент: {action_labels[body.action]}.",
+        metadata={"action": body.action, "actor": principal.username, "comment": body.comment},
+    )
+    session.commit(); session.refresh(incident)
+    return _physical_incident_view(session, incident)
 
 
 @router.get("/rooms/{room_id}/workspace")
@@ -302,6 +393,9 @@ def room_workspace(room_id: UUID, session: Annotated[Session, Depends(get_sessio
     endpoint_ids = [endpoint.id for endpoint in endpoints]
     active_baseline_ids = set(session.scalars(select(BaselineRecord.managed_endpoint_id).where(BaselineRecord.managed_endpoint_id.in_(endpoint_ids), BaselineRecord.status == "ACTIVE"))) if endpoint_ids else set()
     incidents = list(session.scalars(select(IncidentRecord).where(IncidentRecord.managed_endpoint_id.in_(endpoint_ids), IncidentRecord.status.in_(("OPEN", "UNDER_REVIEW"))).order_by(IncidentRecord.created_at.desc()))) if endpoint_ids else []
+    physical_incidents = list(session.scalars(select(PhysicalIncidentRecord).where(
+        PhysicalIncidentRecord.room_id == room.id,
+    ).order_by(PhysicalIncidentRecord.created_at.desc()).limit(50)))
     vision_room = session.scalar(select(VisionRoomRecord).where(VisionRoomRecord.location_room_id == room.id))
     vision_baseline = session.scalar(select(VisionBaselineRecord).where(VisionBaselineRecord.room_id == vision_room.id)) if vision_room else None
     vision_scans = list(session.scalars(select(VisionScanRecord).where(VisionScanRecord.room_id == vision_room.id).order_by(VisionScanRecord.created_at.desc()).limit(50))) if vision_room else []
@@ -333,6 +427,7 @@ def room_workspace(room_id: UUID, session: Annotated[Session, Depends(get_sessio
         "baseline": {"agent_ready": len(active_baseline_ids), "agent_total": len(endpoints), "vision_ready": vision_baseline is not None},
         "vision": None if not vision_room else {"room_id": str(vision_room.id), "has_baseline": vision_baseline is not None, "baseline_counts": vision_baseline.counts if vision_baseline else None, "latest_scan": None if not latest_scan else {"id": str(latest_scan.id), "status": latest_scan.status, "created_at": latest_scan.created_at, "counts": latest_scan.counts, "comparison": latest_scan.comparison}},
         "incidents": [{"id": str(item.id), "endpoint_id": str(item.managed_endpoint_id), "status": item.status, "severity": item.severity, "title": item.title, "created_at": item.created_at} for item in incidents],
+        "physical_incidents": [_physical_incident_view(session, item) for item in physical_incidents],
         "inspections": inspection_views,
         "latest_inspection": inspection_views[0] if inspection_views else None,
         "history": history[:50],

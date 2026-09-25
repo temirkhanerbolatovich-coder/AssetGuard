@@ -116,7 +116,30 @@ async def _complete_mvp_workflow() -> None:
         assert workspace.json()["room"]["purpose"] == "Компьютерный класс"
         assert workspace.json()["latest_inspection"]["comment"] == "Контрольный обход"
         assert workspace.json()["latest_inspection"]["items"][0]["result"] == "DAMAGED"
-        assert {item["source"] for item in workspace.json()["history"][:2]} == {"ASSET", "PHYSICAL"}
+        assert len(workspace.json()["physical_incidents"]) == 1
+        physical_incident = workspace.json()["physical_incidents"][0]
+        assert physical_incident["asset_id"] == asset_id
+        assert physical_incident["issue_type"] == "DAMAGED"
+        assert physical_incident["status"] == "OPEN"
+        review = await client.post(
+            f"/admin/locations/physical-incidents/{physical_incident['id']}/decision",
+            headers=admin_headers(), json={"action": "INVESTIGATE", "comment": "Проверить состояние на месте"},
+        )
+        assert review.status_code == 200
+        assert review.json()["status"] == "UNDER_REVIEW"
+        resolution = await client.post(
+            f"/admin/locations/physical-incidents/{physical_incident['id']}/decision",
+            headers=admin_headers(), json={"action": "REPAIR", "comment": "Передать проектор в ремонт"},
+        )
+        assert resolution.status_code == 200
+        assert resolution.json()["status"] == "RESOLVED"
+        assert resolution.json()["decisions"][-1]["actor"] == "shared-admin"
+        duplicate_resolution = await client.post(
+            f"/admin/locations/physical-incidents/{physical_incident['id']}/decision",
+            headers=admin_headers(), json={"action": "WRITE_OFF", "comment": "Повторное решение запрещено"},
+        )
+        assert duplicate_resolution.status_code == 409
+        assert {"ASSET", "PHYSICAL"} <= {item["source"] for item in workspace.json()["history"]}
         export = await client.get("/admin/assets/export.xlsx", headers=admin_headers())
         assert export.status_code == 200
         assert export.headers["content-type"].startswith("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")

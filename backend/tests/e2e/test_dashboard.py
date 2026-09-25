@@ -177,6 +177,14 @@ def test_admin_can_open_dashboard_and_create_asset(live_server):
         page.locator("#room-inspection-dialog").wait_for(state="hidden")
         assert page.locator("#room-tab-content").get_by_text("E2E обход кабинета").is_visible()
         assert page.locator("#room-tab-content").get_by_text("Повреждено · 1").is_visible()
+        page.locator('[data-room-tab="incidents"]').click()
+        assert page.locator("#room-tab-content").get_by_text("Проектор кабинета: повреждено").is_visible()
+        page.locator("#room-tab-content .physical-incident-action").click()
+        page.locator("#physical-incident-action-select").select_option("REPAIR")
+        page.locator("#physical-incident-comment").fill("Передать проектор в ремонт")
+        page.locator("#physical-incident-submit").click()
+        page.locator("#physical-incident-dialog").wait_for(state="hidden")
+        assert page.locator("#room-tab-content").get_by_text("Ремонт").is_visible()
         page.locator("#room-vision-action").click()
         assert page.locator("#vision-location-room").input_value() == room["id"]
         assert page.locator("#vision-asset-id option").count() == 2

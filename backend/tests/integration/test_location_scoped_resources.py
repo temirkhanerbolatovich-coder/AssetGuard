@@ -18,7 +18,9 @@ from assetguard.modules.assets.models import (
 )
 from assetguard.modules.identity.auth import hash_password
 from assetguard.modules.identity.models import AuthSessionRecord, LocationAccessRecord, UserRecord
-from assetguard.modules.incidents.models import AssetHistoryEntryRecord
+from assetguard.modules.incidents.models import (
+    AssetHistoryEntryRecord, PhysicalIncidentDecisionRecord, PhysicalIncidentRecord,
+)
 from assetguard.modules.vision.models import VisionBaselineRecord, VisionRoomRecord, VisionScanRecord
 
 
@@ -148,15 +150,44 @@ async def _exercise_location_scope() -> None:
 
         editor_write = await client.post(f"/admin/locations/rooms/{visible_room_id}/inspections", headers=headers, json={
             "comment": "Scoped editor inspection",
-            "items": [{"asset_id": str(visible_asset_id), "result": "PRESENT", "affected_quantity": 0}],
+            "items": [{"asset_id": str(visible_asset_id), "result": "DAMAGED", "affected_quantity": 1}],
         })
         assert editor_write.status_code == 201
         assert editor_write.json()["inspector_name"] == username
         visible_inspections = await client.get(f"/admin/locations/rooms/{visible_room_id}/inspections", headers=headers)
         assert visible_inspections.status_code == 200
         assert visible_inspections.json()[0]["comment"] == "Scoped editor inspection"
+        workspace = await client.get(f"/admin/locations/rooms/{visible_room_id}/workspace", headers=headers)
+        physical_incident_id = workspace.json()["physical_incidents"][0]["id"]
+
+        with factory() as session:
+            grant = session.scalar(select(LocationAccessRecord).where(LocationAccessRecord.user_id == created_user_id))
+            grant.permission = "VIEWER"
+            session.commit()
+        viewer_decision = await client.post(
+            f"/admin/locations/physical-incidents/{physical_incident_id}/decision", headers=headers,
+            json={"action": "REPAIR", "comment": "Viewer cannot resolve this incident"},
+        )
+        assert viewer_decision.status_code == 404
+
+        with factory() as session:
+            grant = session.scalar(select(LocationAccessRecord).where(LocationAccessRecord.user_id == created_user_id))
+            grant.permission = "EDITOR"
+            session.commit()
+        editor_decision = await client.post(
+            f"/admin/locations/physical-incidents/{physical_incident_id}/decision", headers=headers,
+            json={"action": "REPAIR", "comment": "Editor sends the item for repair"},
+        )
+        assert editor_decision.status_code == 200
+        assert editor_decision.json()["status"] == "RESOLVED"
+        assert editor_decision.json()["decisions"][0]["actor"] == username
 
     with factory() as session:
+        physical_ids = select(PhysicalIncidentRecord.id).where(PhysicalIncidentRecord.room_id == visible_room_id)
+        session.execute(text("ALTER TABLE physical_incident_decisions DISABLE TRIGGER trg_physical_incident_decisions_immutable"))
+        session.execute(delete(PhysicalIncidentDecisionRecord).where(PhysicalIncidentDecisionRecord.incident_id.in_(physical_ids)))
+        session.execute(text("ALTER TABLE physical_incident_decisions ENABLE TRIGGER trg_physical_incident_decisions_immutable"))
+        session.execute(delete(PhysicalIncidentRecord).where(PhysicalIncidentRecord.room_id == visible_room_id))
         inspection_ids = select(RoomInspectionRecord.id).where(RoomInspectionRecord.room_id == visible_room_id)
         session.execute(text("ALTER TABLE room_inspection_items DISABLE TRIGGER trg_room_inspection_items_immutable"))
         session.execute(text("ALTER TABLE room_inspections DISABLE TRIGGER trg_room_inspections_immutable"))

@@ -34,6 +34,32 @@ class IncidentDecisionRecord(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
+class PhysicalIncidentRecord(Base):
+    __tablename__ = "physical_incidents"
+    id: Mapped[UUID] = mapped_column(PostgreSQLUUID(as_uuid=True), primary_key=True, default=uuid4)
+    room_id: Mapped[UUID] = mapped_column(ForeignKey("location_rooms.id", ondelete="RESTRICT"))
+    asset_id: Mapped[UUID] = mapped_column(ForeignKey("assets.id", ondelete="RESTRICT"))
+    inspection_item_id: Mapped[UUID] = mapped_column(ForeignKey("room_inspection_items.id", ondelete="RESTRICT"), unique=True)
+    issue_type: Mapped[str] = mapped_column(String(16))
+    affected_quantity: Mapped[int] = mapped_column()
+    status: Mapped[str] = mapped_column(String(16))
+    severity: Mapped[str] = mapped_column(String(16))
+    title: Mapped[str] = mapped_column(String(512))
+    description: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class PhysicalIncidentDecisionRecord(Base):
+    __tablename__ = "physical_incident_decisions"
+    id: Mapped[UUID] = mapped_column(PostgreSQLUUID(as_uuid=True), primary_key=True, default=uuid4)
+    incident_id: Mapped[UUID] = mapped_column(ForeignKey("physical_incidents.id", ondelete="RESTRICT"))
+    action: Mapped[str] = mapped_column(String(32))
+    comment: Mapped[str | None] = mapped_column(Text)
+    actor: Mapped[str] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
 class EndpointHistoryEntryRecord(Base):
     __tablename__ = "endpoint_history_entries"
     id: Mapped[UUID] = mapped_column(PostgreSQLUUID(as_uuid=True), primary_key=True, default=uuid4)
