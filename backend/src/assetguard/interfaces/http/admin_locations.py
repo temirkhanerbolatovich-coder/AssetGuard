@@ -13,7 +13,11 @@ from assetguard.infrastructure.database import get_session
 from assetguard.interfaces.http.admin_assets import require_admin, require_viewer
 from assetguard.modules.baselines.models import BaselineRecord
 from assetguard.modules.incidents.models import AssetHistoryEntryRecord, EndpointHistoryEntryRecord, IncidentRecord
-from assetguard.modules.assets.models import AssetRecord, BuildingRecord, FloorRecord, OrganizationRecord, RoomRecord
+from assetguard.modules.assets.models import (
+    AssetRecord, BuildingRecord, FloorRecord, OrganizationRecord, RoomInspectionItemRecord,
+    RoomInspectionRecord, RoomRecord,
+)
+from assetguard.modules.history.service import append_asset_history
 from assetguard.modules.identity.auth import AuthPrincipal
 from assetguard.modules.identity.location_access import permitted_room_ids, require_room_access
 from assetguard.modules.identity.models import LocationAccessRecord, UserRecord
@@ -49,6 +53,18 @@ class RoomUpdate(BaseModel):
     responsible_name: str | None = Field(default=None, max_length=255)
     responsible_contact: str | None = Field(default=None, max_length=255)
     notes: str | None = None
+
+
+class RoomInspectionItemInput(BaseModel):
+    asset_id: UUID
+    result: Literal["PRESENT", "MISSING", "DAMAGED"]
+    affected_quantity: int = Field(default=0, ge=0, le=1_000_000)
+    comment: str | None = Field(default=None, max_length=2000)
+
+
+class RoomInspectionCreate(BaseModel):
+    comment: str | None = Field(default=None, max_length=4000)
+    items: list[RoomInspectionItemInput]
 
 
 class AccessGrant(BaseModel):
@@ -114,6 +130,34 @@ def _room_view(session: Session, room: RoomRecord) -> dict:
         "responsible_name": room.responsible_name, "responsible_contact": room.responsible_contact, "notes": room.notes,
         "asset_count": len(assets), "endpoint_count": len(endpoints),
         "online_count": sum(1 for item in endpoints if item.status == "ONLINE"),
+    }
+
+
+def _inspection_view(session: Session, inspection: RoomInspectionRecord) -> dict:
+    items = list(session.scalars(select(RoomInspectionItemRecord).where(
+        RoomInspectionItemRecord.inspection_id == inspection.id,
+    )))
+    assets = {asset.id: asset for asset in session.scalars(select(AssetRecord).where(
+        AssetRecord.id.in_([item.asset_id for item in items]),
+    ))} if items else {}
+    items.sort(key=lambda item: (
+        assets[item.asset_id].inventory_number if item.asset_id in assets else "",
+        str(item.asset_id),
+    ))
+    counts = {"PRESENT": 0, "MISSING": 0, "DAMAGED": 0}
+    for item in items:
+        counts[item.result] += 1
+    return {
+        "id": str(inspection.id), "room_id": str(inspection.room_id),
+        "inspector_name": inspection.inspector_name, "comment": inspection.comment,
+        "completed_at": inspection.completed_at, "counts": counts,
+        "items": [{
+            "id": str(item.id), "asset_id": str(item.asset_id),
+            "inventory_number": assets[item.asset_id].inventory_number if item.asset_id in assets else None,
+            "name": assets[item.asset_id].name if item.asset_id in assets else "Удалённая позиция",
+            "result": item.result, "expected_quantity": item.expected_quantity,
+            "affected_quantity": item.affected_quantity, "comment": item.comment,
+        } for item in items],
     }
 
 
@@ -186,6 +230,61 @@ def room_report(room_id: UUID, session: Annotated[Session, Depends(get_session)]
     return {"room": _room_view(session, room), "path": {"building": building.name if building else None, "floor": floor.name if floor else None}, "assets": [{"id": str(asset.id), "inventory_number": asset.inventory_number, "name": asset.name, "status": asset.status, "asset_type": asset.asset_type} for asset in assets]}
 
 
+@router.get("/rooms/{room_id}/inspections")
+def room_inspections(room_id: UUID, session: Annotated[Session, Depends(get_session)], principal: Annotated[AuthPrincipal, Depends(require_viewer)]):
+    room = _room(session, room_id, principal)
+    inspections = session.scalars(select(RoomInspectionRecord).where(
+        RoomInspectionRecord.room_id == room.id,
+    ).order_by(RoomInspectionRecord.completed_at.desc()).limit(50))
+    return [_inspection_view(session, item) for item in inspections]
+
+
+@router.post("/rooms/{room_id}/inspections", status_code=status.HTTP_201_CREATED)
+def create_room_inspection(room_id: UUID, body: RoomInspectionCreate, session: Annotated[Session, Depends(get_session)], principal: Annotated[AuthPrincipal, Depends(require_viewer)]):
+    room = _room(session, room_id, principal)
+    require_room_access(session, room.id, principal, write=True)
+    assets = list(session.scalars(select(AssetRecord).where(
+        AssetRecord.room_id == room.id,
+    ).order_by(AssetRecord.inventory_number)))
+    if not assets:
+        raise HTTPException(409, "The room has no assets to inspect.")
+    expected_ids = {asset.id for asset in assets}
+    submitted_ids = [item.asset_id for item in body.items]
+    if len(submitted_ids) != len(set(submitted_ids)) or set(submitted_ids) != expected_ids:
+        raise HTTPException(422, "Every asset in the room must have exactly one inspection result.")
+    assets_by_id = {asset.id: asset for asset in assets}
+    for item in body.items:
+        expected_quantity = assets_by_id[item.asset_id].quantity
+        if item.result == "PRESENT" and item.affected_quantity != 0:
+            raise HTTPException(422, "Present assets cannot have an affected quantity.")
+        if item.result != "PRESENT" and not 1 <= item.affected_quantity <= expected_quantity:
+            raise HTTPException(422, "Missing or damaged assets require an affected quantity within the expected total.")
+    now = datetime.now(UTC)
+    inspection = RoomInspectionRecord(
+        room_id=room.id, inspector_user_id=principal.user_id,
+        inspector_name=principal.username, comment=_clean(body.comment), completed_at=now,
+    )
+    session.add(inspection); session.flush()
+    labels = {"PRESENT": "на месте", "MISSING": "отсутствует", "DAMAGED": "повреждено"}
+    for item in body.items:
+        asset = assets_by_id[item.asset_id]
+        session.add(RoomInspectionItemRecord(
+            inspection_id=inspection.id, asset_id=asset.id, result=item.result,
+            expected_quantity=asset.quantity, affected_quantity=item.affected_quantity,
+            comment=_clean(item.comment),
+        ))
+        message = f"Физическая проверка: {labels[item.result]}."
+        if item.affected_quantity:
+            message = f"Физическая проверка: {labels[item.result]} — {item.affected_quantity} из {asset.quantity} {asset.unit}."
+        append_asset_history(
+            session, asset_id=asset.id, event_type="PHYSICAL_INSPECTION_COMPLETED",
+            related_entity_type="ROOM_INSPECTION", related_entity_id=inspection.id,
+            message=message, metadata={"result": item.result, "affected_quantity": item.affected_quantity, "inspector": principal.username},
+        )
+    session.commit(); session.refresh(inspection)
+    return _inspection_view(session, inspection)
+
+
 @router.get("/rooms/{room_id}/workspace")
 def room_workspace(room_id: UUID, session: Annotated[Session, Depends(get_session)], principal: Annotated[AuthPrincipal, Depends(require_viewer)]):
     """Return one room's inventory, evidence state and outstanding decisions.
@@ -206,6 +305,8 @@ def room_workspace(room_id: UUID, session: Annotated[Session, Depends(get_sessio
     vision_room = session.scalar(select(VisionRoomRecord).where(VisionRoomRecord.location_room_id == room.id))
     vision_baseline = session.scalar(select(VisionBaselineRecord).where(VisionBaselineRecord.room_id == vision_room.id)) if vision_room else None
     vision_scans = list(session.scalars(select(VisionScanRecord).where(VisionScanRecord.room_id == vision_room.id).order_by(VisionScanRecord.created_at.desc()).limit(50))) if vision_room else []
+    inspections = list(session.scalars(select(RoomInspectionRecord).where(RoomInspectionRecord.room_id == room.id).order_by(RoomInspectionRecord.completed_at.desc()).limit(20)))
+    inspection_views = [_inspection_view(session, item) for item in inspections]
     latest_scan = vision_scans[0] if vision_scans else None
     history = []
     if asset_ids:
@@ -213,6 +314,7 @@ def room_workspace(room_id: UUID, session: Annotated[Session, Depends(get_sessio
     if endpoint_ids:
         history.extend({"id": str(item.id), "type": item.event_type, "occurred_at": item.occurred_at, "message": item.message, "source": "AGENT", "entity_id": str(item.managed_endpoint_id)} for item in session.scalars(select(EndpointHistoryEntryRecord).where(EndpointHistoryEntryRecord.managed_endpoint_id.in_(endpoint_ids)).order_by(EndpointHistoryEntryRecord.occurred_at.desc()).limit(50)))
     history.extend({"id": str(item.id), "type": "VISION_SCAN_COMPLETED", "occurred_at": item.created_at, "message": f"Фотопроверка завершена со статусом {item.status}.", "source": "VISION", "entity_id": str(item.id)} for item in vision_scans)
+    history.extend({"id": str(item.id), "type": "PHYSICAL_INSPECTION_COMPLETED", "occurred_at": item.completed_at, "message": f"Физический обход завершил {item.inspector_name}.", "source": "PHYSICAL", "entity_id": str(item.id)} for item in inspections)
     history.sort(key=lambda item: item["occurred_at"], reverse=True)
     categories: dict[str, dict[str, int | str]] = {}
     for asset in assets:
@@ -231,6 +333,8 @@ def room_workspace(room_id: UUID, session: Annotated[Session, Depends(get_sessio
         "baseline": {"agent_ready": len(active_baseline_ids), "agent_total": len(endpoints), "vision_ready": vision_baseline is not None},
         "vision": None if not vision_room else {"room_id": str(vision_room.id), "has_baseline": vision_baseline is not None, "baseline_counts": vision_baseline.counts if vision_baseline else None, "latest_scan": None if not latest_scan else {"id": str(latest_scan.id), "status": latest_scan.status, "created_at": latest_scan.created_at, "counts": latest_scan.counts, "comparison": latest_scan.comparison}},
         "incidents": [{"id": str(item.id), "endpoint_id": str(item.managed_endpoint_id), "status": item.status, "severity": item.severity, "title": item.title, "created_at": item.created_at} for item in incidents],
+        "inspections": inspection_views,
+        "latest_inspection": inspection_views[0] if inspection_views else None,
         "history": history[:50],
     }
 

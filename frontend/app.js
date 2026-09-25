@@ -26,7 +26,8 @@ const ramBytes = (value) => value == null ? null : (Number(value) < 1048576 ? Nu
 const statusLabels = {OK:"В норме",ATTENTION:"Требует внимания",ANOMALY:"Обнаружено расхождение",OFFLINE:"Не в сети",UNCHECKED:"Нет данных Agent",MANUAL:"Ручной учёт",WARNING:"Требует внимания",NOT_CHECKED:"Не проверено",ONLINE:"В норме",REQUIRES_VERIFICATION:"Требует проверки",IDENTITY_CONFLICT:"Конфликт идентификации",OPEN:"Открыто",UNDER_REVIEW:"На проверке",RESOLVED:"Закрыто",DISMISSED:"Не подтверждено",ACTIVE:"Активен",REVOKED:"Отозван"};
 const categoryLabels = {IT:"IT-оборудование",FURNITURE:"Мебель",SPORTS:"Спортинвентарь",EDUCATIONAL:"Учебное оборудование",OTHER:"Другое имущество"};
 const componentLabels = {RAM:"Оперативная память",STORAGE:"Физические накопители",DRIVE:"Разделы дисков",CONTROLLER:"Контроллеры",CPU:"Процессор",GPU:"Видеокарта",MOTHERBOARD:"Материнская плата",NETWORK:"Сетевые интерфейсы",MONITOR:"Мониторы",ENDPOINT:"Устройство"};
-const eventLabels = {COMPONENT_ADDED:"Компонент добавлен",COMPONENT_REMOVED:"Компонент отсутствует",COMPONENT_CHANGED:"Характеристики изменились",COMPONENT_REPLACED:"Компонент заменён",HOSTNAME_CHANGED:"Изменилось имя компьютера",DEVICE_IDENTITY_CHANGED:"Изменился идентификатор устройства",INVENTORY_COMPLETED:"Инвентаризация завершена",BASELINE_ACCEPTED:"Эталон подтверждён",HARDWARE_CHANGE_DETECTED:"Обнаружено изменение оборудования",INCIDENT_CREATED:"Создано обращение",INCIDENT_CLASSIFIED:"Обращение классифицировано",INCIDENT_RESOLVED:"Обращение закрыто",ASSET_CREATED:"Актив добавлен",ASSET_UPDATED:"Карточка обновлена",ENDPOINT_LINKED:"Устройство связано с активом",ENDPOINT_UNLINKED:"Устройство отвязано",VISION_SCAN_COMPLETED:"Фотопроверка завершена"};
+const eventLabels = {COMPONENT_ADDED:"Компонент добавлен",COMPONENT_REMOVED:"Компонент отсутствует",COMPONENT_CHANGED:"Характеристики изменились",COMPONENT_REPLACED:"Компонент заменён",HOSTNAME_CHANGED:"Изменилось имя компьютера",DEVICE_IDENTITY_CHANGED:"Изменился идентификатор устройства",INVENTORY_COMPLETED:"Инвентаризация завершена",BASELINE_ACCEPTED:"Эталон подтверждён",HARDWARE_CHANGE_DETECTED:"Обнаружено изменение оборудования",INCIDENT_CREATED:"Создано обращение",INCIDENT_CLASSIFIED:"Обращение классифицировано",INCIDENT_RESOLVED:"Обращение закрыто",ASSET_CREATED:"Актив добавлен",ASSET_UPDATED:"Карточка обновлена",ENDPOINT_LINKED:"Устройство связано с активом",ENDPOINT_UNLINKED:"Устройство отвязано",VISION_SCAN_COMPLETED:"Фотопроверка завершена",PHYSICAL_INSPECTION_COMPLETED:"Физический обход завершён"};
+const inspectionLabels = {PRESENT:"На месте",MISSING:"Отсутствует",DAMAGED:"Повреждено"};
 const classForStatus = (value) => ({OK:"ok",ONLINE:"ok",ACTIVE:"ok",RESOLVED:"ok",ATTENTION:"attention",WARNING:"warning",OPEN:"warning",UNDER_REVIEW:"warning",ANOMALY:"anomaly",IDENTITY_CONFLICT:"danger",REVOKED:"danger",OFFLINE:"offline",UNCHECKED:"unchecked",NOT_CHECKED:"unchecked",REQUIRES_VERIFICATION:"unchecked"}[value] || "neutral");
 const pill = (value) => `<span class="status-pill ${classForStatus(value)}">${escapeHtml(statusLabels[value] || value || "Не проверено")}</span>`;
 
@@ -162,6 +163,30 @@ function renderOperations(operations) {
 function locationContact(item) { return [item.responsible_name, item.responsible_contact].filter(Boolean).join(" · "); }
 function roomMetric(label,value,help) { return `<article><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong><small>${escapeHtml(help)}</small></article>`; }
 function roomCountRows(counts) { return counts && Object.keys(counts).length ? Object.entries(counts).map(([name,count])=>`<div class="summary-line"><span>${escapeHtml(name)}</span><strong>${escapeHtml(count)}</strong></div>`).join("") : '<p class="empty">Подтверждённых объектов пока нет.</p>'; }
+function canEditRoom(roomId) { return state.currentUser?.role==="ADMIN"||Boolean(roomId&&state.currentUser?.editable_room_ids?.includes(roomId)); }
+function inspectionSummary(inspection) {
+  if(!inspection)return '<p class="empty">Физических обходов пока не было.</p>';
+  const counts=inspection.counts||{};
+  return `<div class="inspection-summary"><div><strong>${dateTime(inspection.completed_at)}</strong><small>${escapeHtml(inspection.inspector_name)}</small></div><div class="inspection-counts"><span class="inspection-present">На месте: ${counts.PRESENT||0}</span><span class="inspection-missing">Отсутствует: ${counts.MISSING||0}</span><span class="inspection-damaged">Повреждено: ${counts.DAMAGED||0}</span></div>${inspection.comment?`<p>${escapeHtml(inspection.comment)}</p>`:""}</div>`;
+}
+function renderInspectionTab(workspace) {
+  const inventory=workspace.inventory, latest=workspace.latest_inspection;
+  const canStart=canEditRoom(workspace.room.id)&&inventory.assets.length>0;
+  const launch=canStart?'<button type="button" class="room-inspection-launch">Начать новый обход</button>':"";
+  const heading=`<div class="section-heading"><div><span class="eyebrow">Физическая инвентаризация</span><h3>Обход кабинета</h3><p>Результат фиксируется от имени вошедшего сотрудника и остаётся в истории.</p></div>${launch}</div>`;
+  if(!latest) {
+    const nextStep=canStart?'<button type="button" class="room-inspection-launch">Начать обход</button>':!inventory.assets.length?'<p>Сначала добавьте имущество в кабинет.</p>':"";
+    return `${heading}<div class="empty-state"><strong>Кабинет ещё не обходили</strong><p>Проверьте каждую позицию и зафиксируйте отсутствующее или повреждённое имущество.</p>${nextStep}</div>`;
+  }
+  const items=latest.items.map((item)=>{
+    const affected=item.affected_quantity?` · ${item.affected_quantity}`:"";
+    const comment=item.comment?`<p>${escapeHtml(item.comment)}</p>`:"";
+    return `<article><div><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.inventory_number)} · ожидалось ${item.expected_quantity}</small></div><span class="inspection-result ${item.result.toLowerCase()}">${escapeHtml(inspectionLabels[item.result])}${affected}</span>${comment}</article>`;
+  }).join("");
+  const previous=(workspace.inspections||[]).slice(1);
+  const history=previous.map(inspectionSummary).join("")||'<p class="empty">Это первый обход кабинета.</p>';
+  return `${heading}${inspectionSummary(latest)}<div class="inspection-result-list">${items}</div><details class="inspection-history"><summary>Предыдущие обходы (${previous.length})</summary>${history}</details>`;
+}
 function renderRoomTab() {
   const workspace=state.roomWorkspace;
   if(!workspace)return;
@@ -177,23 +202,26 @@ function renderRoomTab() {
     html=`<div class="room-two-columns"><section><span class="eyebrow">Последние сигналы Agent</span><h3>Компьютеры</h3>${agents.length?agents.map((item)=>`<div class="room-status-row"><div><strong>${escapeHtml(item.hostname||"Компьютер")}</strong><small>Последний отчёт: ${escapeHtml(relativeTime(item.last_seen_at))}</small></div>${pill(item.status)}</div>`).join(""):'<p class="empty">Agent-компьютеры не привязаны к имуществу этого кабинета.</p>'}</section><section><span class="eyebrow">Последнее фото</span><h3>Vision</h3>${vision?.latest_scan?`${pill(vision.latest_scan.status)}<p class="meta">${dateTime(vision.latest_scan.created_at)}</p><div class="summary-lines">${roomCountRows(vision.latest_scan.counts)}</div>`:'<p class="empty">Фотопроверок этого кабинета пока нет.</p>'}</section></div>`;
   } else if(tab==="inventory") {
     html=inventory.assets.length?`<div class="table-wrap"><table><thead><tr><th>Имущество</th><th>Категория</th><th>Учёт</th><th>Количество</th><th></th></tr></thead><tbody>${inventory.assets.map((asset)=>`<tr><td data-label="Имущество"><strong>${escapeHtml(asset.name)}</strong><small>${escapeHtml(asset.inventory_number)}</small></td><td data-label="Категория">${escapeHtml(categoryLabels[asset.category]||asset.category)}</td><td data-label="Учёт">${asset.tracking_mode==="GROUPED"?"Групповой":"Поштучный"}</td><td data-label="Количество">${asset.quantity} ${escapeHtml(asset.unit)}</td><td><button class="button-secondary open-room-asset" data-id="${asset.id}">Открыть</button></td></tr>`).join("")}</tbody></table></div>`:'<div class="empty-state"><strong>В кабинете пока нет имущества</strong><p>Добавьте запись вручную или импортируйте школьную ведомость.</p><a class="button-anchor" href="#devices">Открыть реестр</a></div>';
+  } else if(tab==="inspection") {
+    html=renderInspectionTab(workspace);
   } else if(tab==="vision") {
     html=vision?`<div class="room-two-columns"><section><span class="eyebrow">Эталон</span><h3>${vision.has_baseline?"Подтверждён":"Не создан"}</h3><div class="summary-lines">${roomCountRows(vision.baseline_counts)}</div></section><section><span class="eyebrow">Текущая проверка</span><h3>${vision.latest_scan?dateTime(vision.latest_scan.created_at):"Проверок нет"}</h3>${vision.latest_scan?`${pill(vision.latest_scan.status)}<div class="summary-lines">${roomCountRows(vision.latest_scan.counts)}</div>`:""}<button type="button" class="button-anchor room-vision-launch">Открыть Vision</button></section></div>`:'<div class="empty-state"><strong>Кабинет ещё не проверялся по фото</strong><p>Vision найдёт объекты, сохранит доказательство и сравнит следующий кадр с эталоном.</p><button type="button" class="button-anchor room-vision-launch">Провести проверку</button></div>';
   } else if(tab==="incidents") {
     html=workspace.incidents.length?`<div class="stack-list">${workspace.incidents.map((item)=>`<article class="room-incident"><div><strong>${escapeHtml(item.title)}</strong><small>${dateTime(item.created_at)}</small></div>${pill(item.status)}</article>`).join("")}</div>`:'<div class="attention-banner ok"><span class="attention-icon">✓</span><div><strong>Открытых инцидентов нет</strong><p>Текущие данные не требуют решения ответственного.</p></div></div>';
   } else {
-    html=workspace.history.length?`<div class="timeline">${workspace.history.map((item)=>`<article><time>${dateTime(item.occurred_at)}</time><div><b>${escapeHtml(eventLabels[item.type]||item.type)}</b><p>${escapeHtml(item.message)}</p><small>${item.source==="AGENT"?"Agent":item.source==="VISION"?"Vision":"Реестр имущества"}</small></div></article>`).join("")}</div>`:'<p class="empty">История кабинета появится после добавления имущества или первой проверки.</p>';
+    html=workspace.history.length?`<div class="timeline">${workspace.history.map((item)=>`<article><time>${dateTime(item.occurred_at)}</time><div><b>${escapeHtml(eventLabels[item.type]||item.type)}</b><p>${escapeHtml(item.message)}</p><small>${item.source==="AGENT"?"Agent":item.source==="VISION"?"Vision":item.source==="PHYSICAL"?"Физический обход":"Реестр имущества"}</small></div></article>`).join("")}</div>`:'<p class="empty">История кабинета появится после добавления имущества или первой проверки.</p>';
   }
   $("room-tab-content").innerHTML=html;
   document.querySelectorAll(".open-room-asset").forEach((button)=>button.onclick=()=>{$("room-detail").hidden=true;detail(button.dataset.id);});
   document.querySelectorAll(".room-vision-launch").forEach((button)=>button.onclick=()=>launchRoomVision(workspace.room.id));
+  document.querySelectorAll(".room-inspection-launch").forEach((button)=>button.onclick=openRoomInspectionDialog);
 }
 async function openRoomWorkspace(roomId) {
   $("room-detail").hidden=false; $("room-detail-title").textContent="Загрузка кабинета…"; $("room-tab-content").innerHTML='<div class="skeleton"></div>';
   try {
     const workspace=await api(`/admin/locations/rooms/${roomId}/workspace`); state.roomWorkspace=workspace; state.roomTab="overview";
     $("room-detail-title").textContent=`Кабинет ${workspace.room.name}`; $("room-detail-path").textContent=[workspace.path.building,workspace.path.floor&&`этаж ${workspace.path.floor}`,workspace.room.purpose].filter(Boolean).join(" · ");
-    $("room-edit-action").hidden=state.currentUser?.role!=="ADMIN"; $("room-vision-action").hidden=state.currentUser?.role!=="ADMIN";
+    $("room-edit-action").hidden=state.currentUser?.role!=="ADMIN"; $("room-vision-action").hidden=state.currentUser?.role!=="ADMIN"; $("room-inspection-action").hidden=!canEditRoom(workspace.room.id)||!workspace.inventory.assets.length;
     const attention=workspace.incidents.length||workspace.agents.some((item)=>item.status!=="ONLINE")||workspace.vision?.latest_scan?.status==="WARNING"; $("room-detail-state").textContent=attention?"Требует внимания":"В норме"; $("room-detail-state").className=`status-pill ${attention?"warning":"ok"}`;
     renderRoomTab(); $("room-detail").scrollIntoView({behavior:"smooth",block:"start"});
   } catch(error) { $("room-detail").hidden=true; showToast(error.message,true); }
@@ -202,6 +230,14 @@ function openRoomEditDialog() {
   const room=state.roomWorkspace?.room;if(!room)return;
   $("room-edit-purpose").value=room.purpose||"";$("room-edit-responsible").value=room.responsible_name||"";$("room-edit-contact").value=room.responsible_contact||"";$("room-edit-notes").value=room.notes||"";
   $("room-edit-dialog").showModal();$("room-edit-purpose").focus();
+}
+function openRoomInspectionDialog() {
+  const workspace=state.roomWorkspace;if(!workspace||!canEditRoom(workspace.room.id))return;
+  if(!workspace.inventory.assets.length){showToast("Сначала добавьте имущество в кабинет",true);return;}
+  $("room-inspection-comment").value="";
+  $("room-inspection-items").innerHTML=workspace.inventory.assets.map((asset)=>`<article class="inspection-item" data-asset="${asset.id}" data-quantity="${asset.quantity}"><div class="inspection-item-title"><strong>${escapeHtml(asset.name)}</strong><small>${escapeHtml(asset.inventory_number)} · ${asset.quantity} ${escapeHtml(asset.unit)}</small></div><label>Результат<select class="inspection-result-input"><option value="PRESENT">На месте</option><option value="MISSING">Отсутствует</option><option value="DAMAGED">Повреждено</option></select></label><label class="inspection-affected" hidden>Проблемных единиц<input class="inspection-affected-input" type="number" min="1" max="${asset.quantity}" value="1"></label><label>Комментарий<input class="inspection-item-comment" maxlength="2000" placeholder="Необязательно"></label></article>`).join("");
+  $("room-inspection-items").querySelectorAll(".inspection-result-input").forEach((select)=>select.onchange=()=>{const item=select.closest(".inspection-item"),affected=item.querySelector(".inspection-affected"),input=item.querySelector(".inspection-affected-input"),present=select.value==="PRESENT";affected.hidden=present;input.disabled=present;});
+  $("room-inspection-dialog").showModal();$("room-inspection-items").querySelector("select")?.focus();
 }
 function syncVisionAssetsForRoom(roomId) {
   const select=$("vision-asset-id"),previous=select.value,assets=state.assets.filter((asset)=>!roomId||asset.room_id===roomId);
@@ -266,7 +302,7 @@ function renderAgentCredentials() {
 }
 function syncRoleControls() {
   const user=state.currentUser, isAdmin=user?.role==="ADMIN", editableRooms=new Set(user?.editable_room_ids||[]), canEditAssets=isAdmin||editableRooms.size>0;
-  $("room-edit-action").hidden=!isAdmin;$("room-vision-action").hidden=!isAdmin;
+  $("room-edit-action").hidden=!isAdmin;$("room-vision-action").hidden=!isAdmin;$("room-inspection-action").hidden=!state.roomWorkspace||!canEditRoom(state.roomWorkspace.room.id)||!state.roomWorkspace.inventory.assets.length;
   $("show-create").hidden=!canEditAssets;
   if(!canEditAssets)$("create-asset").hidden=true;
   ["export-assets","export-assets-pdf","import-assets","import-assets-file","import-assets-pdf","import-assets-pdf-file","create-building","vision-upload","vision-baseline"].forEach((id)=>$(id).hidden=!isAdmin);
@@ -527,8 +563,11 @@ $("room-tabs").addEventListener("click",(event)=>{const button=event.target.clos
 $("room-detail-back").onclick=()=>{state.roomWorkspace=null;$("room-detail").hidden=true;location.hash="locations";$("locations").scrollIntoView({behavior:"smooth",block:"start"});};
 $("room-edit-action").onclick=openRoomEditDialog;
 $("room-vision-action").onclick=()=>launchRoomVision(state.roomWorkspace?.room.id);
+$("room-inspection-action").onclick=openRoomInspectionDialog;
 $("room-edit-cancel").onclick=()=>$("room-edit-dialog").close();
 $("room-edit-form").addEventListener("submit",async(event)=>{event.preventDefault();const roomId=state.roomWorkspace?.room.id;if(!roomId)return;const button=$("room-edit-submit"),body={purpose:$("room-edit-purpose").value.trim()||null,responsible_name:$("room-edit-responsible").value.trim()||null,responsible_contact:$("room-edit-contact").value.trim()||null,notes:$("room-edit-notes").value.trim()||null};button.disabled=true;try{await api(`/admin/locations/rooms/${roomId}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});await load(false);await openRoomWorkspace(roomId);$("room-edit-dialog").close();showToast("Данные кабинета сохранены");}catch(error){showToast(error.message,true);}finally{button.disabled=false;}});
+$("room-inspection-cancel").onclick=()=>$("room-inspection-dialog").close();
+$("room-inspection-form").addEventListener("submit",async(event)=>{event.preventDefault();const roomId=state.roomWorkspace?.room.id;if(!roomId)return;const button=$("room-inspection-submit"),items=[...$("room-inspection-items").querySelectorAll(".inspection-item")].map((row)=>{const result=row.querySelector(".inspection-result-input").value;return {asset_id:row.dataset.asset,result,affected_quantity:result==="PRESENT"?0:Number(row.querySelector(".inspection-affected-input").value),comment:row.querySelector(".inspection-item-comment").value.trim()||null};}),body={comment:$("room-inspection-comment").value.trim()||null,items};button.disabled=true;try{await api(`/admin/locations/rooms/${roomId}/inspections`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});await load(false);await openRoomWorkspace(roomId);state.roomTab="inspection";renderRoomTab();$("room-inspection-dialog").close();showToast("Обход кабинета сохранён");}catch(error){showToast(error.message,true);}finally{button.disabled=false;}});
 $("vision-location-room").addEventListener("change",(event)=>syncVisionAssetsForRoom(event.target.value));
 $("vision-upload").addEventListener("submit",async(event)=>{event.preventDefault();const button=$("vision-run"),selectedRoomName=$("vision-location-room").selectedOptions[0]?.textContent||"Кабинет";button.disabled=true;$("vision-progress").textContent="Анализируем фото… Первый запуск может занять несколько минут.";try{const form=new FormData(event.currentTarget);const scan=await api("/admin/vision/scans",{method:"POST",body:form});state.visionRoomId=scan.room_id;const rooms=await api("/admin/vision/rooms");renderVisionRooms(rooms);await renderVisionScan(scan,selectedRoomName);await loadVisionHistory(scan.room_id);$("vision-progress").textContent=`Анализ завершён: найдено объектов — ${scan.detections.length}. Проверьте результат.`;}catch(error){$("vision-progress").textContent=error.message;showToast(error.message,true);}finally{button.disabled=!state.locations.some((building)=>building.floors.some((floor)=>floor.rooms.length));}});
 $("vision-baseline").onclick=async()=>{if(!state.visionScan)return;if(!confirm("Подтвердить результат этой проверки как эталон кабинета?"))return;try{await api(`/admin/vision/rooms/${state.visionScan.room_id}/baseline`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({scan_id:state.visionScan.id})});const scan=await api(`/admin/vision/scans/${state.visionScan.id}`);await renderVisionScan(scan,state.visionRooms.find((room)=>room.id===scan.room_id)?.name);await loadVisionHistory(scan.room_id);$("vision-progress").textContent="Эталон подтверждён. Следующее фото будет сравнено с ним.";showToast("Эталон помещения сохранён");}catch(error){showToast(error.message,true);}};

@@ -84,13 +84,39 @@ async def _complete_mvp_workflow() -> None:
         })
         assert room_update.status_code == 200
         assert room_update.json()["responsible_name"] == "Ответственный школы"
+        incomplete = await client.post(f"/admin/locations/rooms/{room['id']}/inspections", headers=admin_headers(), json={"items": []})
+        assert incomplete.status_code == 422
+        duplicate = await client.post(f"/admin/locations/rooms/{room['id']}/inspections", headers=admin_headers(), json={
+            "items": [
+                {"asset_id": asset_id, "result": "PRESENT", "affected_quantity": 0},
+                {"asset_id": asset_id, "result": "PRESENT", "affected_quantity": 0},
+            ],
+        })
+        assert duplicate.status_code == 422
+        invalid_present = await client.post(f"/admin/locations/rooms/{room['id']}/inspections", headers=admin_headers(), json={
+            "items": [{"asset_id": asset_id, "result": "PRESENT", "affected_quantity": 1}],
+        })
+        assert invalid_present.status_code == 422
+        invalid_quantity = await client.post(f"/admin/locations/rooms/{room['id']}/inspections", headers=admin_headers(), json={
+            "items": [{"asset_id": asset_id, "result": "DAMAGED", "affected_quantity": 2}],
+        })
+        assert invalid_quantity.status_code == 422
+        inspection = await client.post(f"/admin/locations/rooms/{room['id']}/inspections", headers=admin_headers(), json={
+            "comment": "Контрольный обход",
+            "items": [{"asset_id": asset_id, "result": "DAMAGED", "affected_quantity": 1, "comment": "Требуется диагностика"}],
+        })
+        assert inspection.status_code == 201
+        assert inspection.json()["inspector_name"] == "shared-admin"
+        assert inspection.json()["counts"] == {"PRESENT": 0, "MISSING": 0, "DAMAGED": 1}
         workspace = await client.get(f"/admin/locations/rooms/{room['id']}/workspace", headers=admin_headers())
         assert workspace.status_code == 200
         assert workspace.json()["inventory"]["positions"] == 1
         assert workspace.json()["inventory"]["quantity"] == 1
         assert workspace.json()["baseline"] == {"agent_ready": 0, "agent_total": 0, "vision_ready": False}
         assert workspace.json()["room"]["purpose"] == "Компьютерный класс"
-        assert workspace.json()["history"][0]["source"] == "ASSET"
+        assert workspace.json()["latest_inspection"]["comment"] == "Контрольный обход"
+        assert workspace.json()["latest_inspection"]["items"][0]["result"] == "DAMAGED"
+        assert {item["source"] for item in workspace.json()["history"][:2]} == {"ASSET", "PHYSICAL"}
         export = await client.get("/admin/assets/export.xlsx", headers=admin_headers())
         assert export.status_code == 200
         assert export.headers["content-type"].startswith("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")

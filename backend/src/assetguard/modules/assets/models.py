@@ -24,3 +24,25 @@ class RoomRecord(Base):
 class AssetRecord(Base):
     __tablename__="assets"
     id: Mapped[UUID]=mapped_column(PostgreSQLUUID(as_uuid=True), primary_key=True, default=uuid4); organization_id: Mapped[UUID]=mapped_column(ForeignKey("organizations.id")); room_id: Mapped[UUID|None]=mapped_column(ForeignKey("location_rooms.id", ondelete="RESTRICT"), nullable=True); inventory_number: Mapped[str]=mapped_column(String(128)); name: Mapped[str]=mapped_column(String(255)); asset_type: Mapped[str]=mapped_column(String(32)); category: Mapped[str]=mapped_column(String(32), default="IT"); tracking_mode: Mapped[str]=mapped_column(String(16), default="INDIVIDUAL"); quantity: Mapped[int]=mapped_column(Integer, default=1); unit: Mapped[str]=mapped_column(String(32), default="шт."); status: Mapped[str]=mapped_column(String(32)); building: Mapped[str|None]=mapped_column(String(255)); floor: Mapped[str|None]=mapped_column(String(64)); room: Mapped[str|None]=mapped_column(String(255)); notes: Mapped[str|None]=mapped_column(Text); created_at: Mapped[datetime]=mapped_column(DateTime(timezone=True)); updated_at: Mapped[datetime]=mapped_column(DateTime(timezone=True))
+
+
+class RoomInspectionRecord(Base):
+    __tablename__ = "room_inspections"
+    id: Mapped[UUID] = mapped_column(PostgreSQLUUID(as_uuid=True), primary_key=True, default=uuid4)
+    room_id: Mapped[UUID] = mapped_column(ForeignKey("location_rooms.id", ondelete="RESTRICT"))
+    inspector_user_id: Mapped[UUID | None] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=True)
+    inspector_name: Mapped[str] = mapped_column(String(255))
+    comment: Mapped[str | None] = mapped_column(Text)
+    completed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class RoomInspectionItemRecord(Base):
+    __tablename__ = "room_inspection_items"
+    __table_args__ = (UniqueConstraint("inspection_id", "asset_id", name="uq_room_inspection_asset"),)
+    id: Mapped[UUID] = mapped_column(PostgreSQLUUID(as_uuid=True), primary_key=True, default=uuid4)
+    inspection_id: Mapped[UUID] = mapped_column(ForeignKey("room_inspections.id", ondelete="RESTRICT"))
+    asset_id: Mapped[UUID] = mapped_column(ForeignKey("assets.id", ondelete="RESTRICT"))
+    result: Mapped[str] = mapped_column(String(16))
+    expected_quantity: Mapped[int] = mapped_column(Integer)
+    affected_quantity: Mapped[int] = mapped_column(Integer, default=0)
+    comment: Mapped[str | None] = mapped_column(Text)

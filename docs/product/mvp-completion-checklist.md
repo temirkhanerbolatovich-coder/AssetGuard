@@ -1,12 +1,12 @@
 # AssetGuard MVP v0.1 — чек-лист завершения
 
-Дата актуализации: 2026-09-24. Чек-лист включает исходный computer inventory MVP, PDF/OCR импорт и демонстрационный AssetGuard Vision vertical slice.
+Дата актуализации: 2026-09-25. Чек-лист включает computer inventory MVP, PDF/OCR импорт, демонстрационный AssetGuard Vision vertical slice и физический обход кабинета.
 
 ## Текущая оценка
 
 - Демонстрационный MVP через native GLPI transport и explicit bridge: **готов**.
-- Native GLPI Agent 1.19 `PROLOG → INVENTORY` проверен реальным loopback end-to-end; production TLS/DNS acceptance остаётся отдельным шагом.
-- Production hardening foundation реализован в коде; публичное развёртывание и recovery rehearsal требуют целевого домена/хоста.
+- Native GLPI Agent 1.19 `PROLOG → INVENTORY` проверен реальным компьютером через production HTTPS endpoint.
+- Постоянный Oracle Cloud deployment с DuckDNS и TLS работает; локальный encrypted restore rehearsal выполнен, off-site recovery остаётся незакрытым.
 
 ## Реализовано
 
@@ -24,7 +24,8 @@
 | PARTIAL safety | Готово | Partial inventory не создаёт ложное удаление RAM/SSD. |
 | Dashboard | Готово | Attention-first обзор, поиск/фильтры, связанные и непривязанные устройства, полная карточка Agent-данных, baseline, читаемое «Было → Стало», incidents и timeline. |
 | AssetGuard Vision | Готово для demo | Image upload, Grounding DINO, bounding boxes, counts, baseline, comparison, `WARNING` и history; кабинет связан с локацией и доступ фильтруется. RTSP и связка каждой detection с endpoint остаются будущим этапом. |
-| Иерархия и права локаций | Частично | Организация → корпус → этаж → кабинет, grants VIEWER/EDITOR и единая карточка кабинета с имуществом, Agent, Vision, инцидентами и историей работают; полный tenant-route matrix и физический аудит ещё нужны. |
+| Иерархия и права локаций | Частично | Организация → корпус → этаж → кабинет, grants VIEWER/EDITOR и единая карточка кабинета с имуществом, Agent, Vision, инцидентами, физическими обходами и историей работают; полный tenant-route matrix ещё нужен. |
+| Физический обход | Готово для кабинета | ADMIN/EDITOR отмечает каждую позицию как присутствующую, отсутствующую или повреждённую; акт хранит количества, комментарии, исполнителя и серверное время, не перезаписывает прошлые результаты и входит в историю. QR-запуск и автоматические задачи расхождений остаются развитием. |
 | Background demo | Готово | User-level demo tasks и production Compose deployment с restart policy. |
 | Local package | Готово | ZIP без secret/database/log data, startup scripts и documentation. |
 | GitHub | Готово | Public repository: `temirkhanerbolatovich-coder/AssetGuard`. |
@@ -55,7 +56,7 @@
 - [x] Rate limiting, security headers, request logging, immutable evidence retention и backup/restore runbook.
 - [x] Endpoint last-seen policy: `REQUIRES_VERIFICATION`, без автоматического вывода о пропаже или краже.
 - [x] Managed production deployment: Docker restart policy, независимо от интерактивной Windows-сессии.
-- [ ] Deployment acceptance на целевом сервере: постоянный DNS, публичный/корпоративный сертификат и выполненный restore rehearsal на выбранном off-site storage.
+- [~] Deployment acceptance: постоянный Oracle Cloud host, DuckDNS и публичный TLS проверены; restore rehearsal на выбранном off-site storage ещё не выполнен.
 - [x] Native GLPI Agent 1.19 protocol spike и `DirectGlpiAgentAdapter`.
 - [x] Browser E2E через Playwright/Chromium в GitHub Actions.
 - [x] Optional real Grounding DINO CI smoke job: ручной и еженедельный workflow с настоящей моделью и demo-кадром.
@@ -65,7 +66,7 @@
 ### За пределами текущего demo
 
 - RTSP/camera scheduler, quality gate, multi-frame aggregation и `ANOMALY` confirmation;
-- Фиксация мобильного QR-обхода («на месте / отсутствует / повреждено», количество, исполнитель, время); QR-код пока только открывает карточку;
+- QR-запуск мобильного обхода и автоматическое создание задачи по физическому расхождению; сам полный обход из карточки кабинета уже фиксирует результат, количество, исполнителя и время;
 - 1С/AD integrations, Linux/macOS Agent, полный matrix-тест tenant/location границ всех admin API;
 - связывание каждой Vision detection с конкретным endpoint/asset;
 - custom agent, remote desktop, helpdesk, automatic theft detection.

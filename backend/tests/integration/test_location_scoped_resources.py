@@ -8,13 +8,17 @@ from uuid import uuid4
 import httpx
 import pdfplumber
 from openpyxl import load_workbook
-from sqlalchemy import delete
+from sqlalchemy import delete, select, text
 
 from assetguard.app import app
 from assetguard.infrastructure.database import get_session_factory
-from assetguard.modules.assets.models import AssetRecord, BuildingRecord, FloorRecord, OrganizationRecord, RoomRecord
+from assetguard.modules.assets.models import (
+    AssetRecord, BuildingRecord, FloorRecord, OrganizationRecord,
+    RoomInspectionItemRecord, RoomInspectionRecord, RoomRecord,
+)
 from assetguard.modules.identity.auth import hash_password
 from assetguard.modules.identity.models import AuthSessionRecord, LocationAccessRecord, UserRecord
+from assetguard.modules.incidents.models import AssetHistoryEntryRecord
 from assetguard.modules.vision.models import VisionBaselineRecord, VisionRoomRecord, VisionScanRecord
 
 
@@ -97,7 +101,8 @@ async def _exercise_location_scope() -> None:
             permission="VIEWER", created_at=now,
         ))
         session.commit()
-        hidden_room_id, hidden_scan_id = hidden_vision_room.id, hidden_scan.id
+        visible_room_id, hidden_room_id = visible_room.id, hidden_vision_room.id
+        visible_asset_id, hidden_scan_id = visible_asset.id, hidden_scan.id
         username = user.username
 
     transport = httpx.ASGITransport(app=app)
@@ -129,7 +134,39 @@ async def _exercise_location_scope() -> None:
         assert hidden_history.status_code == 404
         assert hidden_detail.status_code == 404
 
+        hidden_inspections = await client.get(f"/admin/locations/rooms/{hidden_room_id}/inspections", headers=headers)
+        assert hidden_inspections.status_code == 404
+        viewer_write = await client.post(f"/admin/locations/rooms/{visible_room_id}/inspections", headers=headers, json={
+            "items": [{"asset_id": str(visible_asset_id), "result": "PRESENT", "affected_quantity": 0}],
+        })
+        assert viewer_write.status_code == 404
+
+        with factory() as session:
+            grant = session.scalar(select(LocationAccessRecord).where(LocationAccessRecord.user_id == created_user_id))
+            grant.permission = "EDITOR"
+            session.commit()
+
+        editor_write = await client.post(f"/admin/locations/rooms/{visible_room_id}/inspections", headers=headers, json={
+            "comment": "Scoped editor inspection",
+            "items": [{"asset_id": str(visible_asset_id), "result": "PRESENT", "affected_quantity": 0}],
+        })
+        assert editor_write.status_code == 201
+        assert editor_write.json()["inspector_name"] == username
+        visible_inspections = await client.get(f"/admin/locations/rooms/{visible_room_id}/inspections", headers=headers)
+        assert visible_inspections.status_code == 200
+        assert visible_inspections.json()[0]["comment"] == "Scoped editor inspection"
+
     with factory() as session:
+        inspection_ids = select(RoomInspectionRecord.id).where(RoomInspectionRecord.room_id == visible_room_id)
+        session.execute(text("ALTER TABLE room_inspection_items DISABLE TRIGGER trg_room_inspection_items_immutable"))
+        session.execute(text("ALTER TABLE room_inspections DISABLE TRIGGER trg_room_inspections_immutable"))
+        session.execute(delete(RoomInspectionItemRecord).where(RoomInspectionItemRecord.inspection_id.in_(inspection_ids)))
+        session.execute(delete(RoomInspectionRecord).where(RoomInspectionRecord.room_id == visible_room_id))
+        session.execute(text("ALTER TABLE room_inspection_items ENABLE TRIGGER trg_room_inspection_items_immutable"))
+        session.execute(text("ALTER TABLE room_inspections ENABLE TRIGGER trg_room_inspections_immutable"))
+        session.execute(text("ALTER TABLE asset_history_entries DISABLE TRIGGER trg_asset_history_immutable"))
+        session.execute(delete(AssetHistoryEntryRecord).where(AssetHistoryEntryRecord.asset_id == visible_asset_id))
+        session.execute(text("ALTER TABLE asset_history_entries ENABLE TRIGGER trg_asset_history_immutable"))
         session.execute(delete(AuthSessionRecord).where(AuthSessionRecord.user_id == created_user_id))
         session.execute(delete(LocationAccessRecord).where(LocationAccessRecord.user_id == created_user_id))
         session.execute(delete(UserRecord).where(UserRecord.id == created_user_id))

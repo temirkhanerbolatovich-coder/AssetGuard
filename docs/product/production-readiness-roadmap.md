@@ -14,7 +14,7 @@
 
 ## Этап 2: надёжная эксплуатация
 
-- [ ] Постоянный сервер, домен, TLS acceptance и firewall policy.
+- [x] Постоянный Oracle Cloud server, DuckDNS, публичный TLS endpoint и ограничивающие сетевые правила проверены 2026-09-25.
 - [~] Automated encrypted backup + weekly isolated restore rehearsal доступны через Windows Task Scheduler; свежая локальная копия проверена восстановлением 2026-09-24. Off-site ротация и отдельная политика хранения ключа ещё не настроены.
 - [x] Изолированная локальная restore rehearsal: зашифрованная копия восстановлена в отдельный временный PostgreSQL и сравнена с текущей БД; off-site recovery остаётся незакрытым.
 - [~] `/health` и `/health/ready` готовы; метрики API, disk, backup age, Agent last-seen и failed ingest ещё нужно агрегировать и подключить к alerting.
@@ -41,7 +41,7 @@
 - [ ] Утверждённая data inventory, retention/deletion policy для raw inventory и Vision images.
 - [ ] Согласованный legal/security review для школ и выбранного места хранения данных.
 - [x] Нормализованная hierarchy `organisation → building → floor → room`; основные location grants enforced на сервере.
-- [~] QR-коды карточек и location reports доступны; фиксация физического mobile audit, notifications, 1C/AD/helpdesk integrations ещё нужна.
+- [~] QR-коды карточек, location reports и полный физический обход из карточки кабинета доступны; QR-запуск mobile audit, in-app notifications и 1C/AD/helpdesk integrations ещё нужны.
 - [ ] Vision production track: object storage, quality gate, multi-frame/RTSP, evaluation dataset и human confirmation.
 
 ## Не делать до этапа 1
