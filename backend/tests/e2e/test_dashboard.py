@@ -158,10 +158,20 @@ def test_admin_can_open_dashboard_and_create_asset(live_server):
         room_row.get_by_role("button", name="Открыть кабинет").click()
         page.locator("#room-detail-title").filter(has_text="Кабинет 205").wait_for()
         assert page.locator("#room-tab-content").get_by_text("E2E ответственный").is_visible()
+        page.locator("#room-edit-action").click()
+        page.locator("#room-edit-dialog").wait_for(state="visible")
+        page.locator("#room-edit-contact").fill("e2e@example.org")
+        page.locator("#room-edit-submit").click()
+        page.locator("#room-edit-dialog").wait_for(state="hidden")
+        assert page.locator("#room-tab-content").get_by_text("e2e@example.org").is_visible()
         page.locator('[data-room-tab="inventory"]').click()
         assert page.locator("#room-tab-content").get_by_text("Проектор кабинета").is_visible()
         page.locator('[data-room-tab="history"]').click()
         assert page.locator("#room-tab-content").get_by_text("Актив добавлен").is_visible()
+        page.locator("#room-vision-action").click()
+        assert page.locator("#vision-location-room").input_value() == room["id"]
+        assert page.locator("#vision-asset-id option").count() == 2
+        assert page.locator("#vision-asset-id option", has_text="Проектор кабинета").count() == 1
         assert page.locator("body").evaluate("element => element.scrollWidth <= element.clientWidth")
         assert console_errors == []
         browser.close()

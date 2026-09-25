@@ -79,11 +79,17 @@ async def _complete_mvp_workflow() -> None:
         assert room_report.status_code == 200
         assert room_report.json()["path"] == {"building": "Корпус А", "floor": "2"}
         assert room_report.json()["assets"][0]["id"] == asset_id
+        room_update = await client.patch(f"/admin/locations/rooms/{room['id']}", headers=admin_headers(), json={
+            "purpose": "Компьютерный класс", "responsible_name": "Ответственный школы", "responsible_contact": "+7 700 000 00 00",
+        })
+        assert room_update.status_code == 200
+        assert room_update.json()["responsible_name"] == "Ответственный школы"
         workspace = await client.get(f"/admin/locations/rooms/{room['id']}/workspace", headers=admin_headers())
         assert workspace.status_code == 200
         assert workspace.json()["inventory"]["positions"] == 1
         assert workspace.json()["inventory"]["quantity"] == 1
         assert workspace.json()["baseline"] == {"agent_ready": 0, "agent_total": 0, "vision_ready": False}
+        assert workspace.json()["room"]["purpose"] == "Компьютерный класс"
         assert workspace.json()["history"][0]["source"] == "ASSET"
         export = await client.get("/admin/assets/export.xlsx", headers=admin_headers())
         assert export.status_code == 200
