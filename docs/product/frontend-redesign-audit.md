@@ -55,7 +55,7 @@
 | Vision | `/admin/vision/rooms`, `/admin/vision/scans`, room baseline and protected images |
 | Operations | `/health`, `/health/ready`, `/admin/operations/status` |
 
-Большой backend rewrite не требуется. Для текущего этапа новых endpoints не добавлено.
+Большой backend rewrite не требуется. Новых endpoints не добавлено; detail-response существующего `/admin/incidents/{id}` дополнен endpoint/change metadata, необходимыми для прямой ссылки.
 
 ## E. Что перерабатывается
 
@@ -72,19 +72,20 @@
 - безопасный logout с возвратом на понятный экран входа;
 - расширенный browser E2E routing/responsive сценарий.
 
-### Этап 2 — следующий
+### Этап 2 — выполняется
 
-- вкладки карточки устройства: Обзор / Оборудование / Эталон и изменения / Инциденты / История / Технические данные;
-- собственный confirmation dialog для baseline;
-- полноценная incident detail с evidence, решениями и актором без системных prompt;
-- отдельный экран «Импорт и экспорт» поверх существующего безопасного preview workflow;
-- loading/error state на уровне каждого route, а не только общего Dashboard.
+- выполнено: полноценная incident detail с прямым route `#incident=<uuid>`, evidence, comparison, историей решений и управляемой формой без `prompt()`/`confirm()`;
+- выполнено: вкладки карточки устройства «Обзор / Оборудование / Эталон и изменения / Инциденты / История / Технические данные» с deep-link `#asset=<uuid>&tab=<tab>`, Back/Forward, refresh и клавиатурной навигацией;
+- выполнено: единый confirmation dialog для technical baseline, revoke Agent credential и revoke location access;
+- выполнено: отдельный экран «Импорт и экспорт» поверх существующего безопасного preview workflow, с прямым route `#data-exchange`, отображением файла, блокировкой повторной отправки и понятным статусом операции;
+- выполнено для асинхронных deep routes: asset, room и incident показывают loading, сохраняют понятный error state с retry и не выбрасывают пользователя в другой раздел.
 
 ### Этап 3
 
-- accessibility audit: focus trap/restore для всех dialog, tab semantics и keyboard regression;
-- сокращение повторных API запросов при переходах;
-- visual regression на 1920×1080, 1366×768, 900 px, 390 px;
+- выполнено: focus trap/restore для собственных dialog, Escape и keyboard regression для QR dialog; остаётся полная ручная accessibility-проверка;
+- выполнено: сокращение повторных API запросов при переходах с коротким кэшем и дедупликацией in-flight запросов;
+- выполнено: Vision baseline использует единый доступный confirmation dialog вместо системного `confirm()`;
+- выполнено: browser regression на 1920×1080, 1366×768, 900 px, 768 px, 390×844 и 360×800 проверяет отсутствие горизонтальной прокрутки, usable mobile navigation и вмещение dialog;
 - модерируемый тест с новым оператором школы.
 
 ## F. Navigation architecture после этапа 1
@@ -93,6 +94,7 @@
 Работа
 ├── Обзор
 ├── Устройства
+├── Импорт и экспорт
 ├── Инциденты
 ├── Помещения
 └── Проверка по фото
@@ -129,7 +131,8 @@
 - Create/edit/location/inspection/physical operation формы блокируют или ограничивают повторные destructive действия в критичных местах.
 - Новые filters полностью client-side и не создают повторных API запросов.
 - Fake controls не добавлены.
-- Остаётся заменить системные `prompt()` для incident comment и `confirm()` для baseline/resolve на собственные формы.
+- Технический incident workflow больше не использует `prompt()`/`confirm()`; комментарий обязателен, submit блокируется на время API-запроса, ошибка не закрывает dialog.
+- Системные `confirm()` и `prompt()` в основных пользовательских workflow не используются.
 
 ## Проверка этапа 1
 
@@ -141,4 +144,4 @@ $env:ASSETGUARD_RUN_BROWSER_E2E='1'
 .venv/Scripts/python.exe -m pytest tests/e2e -q
 ```
 
-Ожидаемый результат: `27 passed` для unit/integration и `1 passed` для browser E2E.
+Ожидаемый результат: `28 passed` для unit/integration и `2 passed` для browser E2E, включая отдельный direct-link/decision сценарий инцидента (`30 passed` суммарно).

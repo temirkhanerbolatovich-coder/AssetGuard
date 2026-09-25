@@ -55,13 +55,13 @@ AssetGuard уже является работающим pilot MVP: школьн�
 | Постоянный deployment | ✅ | Oracle Cloud Always Free, Docker Compose, Caddy, DuckDNS, TLS, restart policy | Public health/readiness |
 | CI | ✅ | PostgreSQL tests, browser E2E, dependency audit, JS/PowerShell checks, Compose validation | GitHub Actions |
 
-Последняя подтверждённая локальная проверка: **26 backend-тестов пройдены, 1 optional test пропущен; browser E2E пройден отдельно**.
+Последняя подтверждённая локальная проверка: **30 backend-тестов пройдены** (unit, integration и browser E2E).
 
 ## Реализовано частично
 
 | Область | Что уже есть | Чего не хватает до полного production |
 | --- | --- | --- |
-| Multi-tenant | Organization scope есть у пользователей, credentials, assets, endpoints, inventory и Vision | Полный allow/deny matrix каждого admin endpoint; отдельная роль tenant administrator; тест двух реальных школ |
+| Multi-tenant | Organization scope есть у пользователей, credentials, assets, endpoints, inventory и Vision; начата route/access matrix, добавлены negative tests чужих snapshot/baseline/change/incident/history и location-scoped endpoint | Параметризовать A/V/E/F-проверки для каждого admin route; отдельная роль tenant administrator; тест двух реальных школ |
 | Мониторинг | `/health`, `/health/ready`, логи и Telegram PowerShell monitor | Постоянный monitor на сервере, метрики API/БД/диска/backup age, escalation и dashboard наблюдаемости |
 | Backup | Зашифрованные копии, расписание, локальный restore rehearsal, поддержка внешнего диска/rclone | Настроенное внешнее хранилище, ротация, проверка восстановления именно из off-site копии |
 | Vision production | Полный локальный photo workflow и настоящий model smoke в CI | Oracle Free VM не тянет ML runtime; нужны отдельный inference host/GPU либо более мощный сервер, object storage и accuracy evaluation |

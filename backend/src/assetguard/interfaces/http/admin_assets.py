@@ -862,9 +862,7 @@ def evaluate_endpoints(session: Annotated[Session, Depends(get_session)]):
 
 @router.get("/endpoints/{endpoint_id}")
 def endpoint_detail(endpoint_id: UUID, session: Annotated[Session, Depends(get_session)], principal: Annotated[AuthPrincipal, Depends(require_viewer)]):
-    endpoint = session.get(ManagedEndpointRecord, endpoint_id)
-    if not endpoint or (principal.organization_id and endpoint.organization_id != principal.organization_id):
-        raise HTTPException(404, "Endpoint was not found.")
+    endpoint = scoped_endpoint(session, endpoint_id, principal)
     identifiers = list(session.scalars(select(EndpointIdentifierRecord).where(
         EndpointIdentifierRecord.managed_endpoint_id == endpoint.id,
     ).order_by(EndpointIdentifierRecord.identifier_type)))

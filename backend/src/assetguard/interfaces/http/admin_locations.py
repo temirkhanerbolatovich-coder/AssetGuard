@@ -241,7 +241,10 @@ def location_tree(session: Annotated[Session, Depends(get_session)], principal: 
         floors = []
         for floor in session.scalars(select(FloorRecord).where(FloorRecord.building_id == building.id).order_by(FloorRecord.name)):
             rooms = [room for room in session.scalars(select(RoomRecord).where(RoomRecord.floor_id == floor.id).order_by(RoomRecord.name)) if allowed_rooms is None or room.id in allowed_rooms]
-            if rooms: floors.append({"id": str(floor.id), "name": floor.name, "responsible_name": floor.responsible_name, "responsible_contact": floor.responsible_contact, "rooms": [_room_view(session, room) for room in rooms]})
+            # An administrator must see an empty floor in order to add its first
+            # room. Scoped users still see only floors containing rooms they may access.
+            if rooms or allowed_rooms is None:
+                floors.append({"id": str(floor.id), "name": floor.name, "responsible_name": floor.responsible_name, "responsible_contact": floor.responsible_contact, "rooms": [_room_view(session, room) for room in rooms]})
         # A building is meaningful as soon as it is created.  In particular,
         # administrators need to see an empty building in order to add its
         # first floor.  Previously it was omitted until it contained a room,

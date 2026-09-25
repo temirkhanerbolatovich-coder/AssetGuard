@@ -105,6 +105,7 @@ def accept_baseline(snapshot_id: UUID, body: BaselineAccept, session: Annotated[
     item = session.get(HardwareSnapshotRecord, snapshot_id)
     if not item:
         missing()
+    scoped_endpoint(session, item.managed_endpoint_id, principal)
     accepted = accept_snapshot_as_baseline(session, item, body.reason)
     return {"id": str(accepted.id), "status": accepted.status, "snapshot_id": str(accepted.hardware_snapshot_id)}
 
@@ -132,7 +133,6 @@ def change(change_id: UUID, session: Annotated[Session, Depends(get_session)], p
     item = session.get(ChangeEventRecord, change_id)
     if not item:
         missing()
-    scoped_endpoint(session, item.managed_endpoint_id, principal)
     scoped_endpoint(session, item.managed_endpoint_id, principal)
     return {
         "id": str(item.id), "endpoint_id": str(item.managed_endpoint_id),
@@ -173,7 +173,12 @@ def incident(incident_id: UUID, session: Annotated[Session, Depends(get_session)
     return {
         "id": str(item.id), "status": item.status, "severity": item.severity,
         "title": item.title, "description": item.description,
-        "change_event_id": str(item.change_event_id), "resolved_at": item.resolved_at,
+        "endpoint_id": str(item.managed_endpoint_id),
+        "change_event_id": str(item.change_event_id), "created_at": item.created_at,
+        "resolved_at": item.resolved_at,
+        "change_type": change_event.event_type if change_event else None,
+        "component_type": change_event.component_type if change_event else None,
+        "detected_at": change_event.detected_at if change_event else None,
         "evidence": change_event.evidence if change_event else None,
         "decisions": [{
             "id": str(decision.id), "classification": decision.classification,

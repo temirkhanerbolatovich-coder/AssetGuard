@@ -42,6 +42,10 @@ def test_new_building_is_visible_before_its_first_floor() -> None:
     asyncio.run(_new_building_is_visible_before_its_first_floor())
 
 
+def test_new_floor_is_visible_before_its_first_room() -> None:
+    asyncio.run(_new_floor_is_visible_before_its_first_room())
+
+
 async def _new_building_is_visible_before_its_first_floor() -> None:
     """An administrator must be able to select a new building to add a floor."""
     name = f"Empty building {uuid4().hex}"
@@ -57,6 +61,31 @@ async def _new_building_is_visible_before_its_first_floor() -> None:
         building = next(item for item in tree.json() if item["id"] == created.json()["id"])
         assert building["name"] == name
         assert building["floors"] == []
+
+
+async def _new_floor_is_visible_before_its_first_room() -> None:
+    """An administrator must see a new floor in order to add its first room."""
+    building_name = f"Building with empty floor {uuid4().hex}"
+    floor_name = "2"
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        building = await client.post(
+            "/admin/locations/buildings", headers=admin_headers(), json={"name": building_name},
+        )
+        assert building.status_code == 201
+        floor = await client.post(
+            f"/admin/locations/buildings/{building.json()['id']}/floors",
+            headers=admin_headers(), json={"name": floor_name},
+        )
+        assert floor.status_code == 201
+
+        tree = await client.get("/admin/locations/tree", headers=admin_headers())
+        assert tree.status_code == 200
+        location = next(item for item in tree.json() if item["id"] == building.json()["id"])
+        assert location["floors"] == [{
+            "id": floor.json()["id"], "name": floor_name,
+            "responsible_name": None, "responsible_contact": None, "rooms": [],
+        }]
 
 
 async def _complete_mvp_workflow() -> None:
@@ -255,6 +284,11 @@ async def _complete_mvp_workflow() -> None:
             "classification": "AUTHORIZED_CHANGE", "actor": "pytest", "comment": "Approved",
         })).status_code == 200
         incident_detail = (await client.get(f"/admin/incidents/{incident_id}", headers=admin_headers())).json()
+        assert incident_detail["endpoint_id"] == endpoint_id
+        assert incident_detail["change_type"] == "COMPONENT_REMOVED"
+        assert incident_detail["component_type"] == "RAM"
+        assert incident_detail["created_at"]
+        assert incident_detail["evidence"]["previous"]
         assert {item["actor"] for item in incident_detail["decisions"]} == {"bootstrap-admin"}
         await client.post(f"/admin/snapshots/{removed_response.json()['snapshot_id']}/baseline", headers=admin_headers(), json={"reason": "Approved RAM state"})
 

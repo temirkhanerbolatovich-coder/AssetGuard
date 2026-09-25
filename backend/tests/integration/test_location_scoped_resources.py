@@ -21,6 +21,7 @@ from assetguard.modules.identity.models import AuthSessionRecord, LocationAccess
 from assetguard.modules.incidents.models import (
     AssetHistoryEntryRecord, PhysicalIncidentDecisionRecord, PhysicalIncidentRecord,
 )
+from assetguard.modules.snapshots.models import ManagedEndpointRecord
 from assetguard.modules.vision.models import VisionBaselineRecord, VisionRoomRecord, VisionScanRecord
 
 
@@ -69,6 +70,13 @@ async def _exercise_location_scope() -> None:
                 created_at=now, updated_at=now,
             )
         session.add_all([visible_asset, hidden_asset])
+        session.flush()
+        hidden_endpoint = ManagedEndpointRecord(
+            source="TEST", source_agent_id="scope-hidden", asset_id=hidden_asset.id,
+            organization_id=organization.id, hostname="scope-hidden", last_seen_at=now,
+            status="ONLINE", created_at=now, updated_at=now,
+        )
+        session.add(hidden_endpoint)
         visible_vision_room = VisionRoomRecord(
             name="Scope корпус A / 1 / 101", organization_id=organization.id,
             location_room_id=visible_room.id, created_at=now,
@@ -105,6 +113,7 @@ async def _exercise_location_scope() -> None:
         session.commit()
         visible_room_id, hidden_room_id = visible_room.id, hidden_vision_room.id
         visible_asset_id, hidden_scan_id = visible_asset.id, hidden_scan.id
+        hidden_endpoint_id = hidden_endpoint.id
         username = user.username
 
     transport = httpx.ASGITransport(app=app)
@@ -135,6 +144,8 @@ async def _exercise_location_scope() -> None:
         hidden_detail = await client.get(f"/admin/vision/scans/{hidden_scan_id}", headers=headers)
         assert hidden_history.status_code == 404
         assert hidden_detail.status_code == 404
+        hidden_endpoint_detail = await client.get(f"/admin/endpoints/{hidden_endpoint_id}", headers=headers)
+        assert hidden_endpoint_detail.status_code == 404
 
         hidden_inspections = await client.get(f"/admin/locations/rooms/{hidden_room_id}/inspections", headers=headers)
         assert hidden_inspections.status_code == 404
@@ -204,6 +215,7 @@ async def _exercise_location_scope() -> None:
         session.execute(delete(VisionScanRecord).where(VisionScanRecord.room_id.in_([visible_vision_room.id, hidden_room_id])))
         session.execute(delete(VisionBaselineRecord).where(VisionBaselineRecord.room_id.in_([visible_vision_room.id, hidden_room_id])))
         session.execute(delete(VisionRoomRecord).where(VisionRoomRecord.organization_id == organization.id))
+        session.execute(delete(ManagedEndpointRecord).where(ManagedEndpointRecord.id == hidden_endpoint_id))
         session.execute(delete(AssetRecord).where(AssetRecord.inventory_number.in_(["SCOPE-VISIBLE", "SCOPE-HIDDEN"])))
         session.execute(delete(RoomRecord).where(RoomRecord.id.in_(room_ids)))
         session.execute(delete(FloorRecord).where(FloorRecord.id.in_(floor_ids)))
