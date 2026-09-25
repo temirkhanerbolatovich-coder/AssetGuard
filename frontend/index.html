@@ -9,10 +9,21 @@
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-<header class="app-header">
+<header class="app-header" aria-label="Панель приложения">
   <a class="brand" href="#overview" aria-label="AssetGuard, на главную"><span class="brand-mark" aria-hidden="true">A</span><span><strong>AssetGuard</strong><small>Контроль IT-активов</small></span></a>
   <button id="nav-toggle" class="nav-toggle button-secondary" type="button" aria-expanded="false" aria-controls="main-nav" aria-label="Открыть меню">☰ <span>Разделы</span></button>
-  <nav id="main-nav" class="main-nav" aria-label="Основная навигация"><a href="#overview">Обзор</a><a href="#locations">Кабинеты</a><a href="#location-access" id="location-access-nav" hidden>Сотрудники</a><a href="#agent-credentials" id="agent-credentials-nav" hidden>Подключить компьютеры</a><a href="#devices">Имущество и компьютеры</a><a href="#agent-workflow">Как работает Agent</a><a href="#vision">Проверка по фото</a></nav>
+  <nav id="main-nav" class="main-nav" aria-label="Основная навигация">
+    <span class="nav-group-label">Работа</span>
+    <a href="#overview"><span class="nav-icon" aria-hidden="true">⌂</span><span>Обзор</span></a>
+    <a href="#devices"><span class="nav-icon" aria-hidden="true">▤</span><span>Устройства</span></a>
+    <a href="#incidents"><span class="nav-icon" aria-hidden="true">!</span><span>Инциденты</span><span id="nav-incident-count" class="nav-count" hidden>0</span></a>
+    <a href="#locations"><span class="nav-icon" aria-hidden="true">□</span><span>Помещения</span></a>
+    <a href="#vision"><span class="nav-icon" aria-hidden="true">◉</span><span>Проверка по фото</span></a>
+    <span class="nav-group-label">Управление</span>
+    <a href="#location-access" id="location-access-nav" hidden><span class="nav-icon" aria-hidden="true">◇</span><span>Сотрудники и доступ</span></a>
+    <a href="#agent-credentials" id="agent-credentials-nav" hidden><span class="nav-icon" aria-hidden="true">↗</span><span>Подключить Agent</span></a>
+    <a href="#agent-workflow"><span class="nav-icon" aria-hidden="true">?</span><span>Как работает Agent</span></a>
+  </nav>
   <form id="token-form" class="token-form">
     <label class="sr-only" for="username">Логин сотрудника</label><input id="username" autocomplete="username" placeholder="Логин">
     <label class="sr-only" for="token">Пароль сотрудника или ключ администратора</label><input id="token" type="password" autocomplete="current-password" placeholder="Пароль / ключ администратора" required>
@@ -31,10 +42,11 @@
       <div id="setup-steps" class="setup-steps"></div>
     </section>
     <div class="metrics" aria-label="Ключевые показатели">
-      <article><span>В реестре</span><strong id="devices-count">—</strong><small>позиций имущества</small></article>
-      <article><span>Компьютеры на связи</span><strong id="online-count">—</strong><small>последний отчёт актуален</small></article>
-      <article><span>Требуют внимания</span><strong id="attention-count">—</strong><small>изменения на компьютерах</small></article>
-      <article><span>Нет данных Agent</span><strong id="unchecked-count">—</strong><small>компьютеры без актуального отчёта</small></article>
+      <a class="metric-card" href="#devices"><span>В реестре</span><strong id="devices-count">—</strong><small>позиций имущества</small></a>
+      <a class="metric-card" href="#devices" data-device-filter="OK"><span>В норме</span><strong id="online-count">—</strong><small>компьютеров без открытых проблем</small></a>
+      <a class="metric-card" href="#devices" data-device-filter="ATTENTION"><span>Требуют внимания</span><strong id="attention-count">—</strong><small>открыть отфильтрованный реестр</small></a>
+      <a class="metric-card" href="#devices" data-device-filter="UNCHECKED"><span>Не проверено</span><strong id="unchecked-count">—</strong><small>нет свежих данных Agent</small></a>
+      <a class="metric-card" href="#incidents"><span>Открытые инциденты</span><strong id="open-incidents-count">—</strong><small>требуют решения человека</small></a>
     </div>
     <details class="panel operations-panel"><summary class="operations-summary"><span><span class="eyebrow">Для IT-специалиста</span><strong>Техническое состояние сервиса</strong></span><span id="operations-status" class="status-pill neutral">Загрузка…</span></summary><div id="operations-summary" class="summary-lines"><div class="skeleton"></div></div></details>
     <article id="incident-spotlight" class="panel incident-spotlight">
@@ -49,6 +61,17 @@
       <article class="panel"><span class="eyebrow">Размещение</span><h3>Кабинеты и организации</h3><div id="location-summary" class="tag-list"><span class="skeleton short"></span></div></article>
       <article class="panel"><span class="eyebrow">Инвентаризация</span><h3>Качество данных</h3><div id="inventory-summary" class="summary-lines"></div></article>
     </div>
+  </section>
+
+  <section id="incidents" class="page-section" hidden>
+    <div class="section-heading page-heading"><div><span class="eyebrow">Работа с расхождениями</span><h2>Инциденты</h2><p>Здесь собраны изменения оборудования, которые требуют проверки или уже получили решение.</p></div><span id="incident-center-count" class="status-pill neutral">—</span></div>
+    <div class="incident-toolbar panel">
+      <label>Статус<select id="incident-status-filter"><option value="ACTIVE">Открытые и на проверке</option><option value="OPEN">Открытые</option><option value="UNDER_REVIEW">На проверке</option><option value="RESOLVED">Решённые</option><option value="">Все статусы</option></select></label>
+      <label>Приоритет<select id="incident-severity-filter"><option value="">Любой</option><option value="HIGH">Высокий</option><option value="MEDIUM">Средний</option><option value="LOW">Низкий</option></select></label>
+      <label class="incident-search">Найти устройство или событие<input id="incident-search" type="search" placeholder="Например, PC-305 или RAM"></label>
+      <button id="clear-incident-filters" class="button-secondary" type="button">Сбросить</button>
+    </div>
+    <div id="incident-center-list" class="incident-center-list"><div class="panel"><div class="skeleton"></div></div></div>
   </section>
 
   <section id="locations" class="page-section">

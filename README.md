@@ -54,6 +54,7 @@ docker compose --env-file .env -f infra/containers/docker-compose.free-demo.yml 
 - [Актуальный полный чек-лист проекта](docs/product/current-project-checklist.md)
 - [Чек-лист завершения MVP](docs/product/mvp-completion-checklist.md)
 - [Аудит данных и UX Dashboard](docs/product/dashboard-data-audit.md)
+- [UX/UI-аудит и план frontend redesign](docs/product/frontend-redesign-audit.md)
 - [Архитектура и готовый сценарий питча](docs/product/pitch-guide.md)
 - [Локальная demo-поставка](docs/operations/local-demo-guide.md)
 - [Установщик Windows Agent для других компьютеров](scripts/windows/README.md#графический-установщик-для-других-компьютеров)

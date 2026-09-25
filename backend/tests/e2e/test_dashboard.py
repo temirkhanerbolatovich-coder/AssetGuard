@@ -58,15 +58,24 @@ def test_admin_can_open_dashboard_and_create_asset(live_server):
         page.locator("#token").fill(admin_secret)
         page.get_by_role("button", name="Войти").click()
         page.locator("#status").filter(has_text="Данные актуальны").wait_for()
-        assert page.get_by_role("heading", name="Как работает Agent").is_visible()
+        assert page.get_by_role("heading", name="Центр контроля", exact=True).is_visible()
         assert page.get_by_role("heading", name="Последний инцидент").is_visible()
         assert page.locator("#setup-guide").is_visible()
 
-        # The compact desktop header (1101–1320px) keeps navigation behind
-        # the same menu button as tablet layouts; use the real user path.
-        page.locator("#nav-toggle").click()
+        # Desktop uses a persistent application sidebar and one visible route.
+        page.set_viewport_size({"width": 1280, "height": 900})
+        sidebar_width = page.locator(".app-header").evaluate("element => element.getBoundingClientRect().width")
+        assert 250 <= sidebar_width <= 280
+        assert page.locator("#overview").is_visible()
+        assert page.locator("#devices").is_hidden()
+        page.locator("#main-nav a[href='#incidents']").click()
+        page.locator("#incidents").wait_for(state="visible")
+        assert page.locator("#incidents").get_by_role("heading", name="Инциденты", exact=True).is_visible()
+        page.go_back()
+        page.locator("#overview").wait_for(state="visible")
+
         page.locator("#agent-credentials-nav").click()
-        page.locator("#agent-credentials").scroll_into_view_if_needed()
+        page.locator("#agent-credentials").wait_for(state="visible")
         page.get_by_role("button", name="Создать ключ для компьютера").click()
         credential_dialog = page.locator("#agent-credential-dialog")
         credential_dialog.wait_for(state="visible")
@@ -79,12 +88,9 @@ def test_admin_can_open_dashboard_and_create_asset(live_server):
         credential_dialog.wait_for(state="hidden")
         assert page.locator("#agent-credential-secret").input_value() == ""
 
-        page.set_viewport_size({"width": 1280, "height": 900})
-        assert page.locator(".app-header").evaluate("element => element.getBoundingClientRect().height < 220")
         assert page.locator("body").evaluate("element => element.scrollWidth <= element.clientWidth")
-        page.locator("#nav-toggle").click()
         page.locator("#main-nav a[href='#devices']").click()
-        page.locator("#devices").scroll_into_view_if_needed()
+        page.locator("#devices").wait_for(state="visible")
         assert page.locator("#show-create").is_visible()
 
         page.set_viewport_size({"width": 900, "height": 900})
@@ -136,6 +142,7 @@ def test_admin_can_open_dashboard_and_create_asset(live_server):
         open_button = row.get_by_role("button", name="Открыть карточку")
         assert open_button.is_visible()
         open_button.click()
+        assert page.url.endswith(f"#asset={row.get_attribute('data-asset-id')}")
         page.locator("#detail-title").filter(has_text="Browser E2E workstation").wait_for()
         assert page.get_by_text("Компьютер пока не связан с Agent").is_visible()
         assert page.get_by_role("heading", name="Состав компьютера").is_hidden()
@@ -158,11 +165,17 @@ def test_admin_can_open_dashboard_and_create_asset(live_server):
         assert room_asset.ok
         page.reload()
         page.locator("#status").filter(has_text="Данные актуальны").wait_for()
+        assert page.locator("#detail").is_visible()
+        page.locator("#detail-back").click()
+        page.locator("#devices").wait_for(state="visible")
         page.set_viewport_size({"width": 390, "height": 844})
-        page.locator("#devices").scroll_into_view_if_needed()
         assert page.locator("#device-search").is_visible()
         page.locator("#nav-toggle").click()
         assert page.locator("#main-nav a[href='#locations']").is_visible()
+        page.locator("#main-nav a[href='#incidents']").click()
+        assert page.locator("#nav-toggle").get_attribute("aria-expanded") == "false"
+        assert page.locator("#nav-toggle").get_attribute("aria-label") == "Открыть меню"
+        page.locator("#nav-toggle").click()
         page.locator("#main-nav a[href='#locations']").click()
         room_row = page.locator(".location-room", has_text="каб. 205")
         room_row.get_by_role("button", name="Открыть кабинет").click()
@@ -204,6 +217,6 @@ def test_admin_can_open_dashboard_and_create_asset(live_server):
         assert page.locator("#logout").is_hidden()
         assert page.locator("#login").is_visible()
         assert page.locator("#detail").is_hidden()
-        assert page.get_by_text("Войдите, чтобы открыть реестр").is_visible()
+        assert page.get_by_text("Войдите в AssetGuard", exact=True).is_visible()
         assert console_errors == []
         browser.close()

@@ -11,7 +11,7 @@
 | [api](api/) | Реализованные REST API boundaries |
 | [data](data/) | Владение данными, хранение и retention |
 | [security](security/) | Минимальная модель безопасности и privacy |
-| [product](product/) | Demo-сценарий, [актуальный полный чек-лист](product/current-project-checklist.md), [архитектура и pitch-гайд](product/pitch-guide.md), границы MVP, [чек-лист завершения](product/mvp-completion-checklist.md), [аудит данных Dashboard](product/dashboard-data-audit.md) и [UX-сценарии пользователей](product/ux-workflow.md) |
+| [product](product/) | Demo-сценарий, [актуальный полный чек-лист](product/current-project-checklist.md), [архитектура и pitch-гайд](product/pitch-guide.md), границы MVP, [чек-лист завершения](product/mvp-completion-checklist.md), [аудит данных Dashboard](product/dashboard-data-audit.md), [план frontend redesign](product/frontend-redesign-audit.md) и [UX-сценарии пользователей](product/ux-workflow.md) |
 | [quality](quality/) | Фикстуры и стратегия проверки |
 | [operations](operations/) | Среда, наблюдаемость, [PDF/OCR импорт](operations/pdf-import-ocr.md), backup и журналирование |
 

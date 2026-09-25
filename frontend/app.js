@@ -3,6 +3,51 @@ let token = sessionStorage.getItem("assetguard-admin-token") || "";
 let state = {assets: [], endpoints: [], devices: [], changes: [], incidents: [], operations: null, locations: [], users: [], locationAccess: [], organizations: [], agentCredentials: [], currentUser: null, visionRooms: [], selectedAsset: null, linkingEndpoint: null, visionRoomId: null, visionScan: null, visionImageUrl: null, assetQrUrl: null, roomWorkspace: null, roomTab: "overview", physicalIncidentId: null};
 $("token").value = token;
 
+const routeMeta = {
+  overview: ["Состояние инфраструктуры", "Центр контроля"],
+  devices: ["Реестр школы", "Устройства и имущество"],
+  incidents: ["Контроль изменений", "Инциденты"],
+  locations: ["Структура школы", "Помещения"],
+  vision: ["Физическая инвентаризация", "Проверка по фото"],
+  "location-access": ["Администрирование", "Сотрудники и доступ"],
+  "agent-credentials": ["Администрирование", "Подключение Agent"],
+  "agent-workflow": ["Справка", "Как работает Agent"],
+};
+const primaryRoutes = new Set(Object.keys(routeMeta));
+
+function setPageHeading(route) {
+  const meta = routeMeta[route] || routeMeta.overview;
+  document.querySelector(".page-intro .eyebrow").textContent = meta[0];
+  document.querySelector(".page-intro h1").textContent = meta[1];
+  document.title = `${meta[1]} — AssetGuard`;
+}
+
+function showPrimaryRoute(route) {
+  let target = primaryRoutes.has(route) ? route : "overview";
+  if(target === "location-access" && !state.currentUser) target = "overview";
+  if(target === "agent-credentials" && state.currentUser?.role !== "ADMIN") target = "overview";
+  document.querySelectorAll("main > .page-section").forEach((section) => { section.hidden = section.id !== target; });
+  state.selectedAsset = null;
+  state.roomWorkspace = null;
+  document.querySelectorAll("#main-nav a").forEach((link) => link.removeAttribute("aria-current"));
+  document.querySelector(`#main-nav a[href="#${CSS.escape(target)}"]`)?.setAttribute("aria-current", "page");
+  setPageHeading(target);
+  document.querySelector(".app-header").classList.remove("nav-open");
+  $("nav-toggle").setAttribute("aria-expanded", "false");
+  $("nav-toggle").setAttribute("aria-label", "Открыть меню");
+  window.scrollTo({top: 0, behavior: "instant"});
+}
+
+function navigateToAsset(assetId) {
+  if (location.hash !== `#asset=${assetId}`) location.hash = `asset=${assetId}`;
+  else detail(assetId);
+}
+
+function navigateToRoom(roomId) {
+  if (location.hash !== `#room=${roomId}`) location.hash = `room=${roomId}`;
+  else openRoomWorkspace(roomId, false);
+}
+
 const escapeHtml = (value) => String(value ?? "—").replace(/[&<>"']/g, (char) => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[char]));
 const dateTime = (value) => value ? new Intl.DateTimeFormat("ru-RU", {dateStyle: "medium", timeStyle: "short"}).format(new Date(value)) : "—";
 const relativeTime = (value) => {
@@ -109,7 +154,9 @@ function renderDashboard() {
   const online = devices.filter((item) => item.status === "OK").length;
   const attention = devices.filter((item) => ["ATTENTION","ANOMALY"].includes(item.status));
   const unchecked = devices.filter((item) => item.status === "UNCHECKED");
-  $("devices-count").textContent = state.assets.length; $("online-count").textContent = online; $("attention-count").textContent = attention.length; $("unchecked-count").textContent = unchecked.length;
+  const openIncidents = state.incidents.filter((item) => ["OPEN","UNDER_REVIEW"].includes(item.status));
+  $("devices-count").textContent = state.assets.length; $("online-count").textContent = online; $("attention-count").textContent = attention.length; $("unchecked-count").textContent = unchecked.length; $("open-incidents-count").textContent = openIncidents.length;
+  $("nav-incident-count").textContent = openIncidents.length; $("nav-incident-count").hidden = !openIncidents.length;
   const banner = $("attention-banner");
   if (!devices.length) {
     banner.className = "attention-banner is-loading"; banner.innerHTML = '<span class="attention-icon">1</span><div><strong>Начните с настройки школы</strong><p>Создайте кабинеты и добавьте имущество. Agent подключайте, если нужно автоматически следить за компьютерами.</p></div>';
@@ -129,11 +176,59 @@ function renderDashboard() {
   const full = state.endpoints.filter((item) => item.current_snapshot?.type === "FULL").length;
   $("inventory-summary").innerHTML = state.endpoints.length ? `<div class="summary-line"><span>Компьютеры с отчётом</span><strong>${state.endpoints.filter((item) => item.current_snapshot).length} из ${state.endpoints.length}</strong></div><div class="summary-line"><span>Полная инвентаризация</span><strong>${full}</strong></div><div class="summary-line"><span>Последняя активность Agent</span><strong>${latest ? relativeTime(latest) : "—"}</strong></div>` : '<p class="empty">Agent пока не подключён. Мебель и прочее имущество учитываются в реестре отдельно.</p>';
   renderIncidentSpotlight();
+  renderIncidentCenter();
   const reporting = state.endpoints.filter((item) => item.last_seen_at).length;
   $("agent-online-badge").textContent = state.endpoints.length ? `${reporting} компьютеров с Agent на связи` : "Agent не подключён"; $("agent-online-badge").className = `status-pill ${reporting ? "ok" : "neutral"}`;
   $("agent-last-signal").textContent = latest ? `Инвентаризация получена ${relativeTime(latest)}` : "Ожидаем данные Agent";
   $("agent-proof-text").textContent = latest ? `${dateTime(latest)} · отчёт принят, нормализован и сохранён в истории.` : "После первой отправки здесь появится фактическое время последней инвентаризации.";
   bindDynamicActions();
+}
+
+function filteredIncidents() {
+  const status = $("incident-status-filter").value;
+  const severity = $("incident-severity-filter").value;
+  const query = $("incident-search").value.trim().toLocaleLowerCase("ru");
+  return state.incidents.filter((incident) => {
+    const change = state.changes.find((item) => item.id === incident.change_event_id);
+    const device = deviceForEndpoint(incident.endpoint_id);
+    const active = ["OPEN","UNDER_REVIEW"].includes(incident.status);
+    const statusMatch = !status || (status === "ACTIVE" ? active : incident.status === status);
+    const text = [incident.title, incidentLabel(incident, change), device?.name, device?.hostname, device?.inventoryNumber, device?.room].filter(Boolean).join(" ").toLocaleLowerCase("ru");
+    return statusMatch && (!severity || incident.severity === severity) && (!query || text.includes(query));
+  });
+}
+
+function renderIncidentCenter() {
+  const incidents = filteredIncidents();
+  const openCount = state.incidents.filter((item) => ["OPEN","UNDER_REVIEW"].includes(item.status)).length;
+  $("incident-center-count").textContent = `${incidents.length} из ${state.incidents.length}`;
+  $("incident-center-count").className = `status-pill ${openCount ? "warning" : "ok"}`;
+  const list = $("incident-center-list");
+  if (!incidents.length) {
+    const hasAny = state.incidents.length > 0;
+    list.innerHTML = `<div class="panel empty-state"><strong>${hasAny ? "По выбранным фильтрам ничего не найдено" : "Открытых инцидентов нет"}</strong><p>${hasAny ? "Измените статус, приоритет или поисковый запрос." : "Все проверенные устройства сейчас соответствуют подтверждённому состоянию."}</p>${hasAny ? '<button type="button" class="button-secondary clear-incident-filters-inline">Сбросить фильтры</button>' : '<a class="button-anchor" href="#devices">Открыть устройства</a>'}</div>`;
+    list.querySelector(".clear-incident-filters-inline")?.addEventListener("click", clearIncidentFilters);
+    return;
+  }
+  list.innerHTML = incidents.map((incident) => {
+    const change = state.changes.find((item) => item.id === incident.change_event_id);
+    const device = deviceForEndpoint(incident.endpoint_id);
+    const location = device ? locationLabel(device) : "Расположение не указано";
+    const comparison = change ? `<div class="incident-comparison"><div><span>Было</span><strong>${escapeHtml(componentSummary(change.component_type, change.evidence?.previous))}</strong></div><b aria-hidden="true">→</b><div><span>Стало</span><strong>${escapeHtml(componentSummary(change.component_type, change.evidence?.current))}</strong></div></div>` : '<p class="meta">Подробное доказательство доступно в карточке устройства.</p>';
+    const deviceAction = device?.assetId ? `<button type="button" class="open-device" data-id="${device.assetId}">Открыть доказательства</button>` : device ? `<button type="button" class="link-endpoint button-secondary" data-id="${device.endpointId}" data-name="${escapeHtml(device.hostname || "")}">Связать с имуществом</button>` : "";
+    const decisions = state.currentUser?.role === "ADMIN" && ["OPEN","UNDER_REVIEW"].includes(incident.status) ? `<button type="button" class="incident-review button-secondary" data-id="${incident.id}">Взять на проверку</button><button type="button" class="incident-resolve" data-id="${incident.id}">Зафиксировать решение</button>` : "";
+    return `<article class="panel incident-card"><div class="incident-card-head"><div><span class="eyebrow">${escapeHtml(incident.severity === "HIGH" ? "Высокий приоритет" : incident.severity === "LOW" ? "Низкий приоритет" : "Средний приоритет")}</span><h3>${escapeHtml(device?.name || device?.hostname || "Устройство")}</h3><p>${escapeHtml(location)} · ${dateTime(incident.created_at)}</p></div>${pill(incident.status)}</div><div class="incident-card-body"><div><strong>${escapeHtml(incidentLabel(incident, change))}</strong><p>AssetGuard обнаружил расхождение с подтверждённым эталоном. Окончательное решение принимает ответственный сотрудник.</p></div>${comparison}</div><div class="incident-card-actions">${deviceAction}${decisions}</div></article>`;
+  }).join("");
+  bindDynamicActions();
+  document.querySelectorAll(".incident-review").forEach((button) => button.onclick = () => incidentAction(button.dataset.id, false));
+  document.querySelectorAll(".incident-resolve").forEach((button) => button.onclick = () => incidentAction(button.dataset.id, true));
+}
+
+function clearIncidentFilters() {
+  $("incident-status-filter").value = "ACTIVE";
+  $("incident-severity-filter").value = "";
+  $("incident-search").value = "";
+  renderIncidentCenter();
 }
 function renderSetupGuide() {
   const guide = $("setup-guide");
@@ -235,15 +330,17 @@ function renderRoomTab() {
   document.querySelectorAll(".physical-incident-action").forEach((button)=>button.onclick=()=>openPhysicalIncidentDialog(button.dataset.id));
   document.querySelectorAll(".physical-incident-act").forEach((button)=>button.onclick=()=>downloadPhysicalIncidentAct(button.dataset.id,button.dataset.number));
 }
-async function openRoomWorkspace(roomId) {
+async function openRoomWorkspace(roomId, scroll = true) {
+  document.querySelectorAll("main > .page-section").forEach((section) => { section.hidden = section.id !== "room-detail"; });
+  setPageHeading("locations");
   $("room-detail").hidden=false; $("room-detail-title").textContent="Загрузка кабинета…"; $("room-tab-content").innerHTML='<div class="skeleton"></div>';
   try {
     const workspace=await api(`/admin/locations/rooms/${roomId}/workspace`); state.roomWorkspace=workspace; state.roomTab="overview";
     $("room-detail-title").textContent=`Кабинет ${workspace.room.name}`; $("room-detail-path").textContent=[workspace.path.building,workspace.path.floor&&`этаж ${workspace.path.floor}`,workspace.room.purpose].filter(Boolean).join(" · ");
     $("room-edit-action").hidden=state.currentUser?.role!=="ADMIN"; $("room-vision-action").hidden=state.currentUser?.role!=="ADMIN"; $("room-inspection-action").hidden=!canEditRoom(workspace.room.id)||!workspace.inventory.assets.length;
     const attention=workspace.incidents.length||(workspace.physical_incidents||[]).some((item)=>["OPEN","UNDER_REVIEW"].includes(item.status))||workspace.agents.some((item)=>item.status!=="ONLINE")||workspace.vision?.latest_scan?.status==="WARNING"; $("room-detail-state").textContent=attention?"Требует внимания":"В норме"; $("room-detail-state").className=`status-pill ${attention?"warning":"ok"}`;
-    renderRoomTab(); $("room-detail").scrollIntoView({behavior:"smooth",block:"start"});
-  } catch(error) { $("room-detail").hidden=true; showToast(error.message,true); }
+    renderRoomTab(); if(scroll)window.scrollTo({top:0,behavior:"smooth"});
+  } catch(error) { $("room-detail").hidden=true; location.hash="locations"; showToast(error.message,true); }
 }
 function openRoomEditDialog() {
   const room=state.roomWorkspace?.room;if(!room)return;
@@ -307,7 +404,7 @@ function renderLocations(locations) {
   $("location-tree").innerHTML=locations.length ? locations.map((building)=>`<div class="attention-item"><span class="attention-dot"></span><div><strong>${escapeHtml(building.name)}</strong><small>${escapeHtml(locationContact(building)||"Ответственный не назначен")}</small>${building.floors.length ? building.floors.map((floor)=>`<div class="location-floor"><b>Этаж ${escapeHtml(floor.name)}</b> ${canManage?`<button class="button-link add-room" data-floor="${floor.id}">+ кабинет</button>`:""}${floor.rooms.length ? floor.rooms.map((room)=>`<div class="location-room"><span>каб. ${escapeHtml(room.name)}${room.purpose?` · ${escapeHtml(room.purpose)}`:""}</span><small>${room.asset_count} активов · ${escapeHtml(locationContact(room)||"ответственный не назначен")}</small><button class="button-link room-report" data-room="${room.id}">Открыть кабинет</button></div>`).join("") : '<p class="empty">Кабинетов пока нет.</p>'}</div>`).join("") : '<p class="empty">Этажей пока нет.</p>'}${canManage?`<button class="button-link add-floor" data-building="${building.id}">+ этаж</button>`:""}</div></div>`).join("") : '<p class="empty">Структура пока не создана. Добавьте корпус справа, затем создайте для него этажи и кабинеты.</p>';
   document.querySelectorAll(".add-floor").forEach((button)=>button.onclick=()=>openLocationDialog("floor",button.dataset.building));
   document.querySelectorAll(".add-room").forEach((button)=>button.onclick=()=>openLocationDialog("room",button.dataset.floor));
-  document.querySelectorAll(".room-report").forEach((button)=>button.onclick=()=>openRoomWorkspace(button.dataset.room));
+  document.querySelectorAll(".room-report").forEach((button)=>button.onclick=()=>navigateToRoom(button.dataset.room));
 }
 let locationDialogTarget=null;
 function openLocationDialog(kind,parentId) {
@@ -421,7 +518,7 @@ function renderDevices() {
     return `<tr class="device-row" data-asset-id="${item.assetId || ""}"><td data-label="Устройство"><div class="device-name">${item.assetId ? `<button class="device-open-link open-device" data-id="${item.assetId}">${escapeHtml(item.name)}</button>` : `<strong>${escapeHtml(item.name)}</strong>`}<small>${escapeHtml([item.inventoryNumber,item.hostname].filter(Boolean).join(" · ") || (item.kind === "endpoint" ? "Нужно связать с записью учёта" : "Инвентарный номер не задан"))}</small></div></td><td data-label="Расположение">${escapeHtml(locationLabel(item) || "Не указано")}</td><td data-label="Состояние">${pill(item.status)}${item.endpoint?.open_changes ? `<small>${item.endpoint.open_changes} откр. изм.</small>` : ""}</td><td data-label="Последняя проверка"><strong>${escapeHtml(lastCheck)}</strong><small>${escapeHtml(categoryLabels[item.category] || (item.kind === "endpoint" ? "Компьютер Agent" : "Имущество"))}</small></td><td data-label="Оборудование"><span class="hardware-brief">${escapeHtml(hardwareSummary)}</span></td><td data-label="Действие">${item.assetId ? `<button class="row-action open-device" data-id="${item.assetId}">Открыть карточку</button>` : `<button class="link-endpoint button-secondary" data-id="${item.endpointId}" data-name="${escapeHtml(item.hostname || "")}">Связать с имуществом</button>`}</td></tr>`;
   }).join("") : `<tr><td colspan="6">${empty}</td></tr>`;
   $("device-result-count").textContent = `Показано ${devices.length} из ${state.devices.length}`;
-  document.querySelectorAll("tr.device-row[data-asset-id]").forEach((row) => { if (row.dataset.assetId) row.onclick = () => detail(row.dataset.assetId); }); bindDynamicActions();
+  document.querySelectorAll("tr.device-row[data-asset-id]").forEach((row) => { if (row.dataset.assetId) row.onclick = () => navigateToAsset(row.dataset.assetId); }); bindDynamicActions();
   $("empty-add")?.addEventListener("click", openAssetCreateForm);
   $("empty-import")?.addEventListener("click", () => { $("registry-tools").open=true; $("registry-tools").scrollIntoView({behavior:"smooth",block:"center"}); });
   $("empty-reset")?.addEventListener("click", clearDeviceFilters);
@@ -429,7 +526,7 @@ function renderDevices() {
 function clearDeviceFilters() { $("device-search").value=""; $("device-status-filter").value=""; $("device-category-filter").value=""; $("device-room-filter").value=""; $("device-change-filter").checked=false; renderDevices(); }
 function openAssetCreateForm() { const form=$("create-asset"); form.hidden=false; form.scrollIntoView({behavior:"smooth",block:"center"}); form.querySelector('[name="inventory_number"]').focus({preventScroll:true}); }
 function bindDynamicActions() {
-  document.querySelectorAll(".open-device").forEach((button) => button.onclick = (event) => { event.stopPropagation(); detail(button.dataset.id); });
+  document.querySelectorAll(".open-device").forEach((button) => button.onclick = (event) => { event.stopPropagation(); navigateToAsset(button.dataset.id); });
   document.querySelectorAll(".link-endpoint").forEach((button) => button.onclick = (event) => { event.stopPropagation(); openLink(button.dataset.id, button.dataset.name); });
 }
 function factRows(items, emptyMessage = "В последнем отчёте этих сведений нет.") { const rows = items.filter(([,value]) => value !== null && value !== undefined && value !== ""); return rows.length ? rows.map(([label,value]) => `<dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd>`).join("") : `<p class="empty">${escapeHtml(emptyMessage)}</p>`; }
@@ -474,6 +571,8 @@ async function sendAction(path, payload, method = "POST", message = "Измен�
 }
 async function detail(assetId, scroll = true) {
   try {
+    document.querySelectorAll("main > .page-section").forEach((section) => { section.hidden = section.id !== "detail"; });
+    setPageHeading("devices");
     $("detail").hidden = false; $("detail-title").textContent = "Загрузка…";
     const asset = await api(`/admin/assets/${assetId}`); state.selectedAsset = assetId; const endpoint = asset.endpoint; const status = deviceStatus(endpoint,asset);
     $("detail-title").textContent = asset.name; $("detail-status").innerHTML = pill(status);
@@ -562,11 +661,17 @@ async function load(showLoading=true) {
   try { const [assets,endpoints,changes,incidents,visionRooms,operations,locations,currentUser]=await Promise.all([api("/admin/assets"),api("/admin/endpoints"),api("/admin/changes"),api("/admin/incidents"),api("/admin/vision/rooms"),api("/admin/operations/status"),api("/admin/locations/tree"),api("/auth/me")]); state={...state,assets,endpoints,changes,incidents,visionRooms,operations,locations,currentUser}; syncRoleControls(); buildDevices(); renderDashboard(); renderOperations(operations); renderLocations(locations); renderDevices(); renderVisionRooms(visionRooms); await loadAdminAccess(); $("status").textContent=`Данные актуальны · ${dateTime(new Date())}`; }
   catch(error){$("status").textContent=error.message;$("attention-banner").className="attention-banner error";$("attention-banner").innerHTML=`<span class="attention-icon">!</span><div><strong>Не удалось загрузить Dashboard</strong><p>${escapeHtml(error.message)}</p></div>`;showToast(error.message,true);}
 }
-function openAssetFromHash() { const match = location.hash.match(/^#asset=([0-9a-f-]{36})$/i); if (match && token) detail(match[1]); }
+function openRouteFromHash() {
+  const assetMatch = location.hash.match(/^#asset=([0-9a-f-]{36})$/i);
+  const roomMatch = location.hash.match(/^#room=([0-9a-f-]{36})$/i);
+  if(assetMatch){if(token)detail(assetMatch[1]);return;}
+  if(roomMatch){if(token)openRoomWorkspace(roomMatch[1],false);return;}
+  showPrimaryRoute(location.hash.slice(1)||"overview");
+}
 
-$("token-form").addEventListener("submit",async(event)=>{event.preventDefault();const username=$("username").value.trim(),secret=$("token").value;try{if(username){const response=await fetch("/auth/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username,password:secret})});if(!response.ok)throw new Error("Неверный логин или пароль");token=(await response.json()).access_token;}else token=secret;sessionStorage.setItem("assetguard-admin-token",token);$("token").value="";await load();openAssetFromHash();showToast("Вход выполнен");}catch(error){$("status").textContent=error.message;showToast(error.message,true);}});
+$("token-form").addEventListener("submit",async(event)=>{event.preventDefault();const username=$("username").value.trim(),secret=$("token").value;try{if(username){const response=await fetch("/auth/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username,password:secret})});if(!response.ok)throw new Error("Неверный логин или пароль");token=(await response.json()).access_token;}else token=secret;sessionStorage.setItem("assetguard-admin-token",token);$("token").value="";await load();openRouteFromHash();showToast("Вход выполнен");}catch(error){$("status").textContent=error.message;showToast(error.message,true);}});
 $("nav-toggle").addEventListener("click",()=>{const header=document.querySelector(".app-header"),open=header.classList.toggle("nav-open");$("nav-toggle").setAttribute("aria-expanded",String(open));$("nav-toggle").setAttribute("aria-label",open?"Закрыть меню":"Открыть меню");});
-document.querySelectorAll("#main-nav a").forEach((link)=>link.addEventListener("click",()=>{document.querySelector(".app-header").classList.remove("nav-open");$("nav-toggle").setAttribute("aria-expanded","false");document.querySelectorAll("#main-nav a").forEach((item)=>item.removeAttribute("aria-current"));link.setAttribute("aria-current","location");}));
+document.querySelectorAll("#main-nav a").forEach((link)=>link.addEventListener("click",()=>{document.querySelector(".app-header").classList.remove("nav-open");$("nav-toggle").setAttribute("aria-expanded","false");$("nav-toggle").setAttribute("aria-label","Открыть меню");document.querySelectorAll("#main-nav a").forEach((item)=>item.removeAttribute("aria-current"));link.setAttribute("aria-current","location");}));
 function syncTrackingMode() { const grouped=$("asset-tracking-mode").value==="GROUPED", field=$("asset-quantity-field"), input=field.querySelector("input");field.hidden=!grouped;input.disabled=!grouped;input.required=grouped; }
 $("asset-tracking-mode").addEventListener("change",syncTrackingMode);
 $("asset-edit-tracking-mode").addEventListener("change",syncAssetEditTrackingMode);
@@ -575,7 +680,7 @@ $("asset-edit-form").addEventListener("submit",async(event)=>{event.preventDefau
 $("asset-qr-cancel").onclick=()=>$("asset-qr-dialog").close();
 $("asset-qr-form").addEventListener("submit",async(event)=>{event.preventDefault();const asset=state.qrAsset;if(!asset)return;const raw=$("asset-qr-public-url").value.trim();let publicUrl="";try{if(raw){const normalized=new URL(raw);if(normalized.protocol!=="https:")throw new Error("Для телефона нужен HTTPS-адрес.");publicUrl=normalized.origin;localStorage.setItem("assetguardPublicUrl",publicUrl);}await printAssetQr(asset,publicUrl);$("asset-qr-dialog").close();}catch(error){showToast(error.message,true);}});
 $("clear-device-filters").addEventListener("click",clearDeviceFilters);
-$("logout").onclick=()=>{const previousToken=token, isNamedSession=Boolean(state.currentUser?.id);token="";sessionStorage.removeItem("assetguard-admin-token");if(state.visionImageUrl)URL.revokeObjectURL(state.visionImageUrl);if(state.assetQrUrl)URL.revokeObjectURL(state.assetQrUrl);state={assets:[],endpoints:[],devices:[],changes:[],incidents:[],operations:null,locations:[],users:[],locationAccess:[],organizations:[],agentCredentials:[],currentUser:null,visionRooms:[],selectedAsset:null,linkingEndpoint:null,visionRoomId:null,visionScan:null,visionImageUrl:null,assetQrUrl:null,roomWorkspace:null,roomTab:"overview",physicalIncidentId:null};$("detail").hidden=true;$("room-detail").hidden=true;$("create-asset").hidden=true;$("assets").innerHTML='<tr><td colspan="6"><div class="empty-state"><strong>Войдите, чтобы открыть реестр</strong><p>После входа здесь появятся доступные вам имущество и компьютеры.</p></div></td></tr>';$("location-tree").innerHTML='<p class="empty">Войдите, чтобы посмотреть структуру школы.</p>';$("attention-list").innerHTML='<p class="empty">Войдите, чтобы увидеть состояние имущества.</p>';$("activity-list").innerHTML='';$("setup-guide").hidden=true;syncRoleControls();renderAdminAccessVisibility();$("status").textContent="Сессия завершена. Войдите снова, чтобы загрузить данные.";showToast("Вы вышли из системы");if(previousToken&&isNamedSession)fetch("/auth/logout",{method:"POST",headers:{"X-AssetGuard-Admin-Token":previousToken}}).catch(()=>{});};
+$("logout").onclick=()=>{const previousToken=token, isNamedSession=Boolean(state.currentUser?.id);token="";sessionStorage.removeItem("assetguard-admin-token");if(state.visionImageUrl)URL.revokeObjectURL(state.visionImageUrl);if(state.assetQrUrl)URL.revokeObjectURL(state.assetQrUrl);state={assets:[],endpoints:[],devices:[],changes:[],incidents:[],operations:null,locations:[],users:[],locationAccess:[],organizations:[],agentCredentials:[],currentUser:null,visionRooms:[],selectedAsset:null,linkingEndpoint:null,visionRoomId:null,visionScan:null,visionImageUrl:null,assetQrUrl:null,roomWorkspace:null,roomTab:"overview",physicalIncidentId:null};$("detail").hidden=true;$("room-detail").hidden=true;$("create-asset").hidden=true;$("assets").innerHTML='<tr><td colspan="6"><div class="empty-state"><strong>Войдите, чтобы открыть реестр</strong><p>После входа здесь появятся доступные вам имущество и компьютеры.</p></div></td></tr>';$("location-tree").innerHTML='<p class="empty">Войдите, чтобы посмотреть структуру школы.</p>';$("attention-list").innerHTML='<p class="empty">Войдите, чтобы увидеть состояние имущества.</p>';$("activity-list").innerHTML='';$("setup-guide").hidden=true;syncRoleControls();renderAdminAccessVisibility();history.replaceState(null,"","#overview");showPrimaryRoute("overview");$("attention-banner").className="attention-banner is-loading";$("attention-banner").innerHTML='<span class="attention-icon">→</span><div><strong>Войдите в AssetGuard</strong><p>После входа здесь появятся состояние инфраструктуры и задачи, требующие внимания.</p></div>';$("status").textContent="Сессия завершена. Войдите снова, чтобы загрузить данные.";showToast("Вы вышли из системы");if(previousToken&&isNamedSession)fetch("/auth/logout",{method:"POST",headers:{"X-AssetGuard-Admin-Token":previousToken}}).catch(()=>{});};
 $("show-create").onclick=()=>{if(!$("create-asset").hidden){$("create-asset").hidden=true;return;}openAssetCreateForm();};
 $("cancel-create").onclick=()=>{$("create-asset").hidden=true;};
 $("create-building").addEventListener("submit",async(event)=>{event.preventDefault();const form=event.currentTarget;try{await api("/admin/locations/buildings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(Object.fromEntries(new FormData(form).entries()))});form.reset();showToast("Корпус создан");await load(false);}catch(error){showToast(error.message,true);}});
@@ -638,9 +743,13 @@ $("import-assets-pdf-file").onchange = async (event) => { const input=event.targ
 $("create-asset").addEventListener("submit",async(event)=>{event.preventDefault();const form=event.currentTarget;try{const body=Object.fromEntries(new FormData(form).entries());body.room_id=body.room_id||null;body.quantity=body.quantity||1;body.category=({Desktop:"IT",Laptop:"IT",Printer:"IT",Projector:"IT",Network:"IT",Furniture:"FURNITURE",Sports:"SPORTS",Educational:"EDUCATIONAL",Other:"OTHER"})[body.asset_type]||"OTHER";await api("/admin/assets",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});form.reset();form.hidden=true;syncTrackingMode();showToast("Имущество добавлено в реестр");await load(false);}catch(error){showToast(error.message,true);}});
 $("link-form").addEventListener("submit",async(event)=>{event.preventDefault();if(!state.linkingEndpoint||!$("link-asset").value)return;try{await api(`/admin/endpoints/${state.linkingEndpoint}/asset/${$("link-asset").value}`,{method:"POST"});$("link-dialog").close();showToast("Устройство связано с активом");await load(false);}catch(error){showToast(error.message,true);}});$("link-cancel").onclick=()=>$("link-dialog").close();
 [$("device-search"),$("device-status-filter"),$("device-category-filter"),$("device-room-filter"),$("device-change-filter"),$("device-sort")].forEach((control)=>control.addEventListener(control.type==="search"?"input":"change",renderDevices));
-$("detail-back").onclick=()=>{state.selectedAsset=null;$("detail").hidden=true;location.hash="devices";$("devices").scrollIntoView({behavior:"smooth",block:"start"});};
+document.querySelectorAll("[data-device-filter]").forEach((link)=>link.addEventListener("click",()=>{$("device-status-filter").value=link.dataset.deviceFilter;renderDevices();}));
+[$("incident-status-filter"),$("incident-severity-filter")].forEach((control)=>control.addEventListener("change",renderIncidentCenter));
+$("incident-search").addEventListener("input",renderIncidentCenter);
+$("clear-incident-filters").onclick=clearIncidentFilters;
+$("detail-back").onclick=()=>{state.selectedAsset=null;$("detail").hidden=true;location.hash="devices";};
 $("room-tabs").addEventListener("click",(event)=>{const button=event.target.closest("[data-room-tab]");if(!button)return;state.roomTab=button.dataset.roomTab;renderRoomTab();});
-$("room-detail-back").onclick=()=>{state.roomWorkspace=null;$("room-detail").hidden=true;location.hash="locations";$("locations").scrollIntoView({behavior:"smooth",block:"start"});};
+$("room-detail-back").onclick=()=>{state.roomWorkspace=null;$("room-detail").hidden=true;location.hash="locations";};
 $("room-edit-action").onclick=openRoomEditDialog;
 $("room-vision-action").onclick=()=>launchRoomVision(state.roomWorkspace?.room.id);
 $("room-inspection-action").onclick=openRoomInspectionDialog;
@@ -656,7 +765,9 @@ $("vision-location-room").addEventListener("change",(event)=>syncVisionAssetsFor
 $("vision-upload").addEventListener("submit",async(event)=>{event.preventDefault();const button=$("vision-run"),selectedRoomName=$("vision-location-room").selectedOptions[0]?.textContent||"Кабинет";button.disabled=true;$("vision-progress").textContent="Анализируем фото… Первый запуск может занять несколько минут.";try{const form=new FormData(event.currentTarget);const scan=await api("/admin/vision/scans",{method:"POST",body:form});state.visionRoomId=scan.room_id;const rooms=await api("/admin/vision/rooms");renderVisionRooms(rooms);await renderVisionScan(scan,selectedRoomName);await loadVisionHistory(scan.room_id);$("vision-progress").textContent=`Анализ завершён: найдено объектов — ${scan.detections.length}. Проверьте результат.`;}catch(error){$("vision-progress").textContent=error.message;showToast(error.message,true);}finally{button.disabled=!state.locations.some((building)=>building.floors.some((floor)=>floor.rooms.length));}});
 $("vision-baseline").onclick=async()=>{if(!state.visionScan)return;if(!confirm("Подтвердить результат этой проверки как эталон кабинета?"))return;try{await api(`/admin/vision/rooms/${state.visionScan.room_id}/baseline`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({scan_id:state.visionScan.id})});const scan=await api(`/admin/vision/scans/${state.visionScan.id}`);await renderVisionScan(scan,state.visionRooms.find((room)=>room.id===scan.room_id)?.name);await loadVisionHistory(scan.room_id);$("vision-progress").textContent="Эталон подтверждён. Следующее фото будет сравнено с ним.";showToast("Эталон помещения сохранён");}catch(error){showToast(error.message,true);}};
 $("vision-room-select").onchange=async(event)=>{state.visionRoomId=event.target.value;const room=state.visionRooms.find((item)=>item.id===state.visionRoomId);state.visionScan=room?.latest_scan||null;if(state.visionScan)await renderVisionScan(state.visionScan,room.name);await loadVisionHistory(state.visionRoomId);};
-window.addEventListener("hashchange",()=>{openAssetFromHash();const target=location.hash.slice(1),link=document.querySelector(`#main-nav a[href="#${CSS.escape(target)}"]`);document.querySelectorAll("#main-nav a").forEach((item)=>item.removeAttribute("aria-current"));link?.setAttribute("aria-current","location");if(target==="devices"&&state.selectedAsset){$("detail").hidden=true;state.selectedAsset=null;}document.querySelector(".app-header").classList.remove("nav-open");$("nav-toggle").setAttribute("aria-expanded","false");});
+window.addEventListener("hashchange",openRouteFromHash);
 syncRoleControls();
 renderAdminAccessVisibility();
-if(token)load().then(openAssetFromHash);
+if(!location.hash)history.replaceState(null,"","#overview");
+openRouteFromHash();
+if(token)load().then(openRouteFromHash);
