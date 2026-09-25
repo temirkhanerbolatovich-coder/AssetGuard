@@ -242,7 +242,11 @@ def location_tree(session: Annotated[Session, Depends(get_session)], principal: 
         for floor in session.scalars(select(FloorRecord).where(FloorRecord.building_id == building.id).order_by(FloorRecord.name)):
             rooms = [room for room in session.scalars(select(RoomRecord).where(RoomRecord.floor_id == floor.id).order_by(RoomRecord.name)) if allowed_rooms is None or room.id in allowed_rooms]
             if rooms: floors.append({"id": str(floor.id), "name": floor.name, "responsible_name": floor.responsible_name, "responsible_contact": floor.responsible_contact, "rooms": [_room_view(session, room) for room in rooms]})
-        if floors: result.append({"id": str(building.id), "organization_id": str(building.organization_id), "name": building.name, "responsible_name": building.responsible_name, "responsible_contact": building.responsible_contact, "notes": building.notes, "floors": floors})
+        # A building is meaningful as soon as it is created.  In particular,
+        # administrators need to see an empty building in order to add its
+        # first floor.  Previously it was omitted until it contained a room,
+        # which made a successfully created building look like it had vanished.
+        result.append({"id": str(building.id), "organization_id": str(building.organization_id), "name": building.name, "responsible_name": building.responsible_name, "responsible_contact": building.responsible_contact, "notes": building.notes, "floors": floors})
     return result
 
 

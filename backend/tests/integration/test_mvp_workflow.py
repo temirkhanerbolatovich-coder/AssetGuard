@@ -38,6 +38,27 @@ def test_complete_mvp_workflow_and_required_fixtures() -> None:
     asyncio.run(_complete_mvp_workflow())
 
 
+def test_new_building_is_visible_before_its_first_floor() -> None:
+    asyncio.run(_new_building_is_visible_before_its_first_floor())
+
+
+async def _new_building_is_visible_before_its_first_floor() -> None:
+    """An administrator must be able to select a new building to add a floor."""
+    name = f"Empty building {uuid4().hex}"
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        created = await client.post(
+            "/admin/locations/buildings", headers=admin_headers(), json={"name": name},
+        )
+        assert created.status_code == 201
+
+        tree = await client.get("/admin/locations/tree", headers=admin_headers())
+        assert tree.status_code == 200
+        building = next(item for item in tree.json() if item["id"] == created.json()["id"])
+        assert building["name"] == name
+        assert building["floors"] == []
+
+
 async def _complete_mvp_workflow() -> None:
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
