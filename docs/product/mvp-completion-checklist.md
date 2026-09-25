@@ -26,6 +26,7 @@
 | AssetGuard Vision | Готово для demo | Image upload, Grounding DINO, bounding boxes, counts, baseline, comparison, `WARNING` и history; кабинет связан с локацией и доступ фильтруется. RTSP и связка каждой detection с endpoint остаются будущим этапом. |
 | Иерархия и права локаций | Частично | Организация → корпус → этаж → кабинет, grants VIEWER/EDITOR и единая карточка кабинета с имуществом, Agent, Vision, инцидентами, физическими обходами и историей работают; полный tenant-route matrix ещё нужен. |
 | Физический обход | Готово для кабинета | ADMIN/EDITOR отмечает каждую позицию как присутствующую, отсутствующую или повреждённую; акт хранит количества, комментарии, исполнителя и серверное время. Для проблемы автоматически создаётся инцидент с решениями «проверка / перемещение / ремонт / списание / не подтвердилось». Акты и решения append-only. |
+| Перемещение и списание | Готово | Подтверждённая операция меняет кабинет/остаток/статус, частично разделяет только групповые позиции, проверяет доступ к обеим локациям и формирует PDF-акт. |
 | Background demo | Готово | User-level demo tasks и production Compose deployment с restart policy. |
 | Local package | Готово | ZIP без secret/database/log data, startup scripts и documentation. |
 | GitHub | Готово | Public repository: `temirkhanerbolatovich-coder/AssetGuard`. |
@@ -66,7 +67,7 @@
 ### За пределами текущего demo
 
 - RTSP/camera scheduler, quality gate, multi-frame aggregation и `ANOMALY` confirmation;
-- QR-запуск мобильного обхода и отдельные подтверждаемые операции, реально меняющие кабинет/статус после решения о перемещении или списании; сам обход и физический incident workflow уже работают;
+- QR-запуск мобильного обхода; подтверждаемые перемещение и списание с PDF-актом уже работают;
 - 1С/AD integrations, Linux/macOS Agent, полный matrix-тест tenant/location границ всех admin API;
 - связывание каждой Vision detection с конкретным endpoint/asset;
 - custom agent, remote desktop, helpdesk, automatic theft detection.

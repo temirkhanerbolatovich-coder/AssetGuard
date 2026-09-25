@@ -57,6 +57,12 @@ class PhysicalIncidentDecisionRecord(Base):
     action: Mapped[str] = mapped_column(String(32))
     comment: Mapped[str | None] = mapped_column(Text)
     actor: Mapped[str] = mapped_column(String(255))
+    source_room_id: Mapped[UUID | None] = mapped_column(ForeignKey("location_rooms.id", ondelete="RESTRICT"), nullable=True)
+    destination_room_id: Mapped[UUID | None] = mapped_column(ForeignKey("location_rooms.id", ondelete="RESTRICT"), nullable=True)
+    destination_asset_id: Mapped[UUID | None] = mapped_column(ForeignKey("assets.id", ondelete="RESTRICT"), nullable=True)
+    quantity: Mapped[int | None] = mapped_column(nullable=True)
+    document_number: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    operation_snapshot: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 

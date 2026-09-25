@@ -1,16 +1,25 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from io import BytesIO
 from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
+from reportlab.lib import colors
+from reportlab.lib.enums import TA_CENTER
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import mm
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from xml.sax.saxutils import escape
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from assetguard.infrastructure.database import get_session
-from assetguard.interfaces.http.admin_assets import require_admin, require_viewer
+from assetguard.interfaces.http.admin_assets import _pdf_font_name, require_admin, require_viewer
 from assetguard.modules.baselines.models import BaselineRecord
 from assetguard.modules.incidents.models import (
     AssetHistoryEntryRecord, EndpointHistoryEntryRecord, IncidentRecord,
@@ -73,6 +82,10 @@ class RoomInspectionCreate(BaseModel):
 class PhysicalIncidentDecisionInput(BaseModel):
     action: Literal["INVESTIGATE", "MOVE", "REPAIR", "WRITE_OFF", "FALSE_POSITIVE"]
     comment: str = Field(min_length=3, max_length=4000)
+    quantity: int | None = Field(default=None, ge=1, le=1_000_000)
+    destination_room_id: UUID | None = None
+    destination_inventory_number: str | None = Field(default=None, min_length=1, max_length=128)
+    document_number: str | None = Field(default=None, min_length=1, max_length=128)
 
 
 class AccessGrant(BaseModel):
@@ -169,6 +182,27 @@ def _inspection_view(session: Session, inspection: RoomInspectionRecord) -> dict
     }
 
 
+def _room_path(session: Session, room_id: UUID | None) -> str:
+    room = session.get(RoomRecord, room_id) if room_id else None
+    floor = session.get(FloorRecord, room.floor_id) if room else None
+    building = session.get(BuildingRecord, floor.building_id) if floor else None
+    return " / ".join(value for value in (
+        building.name if building else None, floor.name if floor else None, room.name if room else None,
+    ) if value) or "Без кабинета"
+
+
+def _place_asset(session: Session, asset: AssetRecord, room: RoomRecord | None) -> None:
+    if room is None:
+        asset.room_id = None
+        asset.building = asset.floor = asset.room = None
+        return
+    floor = session.get(FloorRecord, room.floor_id)
+    building = session.get(BuildingRecord, floor.building_id) if floor else None
+    if not floor or not building or building.organization_id != asset.organization_id:
+        raise HTTPException(422, "The selected room does not belong to the asset organization.")
+    asset.room_id, asset.building, asset.floor, asset.room = room.id, building.name, floor.name, room.name
+
+
 def _physical_incident_view(session: Session, incident: PhysicalIncidentRecord) -> dict:
     asset = session.get(AssetRecord, incident.asset_id)
     decisions = list(session.scalars(select(PhysicalIncidentDecisionRecord).where(
@@ -186,6 +220,12 @@ def _physical_incident_view(session: Session, incident: PhysicalIncidentRecord) 
         "decisions": [{
             "id": str(decision.id), "action": decision.action,
             "comment": decision.comment, "actor": decision.actor,
+            "quantity": decision.quantity, "document_number": decision.document_number,
+            "source_room_id": str(decision.source_room_id) if decision.source_room_id else None,
+            "destination_room_id": str(decision.destination_room_id) if decision.destination_room_id else None,
+            "destination_asset_id": str(decision.destination_asset_id) if decision.destination_asset_id else None,
+            "operation_snapshot": decision.operation_snapshot,
+            "has_act": decision.action in {"MOVE", "WRITE_OFF"} and bool(decision.document_number),
             "created_at": decision.created_at,
         } for decision in decisions],
     }
@@ -344,7 +384,7 @@ def decide_physical_incident(
     session: Annotated[Session, Depends(get_session)],
     principal: Annotated[AuthPrincipal, Depends(require_viewer)],
 ):
-    incident = session.get(PhysicalIncidentRecord, incident_id)
+    incident = session.get(PhysicalIncidentRecord, incident_id, with_for_update=True)
     if not incident:
         raise HTTPException(404, "Physical incident was not found.")
     _room(session, incident.room_id, principal)
@@ -352,9 +392,114 @@ def decide_physical_incident(
     if incident.status == "RESOLVED":
         raise HTTPException(409, "The physical incident is already resolved.")
     now = datetime.now(UTC)
+    asset = session.get(AssetRecord, incident.asset_id, with_for_update=True)
+    if not asset:
+        raise HTTPException(409, "The asset linked to this incident no longer exists.")
+    if asset.room_id != incident.room_id:
+        raise HTTPException(409, "The asset location changed after the inspection. Start a new inspection before processing it.")
+    organization = session.get(OrganizationRecord, asset.organization_id)
+    source_room_id = asset.room_id
+    destination_room = None
+    destination_asset = None
+    operation_snapshot = None
+    quantity = body.quantity
+    document_number = _clean(body.document_number)
+
+    if body.action in {"MOVE", "WRITE_OFF"}:
+        if quantity is None or quantity > incident.affected_quantity or quantity > asset.quantity:
+            raise HTTPException(422, "Quantity must be within both the incident amount and the current asset balance.")
+        if not document_number:
+            raise HTTPException(422, "Document number is required for move and write-off operations.")
+        if asset.tracking_mode == "INDIVIDUAL" and quantity != asset.quantity:
+            raise HTTPException(422, "An individually tracked asset can only be processed in full.")
+
+    if body.action == "MOVE":
+        if body.destination_room_id is None:
+            raise HTTPException(422, "Destination room is required for a move.")
+        destination_room = _room(session, body.destination_room_id, principal)
+        require_room_access(session, destination_room.id, principal, write=True)
+        if destination_room.id == source_room_id:
+            raise HTTPException(422, "Choose a different destination room.")
+        before_quantity = asset.quantity
+        source_path, destination_path = _room_path(session, source_room_id), _room_path(session, destination_room.id)
+        if quantity < asset.quantity:
+            if asset.tracking_mode != "GROUPED":
+                raise HTTPException(422, "Only a grouped asset position can be split.")
+            inventory_number = _clean(body.destination_inventory_number)
+            if not inventory_number:
+                raise HTTPException(422, "A new inventory number is required for a partial move.")
+            duplicate = session.scalar(select(AssetRecord).where(
+                AssetRecord.organization_id == asset.organization_id,
+                AssetRecord.inventory_number == inventory_number,
+            ))
+            if duplicate:
+                raise HTTPException(409, "The destination inventory number already exists.")
+            asset.quantity -= quantity
+            destination_asset = AssetRecord(
+                organization_id=asset.organization_id, inventory_number=inventory_number,
+                name=asset.name, asset_type=asset.asset_type, category=asset.category,
+                tracking_mode=asset.tracking_mode, quantity=quantity, unit=asset.unit,
+                status=asset.status, building=None, floor=None, room=None,
+                notes=asset.notes, created_at=now, updated_at=now,
+            )
+            _place_asset(session, destination_asset, destination_room)
+            session.add(destination_asset); session.flush()
+            append_asset_history(
+                session, asset_id=destination_asset.id, event_type="ASSET_CREATED",
+                related_entity_type="PHYSICAL_INCIDENT", related_entity_id=incident.id,
+                message=f"Позиция создана при частичном перемещении из {source_path} по акту {document_number}.",
+                metadata={"source_asset_id": str(asset.id), "quantity": quantity, "document_number": document_number},
+            )
+        else:
+            destination_asset = asset
+            _place_asset(session, asset, destination_room)
+        asset.updated_at = now
+        operation_snapshot = {
+            "asset_name": asset.name, "inventory_number": asset.inventory_number,
+            "organization_name": organization.name if organization else "AssetGuard",
+            "source_path": source_path, "destination_path": destination_path,
+            "quantity": quantity, "unit": asset.unit, "balance_before": before_quantity,
+            "balance_after": asset.quantity if destination_asset is not asset else asset.quantity,
+            "destination_inventory_number": destination_asset.inventory_number,
+        }
+        append_asset_history(
+            session, asset_id=asset.id, event_type="ASSET_MOVED",
+            related_entity_type="PHYSICAL_INCIDENT", related_entity_id=incident.id,
+            message=f"Перемещено {quantity} {asset.unit}: {source_path} → {destination_path}. Акт {document_number}.",
+            metadata=operation_snapshot | {"actor": principal.username, "document_number": document_number},
+        )
+    elif body.action == "WRITE_OFF":
+        before_quantity = asset.quantity
+        source_path = _room_path(session, source_room_id)
+        if quantity < asset.quantity:
+            if asset.tracking_mode != "GROUPED":
+                raise HTTPException(422, "Only a grouped asset position can be written off partially.")
+            asset.quantity -= quantity
+        else:
+            asset.status = "WRITTEN_OFF"
+            _place_asset(session, asset, None)
+        asset.updated_at = now
+        operation_snapshot = {
+            "asset_name": asset.name, "inventory_number": asset.inventory_number,
+            "organization_name": organization.name if organization else "AssetGuard",
+            "source_path": source_path, "quantity": quantity, "unit": asset.unit,
+            "balance_before": before_quantity, "balance_after": 0 if quantity == before_quantity else asset.quantity,
+        }
+        append_asset_history(
+            session, asset_id=asset.id, event_type="ASSET_WRITTEN_OFF",
+            related_entity_type="PHYSICAL_INCIDENT", related_entity_id=incident.id,
+            message=f"Списано {quantity} {asset.unit} из {source_path}. Акт {document_number}.",
+            metadata=operation_snapshot | {"actor": principal.username, "document_number": document_number},
+        )
+
     decision = PhysicalIncidentDecisionRecord(
         incident_id=incident.id, action=body.action, comment=_clean(body.comment),
-        actor=principal.username, created_at=now,
+        actor=principal.username, source_room_id=source_room_id,
+        destination_room_id=destination_room.id if destination_room else None,
+        destination_asset_id=destination_asset.id if destination_asset else None,
+        quantity=quantity if body.action in {"MOVE", "WRITE_OFF"} else None,
+        document_number=document_number if body.action in {"MOVE", "WRITE_OFF"} else None,
+        operation_snapshot=operation_snapshot, created_at=now,
     )
     session.add(decision)
     resolving = body.action != "INVESTIGATE"
@@ -370,10 +515,83 @@ def decide_physical_incident(
         event_type="PHYSICAL_INCIDENT_RESOLVED" if resolving else "PHYSICAL_INCIDENT_CLASSIFIED",
         related_entity_type="PHYSICAL_INCIDENT", related_entity_id=incident.id,
         message=f"Физический инцидент: {action_labels[body.action]}.",
-        metadata={"action": body.action, "actor": principal.username, "comment": body.comment},
+        metadata={"action": body.action, "actor": principal.username, "comment": body.comment,
+                  "quantity": quantity, "document_number": document_number},
     )
     session.commit(); session.refresh(incident)
     return _physical_incident_view(session, incident)
+
+
+def _physical_operation_pdf(incident: PhysicalIncidentRecord, decision: PhysicalIncidentDecisionRecord) -> BytesIO:
+    snapshot = decision.operation_snapshot or {}
+    font = _pdf_font_name()
+    output = BytesIO()
+    document = SimpleDocTemplate(
+        output, pagesize=A4, leftMargin=18 * mm, rightMargin=18 * mm,
+        topMargin=18 * mm, bottomMargin=18 * mm,
+    )
+    styles = getSampleStyleSheet()
+    title = ParagraphStyle("OperationTitle", parent=styles["Title"], fontName=font, fontSize=17, leading=22, alignment=TA_CENTER)
+    text_style = ParagraphStyle("OperationText", parent=styles["Normal"], fontName=font, fontSize=10, leading=15)
+    heading_style = ParagraphStyle("OperationHeading", parent=text_style, fontSize=12, leading=17)
+    action_name = "перемещения" if decision.action == "MOVE" else "списания"
+    values = [
+        ("Организация", str(snapshot.get("organization_name") or "AssetGuard")),
+        ("Номер акта", decision.document_number or "—"),
+        ("Дата и время", decision.created_at.astimezone().strftime("%d.%m.%Y %H:%M")),
+        ("Операция", "Перемещение имущества" if decision.action == "MOVE" else "Списание имущества"),
+        ("Наименование", str(snapshot.get("asset_name") or "—")),
+        ("Инвентарный номер", str(snapshot.get("inventory_number") or "—")),
+        ("Количество", f"{decision.quantity or '—'} {snapshot.get('unit') or ''}".strip()),
+        ("Исходное место", str(snapshot.get("source_path") or "—")),
+    ]
+    if decision.action == "MOVE":
+        values.extend([
+            ("Новое место", str(snapshot.get("destination_path") or "—")),
+            ("Инв. номер после перемещения", str(snapshot.get("destination_inventory_number") or snapshot.get("inventory_number") or "—")),
+        ])
+    values.extend([("Основание / комментарий", decision.comment or "—"), ("Операцию выполнил", decision.actor)])
+    rows = [[Paragraph(escape(label), text_style), Paragraph(escape(value), text_style)] for label, value in values]
+    table = Table(rows, colWidths=[58 * mm, 115 * mm])
+    table.setStyle(TableStyle([
+        ("GRID", (0, 0), (-1, -1), .4, colors.HexColor("#cbd5e1")),
+        ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#f1f5f9")),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6), ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ("TOPPADDING", (0, 0), (-1, -1), 6), ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+    ]))
+    story = [
+        Paragraph(f"АКТ {action_name.upper()} ИМУЩЕСТВА", title), Spacer(1, 4 * mm),
+        Paragraph(f"Сформирован системой AssetGuard по физическому инциденту {incident.id}.", heading_style),
+        Spacer(1, 6 * mm), table, Spacer(1, 18 * mm),
+        Paragraph("Ответственный: ____________________ / ____________________", text_style),
+        Spacer(1, 9 * mm), Paragraph("Подтверждение принимающей стороны: ____________________", text_style),
+    ]
+    document.build(story)
+    output.seek(0)
+    return output
+
+
+@router.get("/physical-incidents/{incident_id}/act.pdf")
+def physical_incident_act(
+    incident_id: UUID, session: Annotated[Session, Depends(get_session)],
+    principal: Annotated[AuthPrincipal, Depends(require_viewer)],
+):
+    incident = session.get(PhysicalIncidentRecord, incident_id)
+    if not incident:
+        raise HTTPException(404, "Physical incident was not found.")
+    _room(session, incident.room_id, principal)
+    decision = session.scalar(select(PhysicalIncidentDecisionRecord).where(
+        PhysicalIncidentDecisionRecord.incident_id == incident.id,
+        PhysicalIncidentDecisionRecord.action.in_(("MOVE", "WRITE_OFF")),
+    ).order_by(PhysicalIncidentDecisionRecord.created_at.desc()))
+    if not decision or not decision.document_number:
+        raise HTTPException(409, "A move or write-off act has not been created for this incident.")
+    safe_number = "".join(character if character.isalnum() or character in "-_" else "-" for character in decision.document_number)
+    return StreamingResponse(
+        _physical_operation_pdf(incident, decision), media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="assetguard-act-{safe_number}.pdf"'},
+    )
 
 
 @router.get("/rooms/{room_id}/workspace")

@@ -262,6 +262,71 @@ async def _complete_mvp_workflow() -> None:
         history_types = {entry["type"] for entry in asset["history"]}
         assert {"ASSET_CREATED", "ENDPOINT_LINKED", "BASELINE_ACCEPTED", "HARDWARE_CHANGE_DETECTED", "INCIDENT_RESOLVED", "INVENTORY_COMPLETED"} <= history_types
 
+        # A physical discrepancy can execute a real, auditable partial move and write-off.
+        current_tree = (await client.get("/admin/locations/tree", headers=admin_headers())).json()
+        source_floor = next(
+            floor for building in current_tree if building["name"] == "Корпус А"
+            for floor in building["floors"] if floor["name"] == "2"
+        )
+        destination_response = await client.post(
+            f"/admin/locations/floors/{source_floor['id']}/rooms", headers=admin_headers(),
+            json={"name": "206", "purpose": "Склад"},
+        )
+        assert destination_response.status_code == 201
+        destination_room_id = destination_response.json()["id"]
+        grouped_response = await client.post("/admin/assets", headers=admin_headers(), json={
+            "inventory_number": "CHAIRS-GROUP-001", "name": "Стулья", "asset_type": "Furniture",
+            "category": "FURNITURE", "tracking_mode": "GROUPED", "quantity": 5,
+            "unit": "шт.", "room_id": room["id"],
+        })
+        assert grouped_response.status_code == 201
+        grouped_id = grouped_response.json()["id"]
+        move_inspection = await client.post(
+            f"/admin/locations/rooms/{room['id']}/inspections", headers=admin_headers(), json={"items": [
+                {"asset_id": asset_id, "result": "PRESENT", "affected_quantity": 0},
+                {"asset_id": grouped_id, "result": "MISSING", "affected_quantity": 2},
+            ]},
+        )
+        assert move_inspection.status_code == 201
+        source_workspace = (await client.get(f"/admin/locations/rooms/{room['id']}/workspace", headers=admin_headers())).json()
+        move_incident = next(item for item in source_workspace["physical_incidents"] if item["asset_id"] == grouped_id and item["status"] == "OPEN")
+        move = await client.post(
+            f"/admin/locations/physical-incidents/{move_incident['id']}/decision", headers=admin_headers(), json={
+                "action": "MOVE", "comment": "Передать два стула на склад", "quantity": 2,
+                "destination_room_id": destination_room_id, "destination_inventory_number": "CHAIRS-GROUP-001-M1",
+                "document_number": "MOVE-TEST-001",
+            },
+        )
+        assert move.status_code == 200
+        assert move.json()["decisions"][-1]["quantity"] == 2
+        assert move.json()["decisions"][-1]["has_act"] is True
+        move_act = await client.get(f"/admin/locations/physical-incidents/{move_incident['id']}/act.pdf", headers=admin_headers())
+        assert move_act.status_code == 200 and move_act.content.startswith(b"%PDF")
+        source_after_move = (await client.get(f"/admin/assets/{grouped_id}", headers=admin_headers())).json()
+        moved_asset = next(item for item in (await client.get("/admin/assets", headers=admin_headers())).json() if item["inventory_number"] == "CHAIRS-GROUP-001-M1")
+        assert source_after_move["quantity"] == 3
+        assert moved_asset["quantity"] == 2 and moved_asset["room_id"] == destination_room_id
+
+        writeoff_inspection = await client.post(
+            f"/admin/locations/rooms/{room['id']}/inspections", headers=admin_headers(), json={"items": [
+                {"asset_id": asset_id, "result": "PRESENT", "affected_quantity": 0},
+                {"asset_id": grouped_id, "result": "DAMAGED", "affected_quantity": 1},
+            ]},
+        )
+        assert writeoff_inspection.status_code == 201
+        source_workspace = (await client.get(f"/admin/locations/rooms/{room['id']}/workspace", headers=admin_headers())).json()
+        writeoff_incident = next(item for item in source_workspace["physical_incidents"] if item["asset_id"] == grouped_id and item["status"] == "OPEN")
+        writeoff = await client.post(
+            f"/admin/locations/physical-incidents/{writeoff_incident['id']}/decision", headers=admin_headers(), json={
+                "action": "WRITE_OFF", "comment": "Стул восстановлению не подлежит", "quantity": 1,
+                "document_number": "WRITEOFF-TEST-001",
+            },
+        )
+        assert writeoff.status_code == 200
+        assert (await client.get(f"/admin/assets/{grouped_id}", headers=admin_headers())).json()["quantity"] == 2
+        writeoff_act = await client.get(f"/admin/locations/physical-incidents/{writeoff_incident['id']}/act.pdf", headers=admin_headers())
+        assert writeoff_act.status_code == 200 and writeoff_act.content.startswith(b"%PDF")
+
         user_response = await client.post("/admin/users", headers=admin_headers(), json={
             "username": "e2e-viewer", "password": "fixture-password-123", "role": "VIEWER",
         })
