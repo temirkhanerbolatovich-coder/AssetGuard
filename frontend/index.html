@@ -59,6 +59,24 @@
     </div>
   </section>
 
+  <section id="room-detail" class="page-section room-detail-section" hidden>
+    <button id="room-detail-back" class="button-link" type="button">← Ко всем кабинетам</button>
+    <div class="room-hero panel">
+      <div><span class="eyebrow">Карточка кабинета</span><h2 id="room-detail-title">Кабинет</h2><p id="room-detail-path" class="meta"></p></div>
+      <div id="room-detail-state" class="status-pill neutral">Загрузка…</div>
+    </div>
+    <nav id="room-tabs" class="room-tabs" aria-label="Разделы карточки кабинета" role="tablist">
+      <button type="button" role="tab" data-room-tab="overview" aria-selected="true">Обзор</button>
+      <button type="button" role="tab" data-room-tab="baseline">Эталон</button>
+      <button type="button" role="tab" data-room-tab="current">Текущее</button>
+      <button type="button" role="tab" data-room-tab="inventory">Имущество</button>
+      <button type="button" role="tab" data-room-tab="vision">Vision</button>
+      <button type="button" role="tab" data-room-tab="incidents">Инциденты</button>
+      <button type="button" role="tab" data-room-tab="history">История</button>
+    </nav>
+    <div id="room-tab-content" class="room-tab-content panel" role="tabpanel"><div class="skeleton"></div></div>
+  </section>
+
   <section id="location-access" class="page-section" hidden>
     <div id="access-role-notice" class="attention-banner" hidden></div>
     <div id="access-admin-content">

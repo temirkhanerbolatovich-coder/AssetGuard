@@ -84,6 +84,7 @@ async def _complete_mvp_workflow() -> None:
         assert workspace.json()["inventory"]["positions"] == 1
         assert workspace.json()["inventory"]["quantity"] == 1
         assert workspace.json()["baseline"] == {"agent_ready": 0, "agent_total": 0, "vision_ready": False}
+        assert workspace.json()["history"][0]["source"] == "ASSET"
         export = await client.get("/admin/assets/export.xlsx", headers=admin_headers())
         assert export.status_code == 200
         assert export.headers["content-type"].startswith("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")

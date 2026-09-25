@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from assetguard.infrastructure.database import get_session
 from assetguard.interfaces.http.admin_assets import require_admin, require_viewer
 from assetguard.modules.baselines.models import BaselineRecord
-from assetguard.modules.incidents.models import IncidentRecord
+from assetguard.modules.incidents.models import AssetHistoryEntryRecord, EndpointHistoryEntryRecord, IncidentRecord
 from assetguard.modules.assets.models import AssetRecord, BuildingRecord, FloorRecord, OrganizationRecord, RoomRecord
 from assetguard.modules.identity.auth import AuthPrincipal
 from assetguard.modules.identity.location_access import permitted_room_ids, require_room_access
@@ -205,7 +205,15 @@ def room_workspace(room_id: UUID, session: Annotated[Session, Depends(get_sessio
     incidents = list(session.scalars(select(IncidentRecord).where(IncidentRecord.managed_endpoint_id.in_(endpoint_ids), IncidentRecord.status.in_(("OPEN", "UNDER_REVIEW"))).order_by(IncidentRecord.created_at.desc()))) if endpoint_ids else []
     vision_room = session.scalar(select(VisionRoomRecord).where(VisionRoomRecord.location_room_id == room.id))
     vision_baseline = session.scalar(select(VisionBaselineRecord).where(VisionBaselineRecord.room_id == vision_room.id)) if vision_room else None
-    latest_scan = session.scalar(select(VisionScanRecord).where(VisionScanRecord.room_id == vision_room.id).order_by(VisionScanRecord.created_at.desc())) if vision_room else None
+    vision_scans = list(session.scalars(select(VisionScanRecord).where(VisionScanRecord.room_id == vision_room.id).order_by(VisionScanRecord.created_at.desc()).limit(50))) if vision_room else []
+    latest_scan = vision_scans[0] if vision_scans else None
+    history = []
+    if asset_ids:
+        history.extend({"id": str(item.id), "type": item.event_type, "occurred_at": item.occurred_at, "message": item.message, "source": "ASSET", "entity_id": str(item.asset_id)} for item in session.scalars(select(AssetHistoryEntryRecord).where(AssetHistoryEntryRecord.asset_id.in_(asset_ids)).order_by(AssetHistoryEntryRecord.occurred_at.desc()).limit(50)))
+    if endpoint_ids:
+        history.extend({"id": str(item.id), "type": item.event_type, "occurred_at": item.occurred_at, "message": item.message, "source": "AGENT", "entity_id": str(item.managed_endpoint_id)} for item in session.scalars(select(EndpointHistoryEntryRecord).where(EndpointHistoryEntryRecord.managed_endpoint_id.in_(endpoint_ids)).order_by(EndpointHistoryEntryRecord.occurred_at.desc()).limit(50)))
+    history.extend({"id": str(item.id), "type": "VISION_SCAN_COMPLETED", "occurred_at": item.created_at, "message": f"Фотопроверка завершена со статусом {item.status}.", "source": "VISION", "entity_id": str(item.id)} for item in vision_scans)
+    history.sort(key=lambda item: item["occurred_at"], reverse=True)
     categories: dict[str, dict[str, int | str]] = {}
     for asset in assets:
         bucket = categories.setdefault(asset.category, {"category": asset.category, "positions": 0, "quantity": 0})
@@ -223,6 +231,7 @@ def room_workspace(room_id: UUID, session: Annotated[Session, Depends(get_sessio
         "baseline": {"agent_ready": len(active_baseline_ids), "agent_total": len(endpoints), "vision_ready": vision_baseline is not None},
         "vision": None if not vision_room else {"room_id": str(vision_room.id), "has_baseline": vision_baseline is not None, "baseline_counts": vision_baseline.counts if vision_baseline else None, "latest_scan": None if not latest_scan else {"id": str(latest_scan.id), "status": latest_scan.status, "created_at": latest_scan.created_at, "counts": latest_scan.counts, "comparison": latest_scan.comparison}},
         "incidents": [{"id": str(item.id), "endpoint_id": str(item.managed_endpoint_id), "status": item.status, "severity": item.severity, "title": item.title, "created_at": item.created_at} for item in incidents],
+        "history": history[:50],
     }
 
 

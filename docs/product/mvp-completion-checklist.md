@@ -24,7 +24,7 @@
 | PARTIAL safety | Готово | Partial inventory не создаёт ложное удаление RAM/SSD. |
 | Dashboard | Готово | Attention-first обзор, поиск/фильтры, связанные и непривязанные устройства, полная карточка Agent-данных, baseline, читаемое «Было → Стало», incidents и timeline. |
 | AssetGuard Vision | Готово для demo | Image upload, Grounding DINO, bounding boxes, counts, baseline, comparison, `WARNING` и history; кабинет связан с локацией и доступ фильтруется. RTSP и связка каждой detection с endpoint остаются будущим этапом. |
-| Иерархия и права локаций | Частично | Организация → корпус → этаж → кабинет и grants VIEWER/EDITOR работают на сервере для ключевых ресурсов; полный tenant-route matrix и физический аудит ещё нужны. |
+| Иерархия и права локаций | Частично | Организация → корпус → этаж → кабинет, grants VIEWER/EDITOR и единая карточка кабинета с имуществом, Agent, Vision, инцидентами и историей работают; полный tenant-route matrix и физический аудит ещё нужны. |
 | Background demo | Готово | User-level demo tasks и production Compose deployment с restart policy. |
 | Local package | Готово | ZIP без secret/database/log data, startup scripts и documentation. |
 | GitHub | Готово | Public repository: `temirkhanerbolatovich-coder/AssetGuard`. |
