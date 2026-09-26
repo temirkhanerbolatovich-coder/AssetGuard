@@ -99,6 +99,23 @@ async def _exercise_location_scope() -> None:
             counts={}, comparison={}, model_id="test", confidence_threshold=0.5,
         )
         session.add_all([hidden_scan, mismatched_legacy_scan])
+        hidden_inspection = RoomInspectionRecord(
+            room_id=hidden_room.id, inspector_user_id=None, inspector_name="fixture",
+            comment=None, completed_at=now,
+        )
+        session.add(hidden_inspection); session.flush()
+        hidden_item = RoomInspectionItemRecord(
+            inspection_id=hidden_inspection.id, asset_id=hidden_asset.id, result="MISSING",
+            expected_quantity=1, affected_quantity=1, comment=None,
+        )
+        session.add(hidden_item); session.flush()
+        hidden_physical_incident = PhysicalIncidentRecord(
+            room_id=hidden_room.id, asset_id=hidden_asset.id, inspection_item_id=hidden_item.id,
+            issue_type="MISSING", affected_quantity=1, status="OPEN", severity="HIGH",
+            title="Hidden incident", description="Scoped access must deny this.",
+            created_at=now, resolved_at=None,
+        )
+        session.add(hidden_physical_incident)
         user = UserRecord(
             username=f"scope-viewer-{uuid4().hex[:8]}", password_hash=hash_password("scope-password-123"),
             role="LOCATION_MANAGER", organization_id=organization.id, is_active=True, created_at=now,
@@ -115,6 +132,7 @@ async def _exercise_location_scope() -> None:
         hidden_vision_room_id = hidden_vision_room.id
         visible_asset_id, hidden_scan_id = visible_asset.id, hidden_scan.id
         hidden_endpoint_id = hidden_endpoint.id
+        hidden_physical_incident_id = hidden_physical_incident.id
         username = user.username
 
     transport = httpx.ASGITransport(app=app)
@@ -159,6 +177,11 @@ async def _exercise_location_scope() -> None:
         assert hidden_report.status_code == 404
         assert hidden_inspections.status_code == 404
         assert hidden_workspace.status_code == 404
+        hidden_decision = await client.post(
+            f"/admin/locations/physical-incidents/{hidden_physical_incident_id}/decision", headers=headers,
+            json={"action": "REPAIR", "comment": "Must not be allowed"},
+        )
+        assert hidden_decision.status_code == 404
         viewer_write = await client.post(f"/admin/locations/rooms/{visible_room_id}/inspections", headers=headers, json={
             "items": [{"asset_id": str(visible_asset_id), "result": "PRESENT", "affected_quantity": 0}],
         })
@@ -204,16 +227,16 @@ async def _exercise_location_scope() -> None:
         assert editor_decision.json()["decisions"][0]["actor"] == username
 
     with factory() as session:
-        physical_ids = select(PhysicalIncidentRecord.id).where(PhysicalIncidentRecord.room_id == visible_room_id)
+        physical_ids = select(PhysicalIncidentRecord.id).where(PhysicalIncidentRecord.room_id.in_([visible_room_id, hidden_location_room_id]))
         session.execute(text("ALTER TABLE physical_incident_decisions DISABLE TRIGGER trg_physical_incident_decisions_immutable"))
         session.execute(delete(PhysicalIncidentDecisionRecord).where(PhysicalIncidentDecisionRecord.incident_id.in_(physical_ids)))
         session.execute(text("ALTER TABLE physical_incident_decisions ENABLE TRIGGER trg_physical_incident_decisions_immutable"))
-        session.execute(delete(PhysicalIncidentRecord).where(PhysicalIncidentRecord.room_id == visible_room_id))
-        inspection_ids = select(RoomInspectionRecord.id).where(RoomInspectionRecord.room_id == visible_room_id)
+        session.execute(delete(PhysicalIncidentRecord).where(PhysicalIncidentRecord.room_id.in_([visible_room_id, hidden_location_room_id])))
+        inspection_ids = select(RoomInspectionRecord.id).where(RoomInspectionRecord.room_id.in_([visible_room_id, hidden_location_room_id]))
         session.execute(text("ALTER TABLE room_inspection_items DISABLE TRIGGER trg_room_inspection_items_immutable"))
         session.execute(text("ALTER TABLE room_inspections DISABLE TRIGGER trg_room_inspections_immutable"))
         session.execute(delete(RoomInspectionItemRecord).where(RoomInspectionItemRecord.inspection_id.in_(inspection_ids)))
-        session.execute(delete(RoomInspectionRecord).where(RoomInspectionRecord.room_id == visible_room_id))
+        session.execute(delete(RoomInspectionRecord).where(RoomInspectionRecord.room_id.in_([visible_room_id, hidden_location_room_id])))
         session.execute(text("ALTER TABLE room_inspection_items ENABLE TRIGGER trg_room_inspection_items_immutable"))
         session.execute(text("ALTER TABLE room_inspections ENABLE TRIGGER trg_room_inspections_immutable"))
         session.execute(text("ALTER TABLE asset_history_entries DISABLE TRIGGER trg_asset_history_immutable"))
