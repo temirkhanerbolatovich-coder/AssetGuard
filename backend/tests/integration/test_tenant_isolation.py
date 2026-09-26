@@ -125,3 +125,8 @@ async def _exercise_tenant_isolation() -> None:
         assert (await client.post(f"/admin/locations/floors/{floor_b.id}/rooms", headers=headers, json={"name": "102"})).status_code == 404
         assert (await client.patch(f"/admin/locations/rooms/{room_location_b.id}", headers=headers, json={"purpose": "Forbidden"})).status_code == 404
         assert (await client.post(f"/admin/endpoints/{endpoint_b.id}/asset/{asset_b.id}", headers=headers)).status_code == 404
+        foreign_scan = await client.post(
+            "/admin/vision/scans", headers=headers, data={"asset_id": str(asset_b.id)},
+            files={"image": ("forbidden.jpg", b"not-a-real-image", "image/jpeg")},
+        )
+        assert foreign_scan.status_code == 404
