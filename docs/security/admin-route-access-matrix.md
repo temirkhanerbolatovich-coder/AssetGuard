@@ -23,6 +23,7 @@
 | `GET /admin/endpoints/{id}` | own endpoint | allowed room | allowed room | 404 |
 | `POST /admin/endpoints/{endpoint}/asset/{asset}` | own tenant | deny | deny | 404 |
 | `GET /admin/inventories`, `/inventories/{id}` | own tenant | allowed room | allowed room | filtered/404 |
+| `GET /admin/operations/status` | own tenant | allowed rooms only | allowed rooms only | filtered |
 | `GET /admin/endpoints/{id}/snapshots`, `baseline`, `history` | own endpoint | allowed room | allowed room | 404 |
 | `GET /admin/snapshots/{id}` | own snapshot | allowed room | allowed room | 404 |
 | `POST /admin/snapshots/{id}/baseline` | own snapshot | deny | deny | 404 |
@@ -57,7 +58,7 @@
 
 ## Автоматическое доказательство
 
-`tests/integration/test_tenant_isolation.py` создаёт отдельную организацию с asset, endpoint, raw inventory, snapshot, baseline, change, incident, history и Vision room. Он доказывает `404` для foreign UUID и для изменения чужого baseline/incident.
+`tests/integration/test_tenant_isolation.py` создаёт отдельную организацию с asset, endpoint, raw inventory, snapshot, baseline, change, incident, history, Vision room, user, session и Agent credential. Он доказывает фильтрацию списков, `404` для foreign UUID и для изменения чужих baseline/incident/user/session/credential.
 
 `tests/integration/test_location_scoped_resources.py` проверяет фильтрацию exports/Vision и `404` для ресурса в неразрешённом помещении, включая endpoint detail. Полный набор backend-тестов на момент этой записи: **30 passed**.
 

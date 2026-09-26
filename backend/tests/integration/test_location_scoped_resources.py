@@ -146,6 +146,9 @@ async def _exercise_location_scope() -> None:
         assert hidden_detail.status_code == 404
         hidden_endpoint_detail = await client.get(f"/admin/endpoints/{hidden_endpoint_id}", headers=headers)
         assert hidden_endpoint_detail.status_code == 404
+        operations = await client.get("/admin/operations/status", headers=headers)
+        assert operations.status_code == 200
+        assert operations.json()["agents"]["total"] == 0
 
         hidden_inspections = await client.get(f"/admin/locations/rooms/{hidden_room_id}/inspections", headers=headers)
         assert hidden_inspections.status_code == 404

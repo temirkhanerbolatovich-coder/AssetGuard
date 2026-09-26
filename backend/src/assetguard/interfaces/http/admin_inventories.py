@@ -43,7 +43,10 @@ def list_inventories(
 ):
     query = select(RawInventoryRecord).order_by(RawInventoryRecord.received_at.desc()).limit(limit)
     if principal.organization_id:
-        query = query.join(ManagedEndpointRecord).where(ManagedEndpointRecord.organization_id == principal.organization_id)
+        query = query.join(
+            ManagedEndpointRecord,
+            ManagedEndpointRecord.id == RawInventoryRecord.managed_endpoint_id,
+        ).where(ManagedEndpointRecord.organization_id == principal.organization_id)
     allowed_rooms = permitted_room_ids(session, principal)
     if allowed_rooms is not None:
         endpoint_ids = select(ManagedEndpointRecord.id).join(AssetRecord, AssetRecord.id == ManagedEndpointRecord.asset_id).where(AssetRecord.room_id.in_(allowed_rooms))

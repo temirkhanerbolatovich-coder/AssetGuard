@@ -13,6 +13,8 @@ from assetguard.modules.baselines.models import BaselineRecord
 from assetguard.modules.changes.models import ChangeEventRecord
 from assetguard.modules.incidents.models import EndpointHistoryEntryRecord, IncidentRecord
 from assetguard.modules.inventory.models import RawInventoryRecord
+from assetguard.modules.identity.auth import hash_password
+from assetguard.modules.identity.models import AgentCredentialRecord, UserRecord
 from assetguard.modules.snapshots.models import HardwareSnapshotRecord, ManagedEndpointRecord
 from assetguard.modules.vision.models import VisionRoomRecord
 
@@ -43,16 +45,59 @@ async def _exercise_tenant_isolation() -> None:
         session.add(change_b); session.flush()
         incident_b = IncidentRecord(managed_endpoint_id=endpoint_b.id, change_event_id=change_b.id, status="OPEN", severity="MEDIUM", title="Hidden incident", description="Tenant B only", created_at=now, resolved_at=None)
         history_b = EndpointHistoryEntryRecord(managed_endpoint_id=endpoint_b.id, event_type="TEST", occurred_at=now, related_entity_type="SNAPSHOT", related_entity_id=snapshot_b.id, message="Tenant B only", metadata_json={})
-        session.add_all([incident_b, history_b]); session.commit()
+        foreign_user = UserRecord(
+            username="tenant-b-admin", password_hash=hash_password("tenant-isolation-password"),
+            role="ADMIN", organization_id=school_b.id, is_active=True, created_at=now,
+        )
+        foreign_credential = AgentCredentialRecord(
+            username="tenant-b-agent", secret_hash=hash_password("tenant-isolation-secret"),
+            status="ACTIVE", managed_endpoint_id=None, organization_id=school_b.id,
+            issued_at=now, revoked_at=None,
+        )
+        session.add_all([incident_b, history_b, foreign_user, foreign_credential]); session.commit()
 
     bootstrap = {"X-AssetGuard-Admin-Token": get_settings().admin_shared_secret}
-    transport = httpx.ASGITransport(app=app)
+    transport = httpx.ASGITransport(app=app, client=("tenant-isolation", 50000))
     async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
         user = await client.post("/admin/users", headers=bootstrap, json={"username": "tenant-a-admin", "password": "tenant-isolation-password", "role": "ADMIN", "organization_id": str(school_a.id)})
         assert user.status_code == 201, user.text
         login = await client.post("/auth/login", json={"username": "tenant-a-admin", "password": "tenant-isolation-password"})
         assert login.status_code == 200
         headers = {"X-AssetGuard-Admin-Token": login.json()["access_token"]}
+
+        foreign_login = await client.post("/auth/login", json={"username": "tenant-b-admin", "password": "tenant-isolation-password"})
+        assert foreign_login.status_code == 200
+        foreign_headers = {"X-AssetGuard-Admin-Token": foreign_login.json()["access_token"]}
+        foreign_sessions = await client.get("/admin/sessions", headers=foreign_headers)
+        assert foreign_sessions.status_code == 200
+        foreign_session_id = foreign_sessions.json()[0]["id"]
+
+        async def assert_not_listed(path: str, resource_id: str) -> None:
+            response = await client.get(path, headers=headers)
+            assert response.status_code == 200, (path, response.text)
+            assert resource_id not in {item["id"] for item in response.json()}, path
+
+        for path, resource_id in (
+            ("/admin/assets", str(asset_b.id)),
+            ("/admin/endpoints", str(endpoint_b.id)),
+            ("/admin/inventories", str(inventory_b.id)),
+            ("/admin/changes", str(change_b.id)),
+            ("/admin/incidents", str(incident_b.id)),
+            ("/admin/vision/rooms", str(room_b.id)),
+            ("/admin/users", str(foreign_user.id)),
+            ("/admin/agent-credentials", str(foreign_credential.id)),
+        ):
+            await assert_not_listed(path, resource_id)
+        organizations = await client.get("/admin/locations/organizations", headers=headers)
+        assert organizations.status_code == 200
+        assert str(school_b.id) not in {item["id"] for item in organizations.json()}
+        sessions = await client.get("/admin/sessions", headers=headers)
+        assert sessions.status_code == 200
+        assert foreign_session_id not in {item["id"] for item in sessions.json()}
+        operations = await client.get("/admin/operations/status", headers=headers)
+        assert operations.status_code == 200
+        assert operations.json()["agents"]["total"] == 0
+
         for path in (
             f"/admin/assets/{asset_b.id}", f"/admin/assets/{asset_b.id}/qr.svg",
             f"/admin/endpoints/{endpoint_b.id}", f"/admin/inventories/{inventory_b.id}",
@@ -67,3 +112,6 @@ async def _exercise_tenant_isolation() -> None:
         assert baseline.status_code == 404, baseline.text
         decision = await client.post(f"/admin/incidents/{incident_b.id}/decision", headers=headers, json={"classification": "REPAIR"})
         assert decision.status_code == 404, decision.text
+        assert (await client.patch(f"/admin/users/{foreign_user.id}", headers=headers, json={"active": False})).status_code == 404
+        assert (await client.delete(f"/admin/sessions/{foreign_session_id}", headers=headers)).status_code == 404
+        assert (await client.post(f"/admin/agent-credentials/{foreign_credential.id}/revoke", headers=headers)).status_code == 404
