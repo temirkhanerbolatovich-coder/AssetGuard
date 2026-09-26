@@ -111,7 +111,8 @@ async def _exercise_location_scope() -> None:
             permission="VIEWER", created_at=now,
         ))
         session.commit()
-        visible_room_id, hidden_room_id = visible_room.id, hidden_vision_room.id
+        visible_room_id, hidden_location_room_id = visible_room.id, hidden_room.id
+        hidden_vision_room_id = hidden_vision_room.id
         visible_asset_id, hidden_scan_id = visible_asset.id, hidden_scan.id
         hidden_endpoint_id = hidden_endpoint.id
         username = user.username
@@ -140,18 +141,24 @@ async def _exercise_location_scope() -> None:
         assert visible_rooms.status_code == 200
         assert [room["name"] for room in visible_rooms.json()] == ["Scope корпус A / 1 / 101"]
         assert visible_rooms.json()[0]["latest_scan"]["asset"] is None
-        hidden_history = await client.get(f"/admin/vision/rooms/{hidden_room_id}/scans", headers=headers)
+        hidden_history = await client.get(f"/admin/vision/rooms/{hidden_vision_room_id}/scans", headers=headers)
         hidden_detail = await client.get(f"/admin/vision/scans/{hidden_scan_id}", headers=headers)
+        hidden_baseline = await client.get(f"/admin/vision/rooms/{hidden_vision_room_id}/baseline", headers=headers)
         assert hidden_history.status_code == 404
         assert hidden_detail.status_code == 404
+        assert hidden_baseline.status_code == 404
         hidden_endpoint_detail = await client.get(f"/admin/endpoints/{hidden_endpoint_id}", headers=headers)
         assert hidden_endpoint_detail.status_code == 404
         operations = await client.get("/admin/operations/status", headers=headers)
         assert operations.status_code == 200
         assert operations.json()["agents"]["total"] == 0
 
-        hidden_inspections = await client.get(f"/admin/locations/rooms/{hidden_room_id}/inspections", headers=headers)
+        hidden_report = await client.get(f"/admin/locations/rooms/{hidden_location_room_id}/report", headers=headers)
+        hidden_inspections = await client.get(f"/admin/locations/rooms/{hidden_location_room_id}/inspections", headers=headers)
+        hidden_workspace = await client.get(f"/admin/locations/rooms/{hidden_location_room_id}/workspace", headers=headers)
+        assert hidden_report.status_code == 404
         assert hidden_inspections.status_code == 404
+        assert hidden_workspace.status_code == 404
         viewer_write = await client.post(f"/admin/locations/rooms/{visible_room_id}/inspections", headers=headers, json={
             "items": [{"asset_id": str(visible_asset_id), "result": "PRESENT", "affected_quantity": 0}],
         })
@@ -215,8 +222,8 @@ async def _exercise_location_scope() -> None:
         session.execute(delete(AuthSessionRecord).where(AuthSessionRecord.user_id == created_user_id))
         session.execute(delete(LocationAccessRecord).where(LocationAccessRecord.user_id == created_user_id))
         session.execute(delete(UserRecord).where(UserRecord.id == created_user_id))
-        session.execute(delete(VisionScanRecord).where(VisionScanRecord.room_id.in_([visible_vision_room.id, hidden_room_id])))
-        session.execute(delete(VisionBaselineRecord).where(VisionBaselineRecord.room_id.in_([visible_vision_room.id, hidden_room_id])))
+        session.execute(delete(VisionScanRecord).where(VisionScanRecord.room_id.in_([visible_vision_room.id, hidden_vision_room_id])))
+        session.execute(delete(VisionBaselineRecord).where(VisionBaselineRecord.room_id.in_([visible_vision_room.id, hidden_vision_room_id])))
         session.execute(delete(VisionRoomRecord).where(VisionRoomRecord.organization_id == organization.id))
         session.execute(delete(ManagedEndpointRecord).where(ManagedEndpointRecord.id == hidden_endpoint_id))
         session.execute(delete(AssetRecord).where(AssetRecord.inventory_number.in_(["SCOPE-VISIBLE", "SCOPE-HIDDEN"])))

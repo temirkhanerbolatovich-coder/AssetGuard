@@ -60,6 +60,6 @@
 
 `tests/integration/test_tenant_isolation.py` создаёт отдельную организацию с asset, endpoint, raw inventory, snapshot, baseline, change, incident, history, Vision room, user, session и Agent credential. Он доказывает фильтрацию списков, `404` для foreign UUID и для изменения чужих baseline/incident/user/session/credential.
 
-`tests/integration/test_location_scoped_resources.py` проверяет фильтрацию exports/Vision и `404` для ресурса в неразрешённом помещении, включая endpoint detail. Полный набор backend-тестов на момент этой записи: **30 passed**.
+`tests/integration/test_location_scoped_resources.py` проверяет фильтрацию exports/Vision и `404` для ресурса в неразрешённом помещении, включая endpoint detail, report, workspace, inspections и Vision baseline. Полный набор backend-тестов на момент этой записи: **30 passed**.
 
 Открытая работа для полного P0: расширить эти сценарии параметризованной проверкой каждого маршрута из таблицы с A/V/E/F и добавить реальные две школы в приемочное тестирование.
