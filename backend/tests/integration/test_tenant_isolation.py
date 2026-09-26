@@ -14,7 +14,7 @@ from assetguard.modules.changes.models import ChangeEventRecord
 from assetguard.modules.incidents.models import EndpointHistoryEntryRecord, IncidentRecord
 from assetguard.modules.inventory.models import RawInventoryRecord
 from assetguard.modules.identity.auth import hash_password
-from assetguard.modules.identity.models import AgentCredentialRecord, UserRecord
+from assetguard.modules.identity.models import AgentCredentialRecord, LocationAccessRecord, UserRecord
 from assetguard.modules.snapshots.models import HardwareSnapshotRecord, ManagedEndpointRecord
 from assetguard.modules.vision.models import VisionRoomRecord
 
@@ -60,7 +60,12 @@ async def _exercise_tenant_isolation() -> None:
             status="ACTIVE", managed_endpoint_id=None, organization_id=school_b.id,
             issued_at=now, revoked_at=None,
         )
-        session.add_all([incident_b, history_b, foreign_user, foreign_credential]); session.commit()
+        session.add_all([incident_b, history_b, foreign_user, foreign_credential]); session.flush()
+        foreign_grant = LocationAccessRecord(
+            user_id=foreign_user.id, scope_type="ROOM", scope_id=room_location_b.id,
+            permission="VIEWER", created_at=now,
+        )
+        session.add(foreign_grant); session.commit()
 
     bootstrap = {"X-AssetGuard-Admin-Token": get_settings().admin_shared_secret}
     transport = httpx.ASGITransport(app=app, client=("tenant-isolation", 50000))
@@ -121,6 +126,10 @@ async def _exercise_tenant_isolation() -> None:
         assert (await client.patch(f"/admin/users/{foreign_user.id}", headers=headers, json={"active": False})).status_code == 404
         assert (await client.delete(f"/admin/sessions/{foreign_session_id}", headers=headers)).status_code == 404
         assert (await client.post(f"/admin/agent-credentials/{foreign_credential.id}/revoke", headers=headers)).status_code == 404
+        assert (await client.post("/admin/locations/access", headers=headers, json={
+            "user_id": str(foreign_user.id), "scope_type": "ROOM", "scope_id": str(room_location_b.id), "permission": "EDITOR",
+        })).status_code == 404
+        assert (await client.delete(f"/admin/locations/access/{foreign_grant.id}", headers=headers)).status_code == 404
         assert (await client.post(f"/admin/locations/buildings/{building_b.id}/floors", headers=headers, json={"name": "2"})).status_code == 404
         assert (await client.post(f"/admin/locations/floors/{floor_b.id}/rooms", headers=headers, json={"name": "102"})).status_code == 404
         assert (await client.patch(f"/admin/locations/rooms/{room_location_b.id}", headers=headers, json={"purpose": "Forbidden"})).status_code == 404
