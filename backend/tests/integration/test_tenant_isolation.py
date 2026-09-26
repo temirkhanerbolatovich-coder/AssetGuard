@@ -8,7 +8,7 @@ import httpx
 from assetguard.app import app
 from assetguard.infrastructure.config import get_settings
 from assetguard.infrastructure.database import get_session_factory
-from assetguard.modules.assets.models import AssetRecord, OrganizationRecord
+from assetguard.modules.assets.models import AssetRecord, BuildingRecord, FloorRecord, OrganizationRecord, RoomRecord
 from assetguard.modules.baselines.models import BaselineRecord
 from assetguard.modules.changes.models import ChangeEventRecord
 from assetguard.modules.incidents.models import EndpointHistoryEntryRecord, IncidentRecord
@@ -30,6 +30,12 @@ async def _exercise_tenant_isolation() -> None:
         school_a = OrganizationRecord(name="Isolation School A", created_at=now)
         school_b = OrganizationRecord(name="Isolation School B", created_at=now)
         session.add_all([school_a, school_b]); session.flush()
+        building_b = BuildingRecord(organization_id=school_b.id, name="Hidden building", created_at=now)
+        session.add(building_b); session.flush()
+        floor_b = FloorRecord(building_id=building_b.id, name="1", created_at=now)
+        session.add(floor_b); session.flush()
+        room_location_b = RoomRecord(floor_id=floor_b.id, name="101", created_at=now)
+        session.add(room_location_b); session.flush()
         asset_b = AssetRecord(organization_id=school_b.id, inventory_number="B-001", name="Hidden PC", asset_type="Desktop", status="ACTIVE", building=None, floor=None, room="101", notes=None, created_at=now, updated_at=now)
         session.add(asset_b); session.flush()
         endpoint_b = ManagedEndpointRecord(source="TEST", source_agent_id="tenant-b", asset_id=asset_b.id, organization_id=school_b.id, hostname="hidden-b", last_seen_at=now, status="ONLINE", created_at=now, updated_at=now)
@@ -115,3 +121,7 @@ async def _exercise_tenant_isolation() -> None:
         assert (await client.patch(f"/admin/users/{foreign_user.id}", headers=headers, json={"active": False})).status_code == 404
         assert (await client.delete(f"/admin/sessions/{foreign_session_id}", headers=headers)).status_code == 404
         assert (await client.post(f"/admin/agent-credentials/{foreign_credential.id}/revoke", headers=headers)).status_code == 404
+        assert (await client.post(f"/admin/locations/buildings/{building_b.id}/floors", headers=headers, json={"name": "2"})).status_code == 404
+        assert (await client.post(f"/admin/locations/floors/{floor_b.id}/rooms", headers=headers, json={"name": "102"})).status_code == 404
+        assert (await client.patch(f"/admin/locations/rooms/{room_location_b.id}", headers=headers, json={"purpose": "Forbidden"})).status_code == 404
+        assert (await client.post(f"/admin/endpoints/{endpoint_b.id}/asset/{asset_b.id}", headers=headers)).status_code == 404
