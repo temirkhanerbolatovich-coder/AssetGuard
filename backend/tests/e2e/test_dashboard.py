@@ -417,10 +417,10 @@ def test_incident_detail_supports_direct_link_and_managed_decision(live_server):
         page.locator("#detail-title").filter(has_text="Incident E2E workstation").wait_for()
         assert page.locator("#asset-tab-baseline").is_visible()
         page.go_back()
-        assert page.locator("#asset-tab-hardware").is_visible()
+        page.locator("#asset-tab-hardware").wait_for(state="visible")
         assert page.url.endswith(f"#asset={asset_id}&tab=hardware")
         page.go_forward()
-        assert page.locator("#asset-tab-baseline").is_visible()
+        page.locator("#asset-tab-baseline").wait_for(state="visible")
 
         technical_tab = page.get_by_role("tab", name="Технические данные")
         technical_tab.click()
