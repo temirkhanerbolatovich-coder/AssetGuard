@@ -5,15 +5,15 @@
 ## Текущая оценка
 
 - Демонстрационный MVP через native GLPI transport и explicit bridge: **готов**.
-- Native GLPI Agent 1.19 `PROLOG → INVENTORY` проверен реальным компьютером через production HTTPS endpoint.
+- Native GLPI Agent 1.19 и 1.20 `PROLOG → INVENTORY` проверены на двух реальных компьютерах через production HTTPS endpoint.
 - Постоянный Oracle Cloud deployment с DuckDNS и TLS работает; encrypted off-site recovery из Cloudflare R2 подтверждён ручным rehearsal 2026-09-27.
 
 ## Реализовано
 
 | Область | Статус | Результат |
 | --- | --- | --- |
-| GLPI Agent | Готово | GLPI Agent 1.19 проверен на реальном Windows-PC; есть version lock и minimal privacy profile. |
-| Collection/transport | Готово для 1.19 | Native uncompressed XML PROLOG/INVENTORY и explicit JSON bridge проверены end-to-end. |
+| GLPI Agent | Готово | GLPI Agent 1.19/1.20 проверены на реальных Windows-PC; новые установки закреплены на 1.20, minimal privacy profile сохранён. |
+| Collection/transport | Готово для 1.19/1.20 | Native uncompressed XML PROLOG/INVENTORY и explicit JSON bridge проверены end-to-end. |
 | Raw evidence | Готово | Append-only JSONB payload, hash, idempotency и processing status. |
 | PostgreSQL | Готово | Migrations для raw inventory, snapshots, baseline, change events, incidents, assets, users и Vision. |
 | Asset / endpoint | Готово | Assets связаны с актуальным endpoint; один asset имеет только один текущий endpoint. |
@@ -58,7 +58,7 @@
 - [x] Endpoint last-seen policy: `REQUIRES_VERIFICATION`, без автоматического вывода о пропаже или краже.
 - [x] Managed production deployment: Docker restart policy, независимо от интерактивной Windows-сессии.
 - [x] Deployment recovery acceptance: Cloudflare R2 upload/download и isolated restore rehearsal успешно выполнены 2026-09-27.
-- [x] Native GLPI Agent 1.19 protocol spike и `DirectGlpiAgentAdapter`.
+- [x] Native GLPI Agent 1.19/1.20 protocol contract и `DirectGlpiAgentAdapter`.
 - [x] Browser E2E через Playwright/Chromium в GitHub Actions.
 - [x] Optional real Grounding DINO CI smoke job: ручной и еженедельный workflow с настоящей моделью и demo-кадром.
 - [x] Isolated encrypted-backup restore rehearsal: отдельный disposable PostgreSQL без опубликованных портов, проверка Alembic revision и entity counts; локально выполнен 2026-09-24, из свежей R2-копии — 2026-09-27.

@@ -33,7 +33,14 @@ if ([string]::IsNullOrWhiteSpace($InnoSetupCompiler) -or -not (Test-Path -Litera
 & $InnoSetupCompiler $source
 if ($LASTEXITCODE -ne 0) { throw "Inno Setup build failed with exit code $LASTEXITCODE." }
 
-$output = Join-Path $repositoryRoot 'installer-output\AssetGuard-Agent-Setup-0.1.5.exe'
+$output = Join-Path $repositoryRoot 'installer-output\AssetGuard-Agent-Setup-0.1.6.exe'
 if (-not (Test-Path -LiteralPath $output)) { throw "Expected installer output was not found: $output" }
 $hash = Get-FileHash -LiteralPath $output -Algorithm SHA256
-[pscustomobject]@{ Installer = $output; Bytes = (Get-Item -LiteralPath $output).Length; SHA256 = $hash.Hash }
+$checksum = "$output.sha256"
+Set-Content -LiteralPath $checksum -Value "$($hash.Hash)  $(Split-Path -Leaf $output)" -Encoding ascii -NoNewline
+[pscustomobject]@{
+    Installer = $output
+    Checksum = $checksum
+    Bytes = (Get-Item -LiteralPath $output).Length
+    SHA256 = $hash.Hash
+}

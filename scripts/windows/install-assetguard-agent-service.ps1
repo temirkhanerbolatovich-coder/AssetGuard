@@ -38,6 +38,8 @@ $registrySubKey = 'SOFTWARE\GLPI-Agent'
 $registryAclBackupPath = Join-Path $env:ProgramData 'AssetGuard\glpi-agent-registry-acl.sddl'
 $legacyConfigPath = Join-Path $AgentRoot 'etc\conf.d\99-assetguard.cfg'
 $managedRegistryValues = @('server', 'user', 'password', 'no-category', 'no-compression', 'no-httpd', 'delaytime')
+$pinnedAgentVersion = '1.20'
+$supportedAgentVersions = @('1.19', '1.20')
 
 function Test-Administrator {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -55,6 +57,19 @@ function Open-AgentRegistryKey {
     $key = [Microsoft.Win32.Registry]::LocalMachine.OpenSubKey($registrySubKey, $true)
     if ($null -eq $key) { throw "The GLPI Agent registry key '$registrySubKey' was not found." }
     return $key
+}
+
+function Get-GlpiAgentVersion([string]$Launcher) {
+    $versionOutput = @(& $Launcher '--version' 2>&1)
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not read the installed GLPI Agent version from '$Launcher'."
+    }
+    $versionText = $versionOutput -join [Environment]::NewLine
+    $versionMatch = [regex]::Match($versionText, 'GLPI Agent \((?<version>\d+\.\d+(?:\.\d+)?)\)')
+    if (-not $versionMatch.Success) {
+        throw "The installed GLPI Agent returned an unrecognized version string. Supported versions: $($supportedAgentVersions -join ', ')."
+    }
+    return $versionMatch.Groups['version'].Value
 }
 
 function Protect-AgentRegistryConfiguration {
@@ -112,22 +127,28 @@ try {
     $launcher = Join-Path $AgentRoot 'glpi-agent.bat'
     if (-not (Test-Path -LiteralPath $launcher)) {
         if ($SkipUpstreamInstall) {
-            throw "GLPI Agent was not found at '$AgentRoot'. Install GLPI Agent 1.19 first or omit -SkipUpstreamInstall."
+            throw "GLPI Agent was not found at '$AgentRoot'. Install GLPI Agent $pinnedAgentVersion first or omit -SkipUpstreamInstall."
         }
         $winget = Get-Command winget.exe -ErrorAction SilentlyContinue
         if (-not $winget) {
-            throw 'WinGet is unavailable. Install the official GLPI Agent 1.19 x64 MSI, then re-run with -SkipUpstreamInstall.'
+            throw "WinGet is unavailable. Install the official GLPI Agent $pinnedAgentVersion x64 MSI, then re-run with -SkipUpstreamInstall."
         }
-        if ($PSCmdlet.ShouldProcess('GLPI Agent 1.19', 'Install official upstream package via WinGet')) {
+        if ($PSCmdlet.ShouldProcess("GLPI Agent $pinnedAgentVersion", 'Install version-locked official upstream package via WinGet')) {
             $install = Start-Process -FilePath $winget.Source -ArgumentList @(
-                'install', '--id', 'GLPI-Project.GLPI-Agent', '--exact', '--silent',
-                '--accept-package-agreements', '--accept-source-agreements'
+                'install', '--id', 'GLPI-Project.GLPI-Agent', '--exact',
+                '--version', $pinnedAgentVersion, '--source', 'winget', '--silent',
+                '--accept-package-agreements', '--accept-source-agreements', '--disable-interactivity'
             ) -Wait -PassThru
             if ($install.ExitCode -ne 0) { throw "WinGet GLPI Agent installation failed with exit code $($install.ExitCode)." }
         }
         if (-not (Test-Path -LiteralPath $launcher)) {
             throw "GLPI Agent installation did not create '$launcher'. Verify the official installer and re-run."
         }
+    }
+
+    $installedAgentVersion = Get-GlpiAgentVersion $launcher
+    if ($installedAgentVersion -notin $supportedAgentVersions) {
+        throw "GLPI Agent $installedAgentVersion is not supported by this AssetGuard installer. Supported versions: $($supportedAgentVersions -join ', ')."
     }
 
     $upstreamLogPath = Join-Path $AgentRoot 'logs\glpi-agent.log'
@@ -177,6 +198,7 @@ try {
 
     [pscustomobject]@{
         Service = $serviceName
+        AgentVersion = $installedAgentVersion
         StartupType = 'Automatic'
         GatewayUri = $GatewayUri.AbsoluteUri
         AgentUsername = $AgentUsername

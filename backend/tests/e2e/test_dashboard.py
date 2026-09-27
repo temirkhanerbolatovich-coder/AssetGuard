@@ -328,7 +328,7 @@ def test_incident_detail_supports_direct_link_and_managed_decision(live_server):
             "X-AssetGuard-Ingest-Token": settings.inventory_shared_secret,
             "X-AssetGuard-Idempotency-Key": uuid4().hex,
             "X-AssetGuard-Source": "GLPI_AGENT",
-            "X-AssetGuard-Source-Version": "1.19",
+            "X-AssetGuard-Source-Version": "1.20",
             "X-AssetGuard-Schema-Version": "browser-e2e-v1",
             "X-AssetGuard-Inventory-Type": "FULL",
         }
@@ -387,6 +387,8 @@ def test_incident_detail_supports_direct_link_and_managed_decision(live_server):
         assert page.locator("#incident-detail-decisions").get_by_text("Плановая замена модуля подтверждена").is_visible()
         page.locator("#incident-device-action").get_by_role("button", name="Открыть карточку устройства").click()
         page.locator("#detail-title").filter(has_text="Incident E2E workstation").wait_for()
+        assert page.locator("#device-general").get_by_text("Версия Agent").is_visible()
+        assert page.locator("#device-general").get_by_text("1.20", exact=True).is_visible()
 
         asset_detail_requests = []
         page.on(

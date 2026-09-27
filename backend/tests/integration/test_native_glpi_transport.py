@@ -4,6 +4,7 @@ import asyncio
 import base64
 
 import httpx
+import pytest
 
 from assetguard.app import app
 from assetguard.infrastructure.config import get_settings
@@ -25,15 +26,16 @@ INVENTORY = b"""<?xml version='1.0' encoding='UTF-8'?>
 </CONTENT><DEVICEID>native-fixture-pc</DEVICEID><QUERY>INVENTORY</QUERY></REQUEST>"""
 
 
-def test_native_glpi_agent_prolog_and_inventory() -> None:
-    asyncio.run(_exercise_native_transport())
+@pytest.mark.parametrize("agent_version", ["1.19", "1.20"])
+def test_native_glpi_agent_prolog_and_inventory(agent_version: str) -> None:
+    asyncio.run(_exercise_native_transport(agent_version))
 
 
 def test_per_agent_credential_binds_and_can_be_revoked() -> None:
     asyncio.run(_exercise_per_agent_credential())
 
 
-async def _exercise_native_transport() -> None:
+async def _exercise_native_transport(agent_version: str) -> None:
     credentials = base64.b64encode(
         f"assetguard:{get_settings().inventory_shared_secret}".encode()
     ).decode()
@@ -46,14 +48,16 @@ async def _exercise_native_transport() -> None:
         assert prolog.status_code == 200
         assert b"<RESPONSE>SEND</RESPONSE>" in prolog.content
 
-        first = await client.post("/glpi-agent", headers=native, content=INVENTORY)
-        duplicate = await client.post("/glpi-agent", headers=native, content=INVENTORY)
+        inventory = INVENTORY.replace(b"1.19", agent_version.encode("ascii"))
+        first = await client.post("/glpi-agent", headers=native, content=inventory)
+        duplicate = await client.post("/glpi-agent", headers=native, content=inventory)
         assert first.status_code == duplicate.status_code == 200
 
         inventories = (await client.get("/admin/inventories", headers=admin)).json()
         native_rows = [item for item in inventories if item["schema_version"] == "glpi-agent-legacy-xml-v1"]
         assert len(native_rows) == 1
         assert native_rows[0]["processing_status"] == "PROCESSED"
+        assert native_rows[0]["source_version"] == agent_version
         endpoints = (await client.get("/admin/endpoints", headers=admin)).json()
         native_endpoints = [item for item in endpoints if item["source_agent_id"] == "native-fixture-pc"]
         assert len(native_endpoints) == 1

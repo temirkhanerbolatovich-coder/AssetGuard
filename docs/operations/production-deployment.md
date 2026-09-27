@@ -44,7 +44,7 @@ Configure `ASSETGUARD_VISION_MODEL_ID`, `ASSETGUARD_VISION_CONFIDENCE_THRESHOLD`
 
 ## Native GLPI Agent target
 
-Configure the upstream GLPI Agent 1.19 server target as `https://<ASSETGUARD_PUBLIC_HOST>/glpi-agent`, HTTP Basic user `assetguard`, and password `ASSETGUARD_INVENTORY_SHARED_SECRET`. Apply the repository minimal privacy profile and `no-compression = 1`; do not put credentials in source control or a world-readable script. The agent must trust the Caddy/public or organisation CA. Validate one `PROLOG` and one `INVENTORY` in logs, then confirm a single `PROCESSED` inventory and `ONLINE` endpoint through the admin API.
+Configure a supported upstream GLPI Agent 1.19 or 1.20 server target as `https://<ASSETGUARD_PUBLIC_HOST>/glpi-agent`, HTTP Basic user issued for that device, and its one-time inventory secret. New installer deployments are pinned to 1.20. Apply the repository minimal privacy profile and `no-compression = 1`; do not put credentials in source control or a world-readable script. The agent must trust the Caddy/public or organisation CA. Validate one `PROLOG` and one `INVENTORY` in logs, then confirm a single `PROCESSED` inventory and `ONLINE` endpoint through the admin API.
 
 ## Rate limiting and logging
 

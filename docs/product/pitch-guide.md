@@ -8,7 +8,7 @@ AssetGuard превращает технический отчёт об обор�
 
 ## Как работает GLPI Agent
 
-1. Неизменённый open-source GLPI Agent 1.19 запускается на Windows-компьютере вручную или по расписанию.
+1. Неизменённый open-source GLPI Agent 1.19 или 1.20 запускается как Windows-служба; новые установки закреплены на 1.20.
 2. Privacy-профиль разрешает только нужные категории: BIOS, CPU, RAM, накопители, GPU, плата, мониторы и сетевые идентификаторы.
 3. Agent формирует JSON/XML inventory и отправляет его в AssetGuard по HTTPS. Пользовательские документы, пароли, процессы и список пользователей не собираются.
 4. AssetGuard сохраняет исходный отчёт как неизменяемое доказательство, нормализует компоненты и строит Snapshot.
@@ -52,7 +52,7 @@ pwsh -File .\scripts\windows\prepare-pitch-incident.ps1
 
 ```mermaid
 flowchart LR
-    A[GLPI Agent 1.19] -->|HTTPS XML или JSON| B[FastAPI transport adapters]
+    A[GLPI Agent 1.19/1.20] -->|HTTPS XML или JSON| B[FastAPI transport adapters]
     B --> C[(RawInventory JSONB)]
     B --> D[Normalizer]
     D --> E[(Hardware Snapshot)]
@@ -69,7 +69,7 @@ flowchart LR
 
 | Слой | Технология | Ответственность |
 | --- | --- | --- |
-| Collector | GLPI Agent 1.19 + PowerShell profile | Локально получить разрешённый hardware inventory |
+| Collector | GLPI Agent 1.19/1.20 + PowerShell profile | Локально получить разрешённый hardware inventory |
 | Transport | FastAPI adapters | Принять native GLPI XML или доверенный JSON, проверить ключ и идемпотентность |
 | Evidence | PostgreSQL JSONB | Неизменяемо сохранить исходный отчёт и его hash |
 | Domain | Python services | Identity resolution, snapshots, completeness, baseline, diff, incidents |

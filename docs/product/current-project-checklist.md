@@ -27,7 +27,7 @@ AssetGuard уже является работающим pilot MVP: школьн�
 | --- | --- | --- | --- |
 | Backend и БД | ✅ | FastAPI, PostgreSQL 17, SQLAlchemy, Alembic; миграции до `0024` | Полный upgrade и rehearsal `0024 → 0023 → 0024` |
 | Raw inventory | ✅ | Неизменяемый исходный payload, hash, idempotency, processing status | Integration tests и DB triggers |
-| GLPI Agent transport | ✅ | Native GLPI Agent 1.19 `PROLOG → INVENTORY` и JSON bridge | Реальный Windows-PC и fixtures |
+| GLPI Agent transport | ✅ | Native GLPI Agent 1.19/1.20 `PROLOG → INVENTORY` и JSON bridge | Два реальных Windows-PC и fixtures |
 | Аппаратная инвентаризация | ✅ | CPU, RAM, накопители, GPU, motherboard, сеть, мониторы, BIOS/идентификаторы | Unit/integration tests |
 | Endpoint identity | ✅ | Стабильные идентификаторы, hostname history, обнаружение конфликтов | Automated tests |
 | Baseline и изменения | ✅ | Явное подтверждение эталона, сравнение «Было → Стало», защита PARTIAL inventory | Automated workflow |
@@ -37,7 +37,7 @@ AssetGuard уже является работающим pilot MVP: школьн�
 | Пользователи и сессии | ✅ | Именованные пользователи, роли, login/logout, отзыв сессий, смена пароля и отключение | Auth lifecycle tests |
 | Права по локациям | ✅ для основных сценариев | Grants `VIEWER`/`EDITOR` на корпус, этаж или кабинет; API проверяет область доступа | Scoped-resource tests |
 | Credentials устройств | ✅ | Отдельный username/secret на каждый Agent, one-time показ, hash в БД, revoke | API, UI и installer flow |
-| Windows installer | ✅ для пилота | `AssetGuard-Agent-Setup-0.1.5.exe`, HTTPS server URL, уникальные credentials, Windows-служба с автозапуском | Установка и отправка inventory проверены на реальном ПК |
+| Windows installer | ✅ для пилота | `AssetGuard-Agent-Setup-0.1.6.exe`, pinned GLPI Agent 1.20, HTTPS server URL, уникальные credentials, Windows-служба с автозапуском | Версии 1.19 и 1.20 отправили inventory с двух реальных ПК |
 | Работа Agent в фоне | ✅ | GLPI Agent работает Windows-службой; остановка/изменение требует административных прав ОС | Реальная установка |
 | Физический обход | ✅ | Полная сверка каждой позиции: на месте / отсутствует / повреждено, количество, комментарий и исполнитель | Integration и browser E2E |
 | Физические инциденты | ✅ | Автоматическое создание из расхождения, проверка, ремонт, ложное срабатывание | Integration и browser E2E |

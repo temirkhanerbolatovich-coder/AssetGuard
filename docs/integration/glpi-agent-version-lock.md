@@ -1,20 +1,20 @@
-# GLPI Agent: version lock для Phase 0
+# GLPI Agent: version lock
 
 ## Выбранный артефакт для лабораторного стенда
 
 | Параметр | Значение |
 | --- | --- |
 | Проект | GLPI Agent (`glpi-project/glpi-agent`) |
-| Версия | 1.19 |
+| Версия новых установок | 1.20 |
+| Поддерживаемая предыдущая версия | 1.19 |
 | Платформа | Windows x64 |
-| Артефакт | `GLPI-Agent-1.19-x64.msi` |
-| Официальный источник | GitHub Releases проекта GLPI Agent |
-| SHA-256, опубликованный проектом | `f3f933a54bc325ffe0d6063e177874e05138dd887fe690adef337640e8d6335c` |
+| WinGet package | `GLPI-Project.GLPI-Agent` |
+| Официальный источник | WinGet manifest и GitHub Releases проекта GLPI Agent |
 | Лицензия upstream | GPL-2.0-or-later |
 
 ## Назначение
 
-Версия закреплена только для воспроизводимого Phase 0 на текущем Windows x64 стенде. Обновление агента требует отдельной проверки release notes, цифровой подписи, SHA-256 и регрессии canonicalization/diff на сохранённых sanitized fixtures.
+Графический AssetGuard installer закрепляет новые установки на GLPI Agent 1.20 и явно указывает WinGet source. Существующая версия 1.19 остаётся совместимой, чтобы обновление установленных pilot-PC не было обязательным. Любая следующая версия требует отдельной проверки release notes, цифровой подписи, transport contract и регрессии canonicalization/diff на сохранённых sanitized fixtures.
 
 ## Безопасная последовательность внедрения
 
@@ -27,4 +27,4 @@
 
 ## Текущее состояние
 
-На 23.09.2026 GLPI Agent 1.19 установлен через официальный WinGet package `GLPI-Project.GLPI-Agent` и проверен командой `--version`. Локальный full inventory получен штатной утилитой `glpi-inventory --json`; server URL, credentials и внешняя передача данных не использовались. Результат Phase 0 зафиксирован в [наблюдении реального payload](phase0-local-inventory-observation.md).
+На 23.09.2026 GLPI Agent 1.19 прошёл локальный payload и native transport spike. На 27.09.2026 неизменённый GLPI Agent 1.20, установленный WinGet на втором реальном Windows-PC, успешно выполнил authenticated native отправку в production: RawInventory получил `PROCESSED`, endpoint — `ONLINE`. Integration contract теперь прогоняется для метаданных версий 1.19 и 1.20. Это подтверждает используемый AssetGuard XML boundary, но не объявляет совместимость с будущими версиями.
