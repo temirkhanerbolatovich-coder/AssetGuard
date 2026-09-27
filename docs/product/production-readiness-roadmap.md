@@ -25,7 +25,8 @@
 
 - [x] Python dependency vulnerability audit в CI: проверяет точные установленные версии, включая CPU-сборку PyTorch, без повторного скачивания из неподходящего PyPI-индекса.
 - [x] Dependabot для Python и GitHub Actions.
-- [ ] Secret scanning / pre-commit hook и protection rules на main.
+- [x] Secret scanning всей Git-истории в CI и локальный pre-commit hook.
+- [ ] Protection rules на `main` с обязательным успешным CI.
 - [ ] SAST, container image scan и SBOM release artifact.
 - [ ] Подписанные Windows installer/release artifacts и политика обновления Agent.
 - [ ] Внешний penetration test перед работой с несколькими организациями.

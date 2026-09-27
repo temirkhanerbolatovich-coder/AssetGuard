@@ -2,7 +2,7 @@
 
 Дата актуализации: **27 сентября 2026 года**
 
-Проверенная ветка: **`main` после `3d71527`**
+Проверенная ветка: **актуальная `main`, синхронизированная с GitHub**
 
 Production: **https://assetguard-temirkhan.duckdns.org**  
 Версия схемы БД: **`0024_physical_asset_operations`**
@@ -74,7 +74,7 @@ AssetGuard уже является работающим pilot MVP: школьн�
 | PDF import | Типовые таблицы и OCR поддерживаются | Мастер ручного сопоставления нестандартных колонок, список ошибок, объединение дубликатов, больше реальных ведомостей РК |
 | Отчётность | Реестр, PDF/Excel, карточка кабинета, история и акты операций | Сводки по школе/ответственным/категориям/состояниям, журнал операций за период, scheduled reports |
 | QR-инвентаризация | QR актива открывает карточку | QR кабинета, мобильный режим обхода, offline/PWA и сканирование камерой телефона |
-| Security hardening | Dependency audit, rate limit приложения, TLS, роли, append-only | Proxy-level rate limiting, secret scanning/pre-commit, SAST, container scan, SBOM, MFA/SSO и внешний pentest |
+| Security hardening | Dependency audit, автоматический secret scan всей Git-истории, pre-commit hook, rate limit приложения, TLS, роли, append-only | Proxy-level rate limiting, SAST, container scan, SBOM, MFA/SSO и внешний pentest |
 | Admin audit | Инциденты, baseline, активы и операции оставляют history | Единый журнал всех административных действий: пользователи, grants, credential revoke, imports и настройки |
 | Operations | Production Compose и restart policy работают | Staging, blue/green или rollback automation, release tags, SLA/runbook инцидентов |
 | UX | Основные сценарии и адаптивность реализованы | Модерируемый тест с сотрудниками школы, accessibility audit и устранение найденных проблем |
@@ -91,7 +91,7 @@ AssetGuard уже является работающим pilot MVP: школьн�
 - ⛔ Подписанный сертификатом установщик.
 - ⛔ Полноценный сервер метрик уровня Prometheus/Grafana либо эквивалент.
 - ⛔ Нагрузочные тесты на целевое количество школ, пользователей и endpoints.
-- ⛔ SAST, container image scan, SBOM и автоматический secret scan.
+- ⛔ SAST, container image scan и SBOM.
 - ⛔ Юридически утверждённая политика обработки школьных данных и фотографий помещений.
 
 ## Известные границы, которые не являются ошибками

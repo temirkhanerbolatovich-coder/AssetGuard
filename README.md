@@ -19,7 +19,15 @@ pwsh -File .\scripts\windows\start-demo.ps1
 
 Откройте http://127.0.0.1:8000. Для bootstrap можно использовать admin token из локального `.env`; затем рекомендуется создать named ADMIN/VIEWER пользователя и входить по username/password. Сессии можно завершать и отзывать, secrets не включаются в исходники или release archive.
 
-GitHub Actions проверяет migrations/tests на PostgreSQL, зависимости Python, JavaScript syntax и production Compose. Актуальный набор содержит 30 unit/integration tests и 2 browser E2E.
+GitHub Actions проверяет migrations/tests на PostgreSQL, зависимости Python, историю Git на утечки секретов, синтаксис JavaScript/PowerShell/Linux-скриптов и production Compose. Актуальный набор содержит 30 unit/integration tests и 2 browser E2E.
+
+Перед локальным коммитом можно включить ту же проверку секретов через pre-commit:
+
+```powershell
+python -m pip install pre-commit
+pre-commit install
+pre-commit run --all-files
+```
 
 Production Compose также включает Vision dependencies, persistent image storage и model cache; ограничения и настройки описаны в `docs/operations/production-deployment.md`.
 
