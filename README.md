@@ -53,12 +53,23 @@ docker compose --env-file .env -f infra/containers/docker-compose.free-demo.yml 
 
 Новый snapshot не становится baseline автоматически. Отсутствие данных в частичной инвентаризации не означает, что компонент удалён.
 
-## Навигация
+## Техническая документация
+
+Начните с [карты документации](docs/README.md). Она ведёт к подтверждённым текущей реализацией документам:
+
+- [Обзор архитектуры](docs/architecture/overview.md) и [потоки данных](docs/architecture/data-flow.md)
+- [Реализованные возможности](docs/features/README.md)
+- [Архитектурные решения](docs/decisions/README.md)
+- [Модель безопасности](docs/security/security-model.md)
+- [Стратегия тестирования](docs/testing/testing-strategy.md)
+- [Развёртывание](docs/deployment/README.md)
+- [Технический долг](docs/technical-debt.md)
+
+## Дополнительные материалы
 
 - [Сохранённые требования MVP](ASSETGUARD_MVP_v0.1_REQUIREMENTS.md)
 - [Анализ требований](ASSETGUARD_MVP_v0.1_ANALYSIS.md)
 - [Исследование open-source основы](ASSETGUARD_TECHNICAL_RESEARCH.md)
-- [Карта документации](docs/README.md)
 - [Актуальный полный чек-лист проекта](docs/product/current-project-checklist.md)
 - [Чек-лист завершения MVP](docs/product/mvp-completion-checklist.md)
 - [Аудит данных и UX Dashboard](docs/product/dashboard-data-audit.md)
