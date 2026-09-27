@@ -2,10 +2,12 @@
 
 Дата актуализации: **27 сентября 2026 года**
 
-Проверенная ветка: **актуальная `main`, синхронизированная с GitHub**
+Ветка учёта: **`main`**
 
 Production: **https://assetguard-temirkhan.duckdns.org**  
-Версия схемы БД: **`0024_physical_asset_operations`**
+Версия схемы репозитория: **`0025_agent_reenrolment`**
+
+Последняя зафиксированная production/R2 restore revision: **`0024_physical_asset_operations`**
 
 Этот документ — единая точка правды о текущем состоянии AssetGuard. Статус «реализовано» означает, что функция присутствует в коде и покрыта автоматической либо выполненной ручной проверкой. Статус «частично» означает, что рабочий сценарий есть, но ещё не закрыты эксплуатационные, масштабные или продуктовые требования.
 
@@ -25,7 +27,7 @@ AssetGuard уже является работающим pilot MVP: школьн�
 
 | Область | Статус | Что работает сейчас | Проверка |
 | --- | --- | --- | --- |
-| Backend и БД | ✅ | FastAPI, PostgreSQL 17, SQLAlchemy, Alembic; миграции до `0024` | Полный upgrade и rehearsal `0024 → 0023 → 0024` |
+| Backend и БД | ✅ | FastAPI, PostgreSQL 17, SQLAlchemy, Alembic; миграции до `0025` | Disposable PostgreSQL upgrade до `head`; production/R2 rehearsal подтверждён на `0024` |
 | Raw inventory | ✅ | Неизменяемый исходный payload, hash, idempotency, processing status | Integration tests и DB triggers |
 | GLPI Agent transport | ✅ | Native GLPI Agent 1.19/1.20 `PROLOG → INVENTORY` и JSON bridge | Два реальных Windows-PC и fixtures |
 | Аппаратная инвентаризация | ✅ | CPU, RAM, накопители, GPU, motherboard, сеть, мониторы, BIOS/идентификаторы | Unit/integration tests |
@@ -37,7 +39,7 @@ AssetGuard уже является работающим pilot MVP: школьн�
 | Пользователи и сессии | ✅ | Именованные пользователи, роли, login/logout, отзыв сессий, смена пароля и отключение | Auth lifecycle tests |
 | Права по локациям | ✅ для основных сценариев | Grants `VIEWER`/`EDITOR` на корпус, этаж или кабинет; API проверяет область доступа | Scoped-resource tests |
 | Credentials устройств | ✅ | Отдельный username/secret на каждый Agent, one-time показ, hash в БД, revoke | API, UI и installer flow |
-| Windows installer | ✅ для пилота | `AssetGuard-Agent-Setup-0.1.6.exe`, pinned GLPI Agent 1.20, HTTPS server URL, уникальные credentials, Windows-служба с автозапуском | Версии 1.19 и 1.20 отправили inventory с двух реальных ПК |
+| Windows installer | ✅ для пилота | Опубликован `0.1.6`; локальный `0.1.7` добавляет version reporting, lifecycle log и approved re-enrolment; pinned GLPI Agent 1.20, HTTPS, отдельные credentials и Windows-служба | Версии Agent 1.19/1.20 проверены на двух ПК; installer `0.1.7` ещё не принят на третьем ПК и не подписан |
 | Работа Agent в фоне | ✅ | GLPI Agent работает Windows-службой; остановка/изменение требует административных прав ОС | Реальная установка |
 | Физический обход | ✅ | Полная сверка каждой позиции: на месте / отсутствует / повреждено, количество, комментарий и исполнитель | Integration и browser E2E |
 | Физические инциденты | ✅ | Автоматическое создание из расхождения, проверка, ремонт, ложное срабатывание | Integration и browser E2E |
@@ -57,13 +59,13 @@ AssetGuard уже является работающим pilot MVP: школьн�
 | Постоянный deployment | ✅ | Oracle Cloud Always Free, Docker Compose, Caddy, DuckDNS, TLS, restart policy | Public health/readiness |
 | CI | ✅ | PostgreSQL tests, browser E2E, dependency audit, JS/PowerShell checks, Compose validation | GitHub Actions |
 
-Последняя подтверждённая локальная проверка: **все 45 backend-тестов пройдены единым запуском**: 43 unit/integration и 2 browser E2E. Disposable PostgreSQL очищается перед каждым тестом, а in-memory rate limiter не переносит состояние между сценариями.
+Последняя подтверждённая локальная проверка: **50 unit/integration tests и 2 browser E2E пройдены 2026-09-27**. Disposable PostgreSQL применяет migration `0025`, очищается перед каждым тестом, а in-memory rate limiter не переносит состояние между сценариями. GitHub CI для commit `3216a11` завершился успешно.
 
 ## Реализовано частично
 
 | Область | Что уже есть | Чего не хватает до полного production |
 | --- | --- | --- |
-| Multi-tenant | Organization scope есть у пользователей, credentials, assets, endpoints, inventory и Vision; исполняемая allow/deny-матрица покрывает все 60 защищённых admin operations | Отдельная роль tenant administrator и тест двух реальных школ |
+| Multi-tenant | Organization scope есть у пользователей, credentials, re-enrolment, assets, endpoints, inventory и Vision; исполняемая allow/deny-матрица покрывает все 60 защищённых admin operations | Отдельная роль tenant administrator и приёмка на данных двух реальных школ |
 | Мониторинг | Постоянный systemd monitor проверяет API, Compose services, диск, возраст/ошибки backup, ingest и Agent last-seen; доставка, дедупликация и четырёхчасовой repeat Telegram-alert приняты | Dashboard наблюдаемости и формальная on-call escalation |
 | Backup | Зашифрованные копии, Cloudflare R2, 14 дней локально / 30 дней off-site; Windows и постоянные Linux timers работают; server restore rehearsal `PASS` 2026-09-27 | Наблюдать следующий автоматический daily/weekly цикл; backup пока охватывает PostgreSQL, но не Vision volume |
 | Vision production | Полный локальный photo workflow и настоящий model smoke в CI | Oracle Free VM не тянет ML runtime; нужны отдельный inference host/GPU либо более мощный сервер, object storage и accuracy evaluation |

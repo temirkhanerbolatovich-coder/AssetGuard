@@ -1,5 +1,7 @@
 # Демонстрационный сценарий MVP
 
+> **Справочный сценарий.** Он демонстрирует базовый inventory flow и не покрывает весь текущий продукт. Полный статус находится в [current project checklist](current-project-checklist.md).
+
 1. PC-001 сообщает RAM A123, RAM B456 и SSD S991.
 2. Система сохраняет immutable RawInventory и создаёт Snapshot #1.
 3. Администратор связывает endpoint с Asset и явно принимает Snapshot #1 как baseline.
@@ -14,4 +16,3 @@
 - PARTIAL software inventory не должен означать удаление RAM/SSD.
 - Изменение не должно автоматически называться кражей.
 - Закрытие Incident не должно само по себе менять baseline.
-

@@ -1,14 +1,56 @@
 # AssetGuard
 
-AssetGuard — MVP системы непрерывного контроля компьютерных активов. Она принимает инвентаризацию от неизменённого GLPI Agent через нативный XML transport либо explicit JSON bridge, сохраняет исходный payload, строит нормализованные снимки оборудования, сравнивает их с явно подтверждённым baseline и ведёт объяснимую историю изменений и решений.
+[![CI](https://github.com/temirkhanerbolatovich-coder/AssetGuard/actions/workflows/ci.yml/badge.svg)](https://github.com/temirkhanerbolatovich-coder/AssetGuard/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/temirkhanerbolatovich-coder/AssetGuard?include_prereleases)](https://github.com/temirkhanerbolatovich-coder/AssetGuard/releases)
 
-## Статус
+AssetGuard — система учёта и контролируемой инвентаризации школьного имущества. Она объединяет реестр по организациям и кабинетам, технические данные Windows-компьютеров, явные эталоны оборудования, объяснимые инциденты, физические обходы, импорт/экспорт и экспериментальный Vision-контур.
 
-Готов демонстрационный MVP v0.1: FastAPI backend, PostgreSQL migrations, browser dashboard, baseline/change/incident workflow, GLPI Agent minimal privacy profile и AssetGuard Vision. Dashboard показывает состояние инфраструктуры, поиск и фильтры устройств, полную читаемую карточку оборудования, сравнение «Было → Стало», историю и приоритетные проблемы. Vision поддерживает загрузку JPEG/PNG, Grounding DINO object detection, bounding boxes, подсчёт объектов, room baseline и повторное сравнение.
+Система принимает данные неизменённого GLPI Agent 1.19/1.20, сохраняет исходный payload как immutable evidence, строит нормализованный snapshot и сравнивает его только с явно подтверждённым baseline. Частичная инвентаризация не считается доказательством удаления компонента.
 
-## Быстрый запуск на Windows
+## Текущий статус
 
-Нужны Docker Desktop и Python 3.12. Распакуйте проект в путь без кириллических символов (например `C:\AssetGuard-MVP`), затем в корне выполните:
+Статус проекта: **рабочий pilot MVP; не готов к массовому multi-school rollout**.
+
+Подтверждено кодом, тестами или выполненной эксплуатационной проверкой:
+
+- FastAPI, PostgreSQL 17, SQLAlchemy и Alembic migrations до `0025_agent_reenrolment`;
+- browser dashboard, реестр имущества, структура `организация → корпус → этаж → кабинет`;
+- native GLPI XML transport и JSON bridge;
+- raw inventory, snapshots, explicit baseline, changes, incidents и append-only history;
+- отдельные Agent credentials, отзыв ключа и подтверждаемое re-enrolment после переустановки Windows;
+- физический обход кабинета, перемещение, списание и PDF-акты;
+- Excel/PDF import/export, локальный OCR и QR карточки;
+- tenant/location authorization matrix для 60 защищённых admin operations;
+- production HTTPS deployment, encrypted PostgreSQL backup в Cloudflare R2 и isolated restore rehearsal;
+- CI, dependency audit, secret scanning и browser E2E.
+
+До реального масштабирования остаются fleet test на 3–5 ПК, подписанный Windows installer, управляемое обновление/rollback Agent, отключение legacy shared credentials, политика хранения данных, backup Vision-фотографий и дополнительная multi-school проверка.
+
+Актуальная точка правды: [полный чек-лист проекта](docs/product/current-project-checklist.md). Последний опубликованный pilot installer — [`v0.1.6`](https://github.com/temirkhanerbolatovich-coder/AssetGuard/releases/tag/v0.1.6); `0.1.7` с version reporting и re-enrolment пока собран только для контролируемой проверки и не подписан.
+
+## Архитектура
+
+```text
+GLPI Agent / JSON bridge
+          │ HTTPS
+          ▼
+       Caddy
+          ▼
+FastAPI modular monolith ─────► Vision files/model cache
+          │
+          ▼
+     PostgreSQL 17 ───────────► encrypted backup ─► Cloudflare R2
+```
+
+Основной поток:
+
+`Inventory → Raw evidence → Snapshot → Explicit baseline → Change → Incident → Decision → History`
+
+AssetGuard не является форком GLPI, custom collector, helpdesk, remote desktop или системой автоматического определения кражи. GLPI Agent остаётся внешним сборщиком; `WARNING` и `OFFLINE` означают необходимость проверки человеком.
+
+## Быстрый локальный запуск
+
+Требования: Windows, Docker Desktop, PowerShell 7 и Python 3.12. Для Python рекомендуется путь без кириллицы.
 
 ```powershell
 pwsh -File .\scripts\windows\new-local-env.ps1
@@ -17,76 +59,74 @@ backend/.venv/Scripts/python.exe -m pip install -e 'backend[dev,vision]'
 pwsh -File .\scripts\windows\start-demo.ps1
 ```
 
-Откройте http://127.0.0.1:8000. Для bootstrap можно использовать admin token из локального `.env`; затем рекомендуется создать named ADMIN/VIEWER пользователя и входить по username/password. Сессии можно завершать и отзывать, secrets не включаются в исходники или release archive.
+Откройте <http://127.0.0.1:8000>. Bootstrap token берётся из локального `.env`; после первого входа создайте именованного пользователя. Не используйте production credentials в локальной среде и не добавляйте `.env` в Git.
 
-GitHub Actions проверяет migrations/tests на PostgreSQL, зависимости Python, историю Git на утечки секретов, синтаксис JavaScript/PowerShell/Linux-скриптов и production Compose. Актуальный набор содержит 43 unit/integration tests и 2 browser E2E.
-
-Перед локальным коммитом можно включить ту же проверку секретов через pre-commit:
-
-```powershell
-python -m pip install pre-commit
-pre-commit install
-pre-commit run --all-files
-```
-
-Production Compose также включает Vision dependencies, persistent image storage и model cache; ограничения и настройки описаны в `docs/operations/production-deployment.md`.
-
-## Бесплатная публичная демонстрация
-
-После создания `.env` весь контейнерный стек можно открыть через временный Cloudflare Quick Tunnel:
+Для временной публичной демонстрации:
 
 ```powershell
 pwsh -File .\scripts\windows\start-free-public-demo.ps1
 ```
 
-Скрипт выводит локальный и публичный HTTPS URL. Домен и аккаунт Cloudflare не требуются. Quick Tunnel предназначен только для короткой демонстрации: URL меняется после пересоздания, гарантий доступности нет. Остановить стек:
+Cloudflare Quick Tunnel предназначен только для демонстрации: URL меняется и не подходит для постоянной установки Agent.
+
+## Тестирование
+
+Backend-тесты запускаются из каталога `backend`, чтобы Alembic использовал правильную конфигурацию:
 
 ```powershell
-docker compose --env-file .env -f infra/containers/docker-compose.free-demo.yml down
+Push-Location backend
+.\.venv\Scripts\python.exe -m pytest -q
+Pop-Location
+
+node --check frontend/app.js
+git diff --check
 ```
 
-## Демонстрация Vision
+Текущий подтверждённый набор: **50 unit/integration tests и 2 browser E2E**. Каждый backend-запуск создаёт отдельную PostgreSQL database, применяет migrations до `head`, очищает состояние между тестами и удаляет базу после завершения.
 
-В блоке **AssetGuard Vision** укажите помещение и загрузите `demo/vision/room-305-baseline.png`. После обработки нажмите **Сохранить baseline**, затем загрузите `demo/vision/room-305-warning.png`: на втором кадре удалён принтер, поэтому сравнение показывает расхождение и `WARNING`. Первый запуск загружает/инициализирует модель и на CPU может занять больше времени; следующие scans выполняются уже на прогретой модели.
+## Windows Agent
 
-## Главный принцип
+Новые установки закреплены на upstream GLPI Agent `1.20`. Installer:
 
-Новый snapshot не становится baseline автоматически. Отсутствие данных в частичной инвентаризации не означает, что компонент удалён.
+- устанавливает службу с автозапуском и recovery;
+- применяет privacy-limited profile;
+- использует отдельный username/secret для каждого компьютера;
+- сообщает версии installer и Agent;
+- пишет локальный lifecycle log без секретов;
+- поддерживает подтверждаемое восстановление после переустановки Windows по SMBIOS UUID.
 
-## Техническая документация
+Подробности: [Windows operations](scripts/windows/README.md) и [fleet test](docs/operations/agent-fleet-pilot.md). Неподписанный EXE допустим только для ограниченного внутреннего пилота.
 
-Начните с [карты документации](docs/README.md). Она ведёт к подтверждённым текущей реализацией документам:
+## Production и восстановление
 
-- [Обзор архитектуры](docs/architecture/overview.md) и [потоки данных](docs/architecture/data-flow.md)
-- [Реализованные возможности](docs/features/README.md)
-- [Архитектурные решения](docs/decisions/README.md)
-- [Модель безопасности](docs/security/security-model.md)
-- [Стратегия тестирования](docs/testing/testing-strategy.md)
-- [Развёртывание](docs/deployment/README.md)
-- [Технический долг](docs/technical-debt.md)
+Production topology публикует только Caddy на 80/443; API и PostgreSQL находятся во внутренней Docker-сети. PostgreSQL backup шифруется AES-256-GCM, отправляется в R2 и проверяется восстановлением в disposable database. Vision volume пока не включён в этот backup.
 
-## Дополнительные материалы
+- [Deployment overview](docs/deployment/README.md)
+- [Production deployment and recovery](docs/operations/production-deployment.md)
+- [Observability](docs/operations/observability.md)
+- [Security model](docs/security/security-model.md)
 
-- [Сохранённые требования MVP](ASSETGUARD_MVP_v0.1_REQUIREMENTS.md)
-- [Анализ требований](ASSETGUARD_MVP_v0.1_ANALYSIS.md)
-- [Исследование open-source основы](ASSETGUARD_TECHNICAL_RESEARCH.md)
-- [Актуальный полный чек-лист проекта](docs/product/current-project-checklist.md)
-- [Чек-лист завершения MVP](docs/product/mvp-completion-checklist.md)
-- [Аудит данных и UX Dashboard](docs/product/dashboard-data-audit.md)
-- [UX/UI-аудит и план frontend redesign](docs/product/frontend-redesign-audit.md)
-- [Архитектура и готовый сценарий питча](docs/product/pitch-guide.md)
-- [Локальная demo-поставка](docs/operations/local-demo-guide.md)
-- [Установщик Windows Agent для других компьютеров](scripts/windows/README.md#графический-установщик-для-других-компьютеров)
-- [Production deployment и recovery](docs/operations/production-deployment.md)
-- [Бесплатный deployment](docs/operations/free-deployment.md)
-- [GLPI minimal profile spike](docs/integration/glpi-agent-minimal-profile-spike.md)
-- [Требования AssetGuard Vision](docs/product/assetguard-vision-requirements.md)
-- [Минимальная интеграция AssetGuard Vision](docs/architecture/assetguard-vision-integration-analysis.md)
+## Документация
 
-## Будущий вертикальный поток
+Полная карта находится в [docs/README.md](docs/README.md). Основные документы:
 
-`Inventory → Raw evidence → Snapshot → Explicit baseline → Change Detection → Incident → Decision → History`
+- [архитектура](docs/architecture/overview.md) и [потоки данных](docs/architecture/data-flow.md);
+- [API boundaries](docs/api/README.md);
+- [реализованные возможности](docs/features/README.md);
+- [ADR](docs/decisions/README.md);
+- [стратегия тестирования](docs/testing/testing-strategy.md);
+- [production roadmap](docs/product/production-readiness-roadmap.md);
+- [технический долг](docs/technical-debt.md);
+- [история релизов и unreleased changes](CHANGELOG.md).
 
-## Границы MVP
+Исходные требования, исследования и старые планы сохранены как исторические документы. При расхождении приоритет имеют текущий код, executable tests, migrations и документы, помеченные как актуальные в карте документации.
 
-AssetGuard не является форком GLPI, custom Windows agent, helpdesk или системой автоматического определения краж. GLPI Agent остаётся collector, а AssetGuard владеет raw inventory, snapshots, baseline, events, incidents и history.
+## Безопасность и ограничения
+
+- Не публикуйте `.env`, Agent secrets, backup passphrase, R2 keys или Telegram token.
+- Не отключайте TLS verification для постоянного Agent endpoint.
+- Не принимайте новый snapshot как baseline автоматически.
+- Не разворачивайте Vision production без retention policy и отдельного backup фотографий.
+- Не распространяйте installer массово до code signing и проверенного rollback.
+
+Лицензионная модель проекта пока не зафиксирована отдельным `LICENSE`; до её определения репозиторий нельзя считать разрешением на свободное переиспользование.

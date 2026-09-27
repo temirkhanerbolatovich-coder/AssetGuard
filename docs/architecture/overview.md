@@ -34,7 +34,7 @@ flowchart LR
 | Baselines и changes | Явное принятие эталона и детерминированное сравнение снимков | `modules/baselines/`, `modules/changes/` |
 | Incidents и history | Инциденты, решения и журнал действий по активу или endpoint | `modules/incidents/`, `modules/history/` |
 | Assets | Организации, здания, этажи, помещения, активы и физические проверки | `modules/assets/` |
-| Identity | Пользователи, сессии, роли, agent credentials и доступ к помещениям | `modules/identity/` |
+| Identity | Пользователи, сессии, роли, Agent credentials, re-enrolment и доступ к помещениям | `modules/identity/` |
 | Vision | Grounding DINO, scans, detections и room baseline | `modules/vision/` |
 | Persistence | SQLAlchemy sessions и Alembic migrations | `infrastructure/database.py`, `backend/migrations/` |
 | Web UI | Статический browser dashboard, смонтированный FastAPI | `frontend/`, `assetguard/app.py` |
@@ -46,7 +46,7 @@ flowchart LR
 - PostgreSQL хранит доменные сущности, raw inventory, snapshots, события, инциденты, решения, сессии и метаданные Vision.
 - Оригиналы и аннотированные изображения Vision хранятся в файловой системе. В production это volume `assetguard-vision-data`.
 - Модель Vision кэшируется отдельно в `assetguard-model-cache`.
-- Alembic является единственным подтверждённым механизмом изменения схемы; на момент этого документа цепочка включает migrations `0001`–`0024`.
+- Alembic является единственным подтверждённым механизмом изменения схемы; на момент этого документа цепочка включает migrations `0001`–`0025_agent_reenrolment`.
 - Raw inventory, снимки и история являются свидетельствами; новый снимок не заменяет baseline автоматически.
 
 ## Развёртывание

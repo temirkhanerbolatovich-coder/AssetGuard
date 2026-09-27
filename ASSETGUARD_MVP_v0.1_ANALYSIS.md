@@ -2,7 +2,7 @@
 
 ## Статус
 
-Документ сохраняет исходную аналитическую фиксацию до начала разработки. После неё реализованы backend/frontend, PostgreSQL migrations, GLPI privacy-profile/bridge, inventory workflow и Vision demo. Актуальный статус и оставшиеся ограничения ведутся в `docs/product/mvp-completion-checklist.md`.
+Документ сохраняет исходную аналитическую фиксацию до начала разработки. После неё реализованы backend/frontend, PostgreSQL migrations, GLPI privacy-profile/bridge, inventory workflow и Vision demo. Актуальный статус и оставшиеся ограничения ведутся в [current project checklist](docs/product/current-project-checklist.md).
 
 ## Что в ТЗ определено особенно хорошо
 

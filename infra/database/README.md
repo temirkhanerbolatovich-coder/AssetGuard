@@ -17,5 +17,15 @@ ASSETGUARD_POSTGRES_PORT=5432
 docker compose --env-file .env -f infra/containers/docker-compose.yml up -d postgres
 ```
 
-Миграции будут добавлены вместе с первой доменной схемой; schema creation в runtime приложения не допускается.
+Alembic — единственный поддерживаемый механизм изменения схемы. Текущий `head` — `0025_agent_reenrolment`; schema creation через `Base.metadata.create_all()` в runtime приложения не допускается.
 
+Проверка и применение выполняются из `backend`:
+
+```powershell
+Push-Location backend
+.\.venv\Scripts\python.exe -m alembic heads
+.\.venv\Scripts\python.exe -m alembic upgrade head
+Pop-Location
+```
+
+Перед production migration создайте свежий encrypted backup и проверьте readiness после обновления. Не используйте production connection string для тестов: pytest создаёт и удаляет отдельную database.

@@ -2,7 +2,7 @@
 
 | Термин | Значение |
 | --- | --- |
-| Organization | Владелец учёта; в MVP одна организация |
+| Organization | Tenant-владелец учёта: школа или другая отдельная организация |
 | Asset | Учётный физический объект с inventory number |
 | ManagedEndpoint | Техническая identity устройства, которое сообщает инвентаризацию |
 | EndpointIdentifier | Наблюдаемый идентификатор endpoint с confidence и временем актуальности |
@@ -15,6 +15,9 @@
 | Incident | Workflow над ChangeEvent, а не замена факта |
 | IncidentDecision | Append-only административное решение по Incident |
 | AssetHistoryEntry | Append-only элемент общей временной шкалы |
+| AgentCredential | Отдельный username и hash секрета, разрешающий одному Agent отправлять inventory |
+| AgentReenrolment | Короткоживущий запрос на перевыпуск AgentCredential после переустановки Windows |
+| LocationGrant | Право `VIEWER` или `EDITOR` на корпус, этаж либо кабинет |
 
 ## Инварианты
 
@@ -27,3 +30,5 @@
 7. Решения и history append-only.
 8. Baseline меняется только через явное `accept_snapshot_as_baseline`; normalizer никогда не делает этого сам.
 9. Diff RAM/STORAGE разрешён только когда соответствующая категория current snapshot имеет `COMPLETE`.
+10. У ManagedEndpoint одновременно может быть не более одного активного AgentCredential; re-enrolment отзывает предыдущий активный credential.
+11. Hardware identifier используется для сопоставления endpoint, но не является секретом или самостоятельной аутентификацией.

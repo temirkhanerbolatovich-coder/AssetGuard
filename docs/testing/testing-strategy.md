@@ -15,7 +15,7 @@
 | Static/config checks | JavaScript, PowerShell, shell, Python scripts и Compose config | `.github/workflows/ci.yml` |
 | Security checks | Gitleaks, `pip check`, `pip-audit` | `.github/workflows/ci.yml` |
 
-В текущем наборе 43 unit/integration и 2 browser E2E tests. Число является снимком состояния репозитория и должно обновляться вместе с изменением набора.
+В текущем наборе 50 unit/integration и 2 browser E2E tests. Число является снимком состояния репозитория и должно обновляться вместе с изменением набора.
 
 ## Тестовое окружение
 
@@ -88,6 +88,7 @@ Grounding DINO real-model smoke выполняется отдельно по р�
 
 - Нет нагрузочных и длительных soak tests.
 - R2 restore rehearsal реализован как эксплуатационный скрипт: Windows Task Scheduler и постоянный Linux server прошли 2026-09-27. Server rehearsal вернул revision `0024_physical_asset_operations`, `assets=211`, `endpoints=1`. Monitor test mode подтвердил Telegram acceptance и дедупликацию без остановки production.
+- Agent re-enrolment integration tests применяют миграцию `0025`, проверяют отсутствие plaintext claim token, tenant isolation, expiry, approve/reject, отзыв прежнего credential и сохранение endpoint.
 - Real-model smoke проверяет работоспособность pipeline, но не точность модели на репрезентативном датасете.
 - Реальный fleet GLPI Agent и production failover остаются ручными проверками.
 

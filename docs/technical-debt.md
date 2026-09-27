@@ -8,10 +8,9 @@
 | --- | --- | --- | --- | --- |
 | TD-004 | P1 | Credentials | Bootstrap admin/viewer secrets и legacy shared inventory secret остаются рабочими fallback-механизмами | Named users и per-agent credentials являются обязательным production path; fallback отключаем или строго ограничен и задокументирован |
 | TD-005 | P1 | Data governance | Код хранит raw inventory, историю и Vision images, но утверждённые retention/deletion сроки отсутствуют | Принята policy по классам данных и реализованы проверяемые процедуры retention/export/delete |
-| TD-006 | P1 | Agent lifecycle | Установщик и per-agent credentials есть; централизованная signing/release и подтверждённая ротация fleet отсутствуют | Release artifact подписан, версия прослеживается, credential rotation проверена на pilot fleet |
+| TD-006 | P1 | Agent lifecycle | Установщик, per-agent credentials, version reporting и approved re-enrolment реализованы; code signing, managed update/rollback и fleet acceptance отсутствуют | Release artifact подписан, update/rollback проверены, credential rotation и re-enrolment приняты на 3–5 pilot-PC |
 | TD-007 | P1 | Vision | Pipeline, integration test и scheduled real-model smoke есть; production camera ingestion и quality benchmark отсутствуют | Определён поддерживаемый input, собран репрезентативный dataset, зафиксированы accuracy/latency limits |
 | TD-008 | P1 | Release/rollback | Production Compose описан, но tag `v0.1.0-demo` не отражает текущее состояние, version остаётся `0.1.0`; автоматизированного rollback rehearsal нет | Версия и release notes соответствуют deployed commit; rollback/recovery проверены и задокументированы |
-| TD-009 | P2 | Documentation | Часть старых документов расходится с кодом: source layout заканчивает migrations на `0009`, Vision analysis утверждает отсутствие location hierarchy; `docs/data` исключается общим правилом `.gitignore` | Устаревшие документы помечены или синхронизированы; все ссылки CI-проверяемы; docs files не скрываются случайным ignore rule |
 | TD-010 | P2 | Capacity | In-process rate limiter хранит состояние одного API-процесса; нагрузочные тесты отсутствуют | Определён deployment limit либо введён shared limiter; зафиксированы нагрузочные границы |
 
 ## Правило ведения

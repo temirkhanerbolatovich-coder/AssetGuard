@@ -1,8 +1,10 @@
 # AssetGuard Vision — минимальная интеграция
 
+> **Историческая фиксация.** Документ объясняет первоначальный выбор Vision vertical slice. После него добавлены каноническая иерархия помещений, tenant/location scope и физические обходы. Актуальные границы описаны в [architecture overview](overview.md) и [project checklist](../product/current-project-checklist.md).
+
 ## Решение
 
-Для демонстрационного MVP Vision добавлен как изолированный модуль существующего FastAPI modular monolith. Это минимальный путь: используются текущие PostgreSQL, SQLAlchemy/Alembic, `/admin/*` authentication, единый Dashboard и принятая структура `modules`/`interfaces`. Отдельный microservice и полная room hierarchy не нужны для сегодняшнего сценария и увеличили бы число точек отказа.
+Для демонстрационного MVP Vision добавлен как изолированный модуль существующего FastAPI modular monolith. Это минимальный путь: используются текущие PostgreSQL, SQLAlchemy/Alembic, `/admin/*` authentication, единый Dashboard и принятая структура `modules`/`interfaces`. Отдельный microservice не требовался и увеличил бы число точек отказа.
 
 `Dashboard multipart upload → /admin/vision/scans → lazy Grounding DINO inference → original/annotated JPEG → PostgreSQL scan/detections/counts → explicit room baseline → comparison → WARNING`
 
@@ -20,7 +22,6 @@
 
 ## Осознанно не реализовано
 
-- Institution → Building → Floor → Room: room пока задаётся уникальным именем;
 - отдельный inference service/container и S3-compatible storage;
 - RTSP/cameras/scheduler, video, tracking и распознавание людей;
 - `ANOMALY`, автоматическое подтверждение пропажи и уведомления;

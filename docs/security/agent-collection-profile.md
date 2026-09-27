@@ -26,9 +26,9 @@ Configuration spike от 2026-09-23 подтверждён на установл
 - printers, USB/peripheral details (`printer`, `usb`, `input`, `sound`, `modem`, `port`);
 - user files, browser history, arbitrary registry и любые custom collection sources.
 
-## Правило до production
+## Правило для pilot и production
 
-Нельзя запускать агент с full default payload против Gateway. Native `/glpi-agent` проверен только вместе с этим минимальным profile, `no-compression = 1`, HTTP Basic credentials и GLPI Agent 1.19/1.20. Перед production-отправкой нужны утверждение policy владельцем проекта, HTTPS trust и защищённое хранение agent credentials.
+Нельзя запускать агент с full default payload против Gateway. Native `/glpi-agent` проверен только вместе с этим минимальным profile, `no-compression = 1`, HTTP Basic credentials и GLPI Agent 1.19/1.20. Для постоянной отправки обязательны утверждение policy владельцем проекта, HTTPS trust, отдельный credential устройства и его защищённое хранение. Legacy shared credential допускается только как временный migration fallback.
 
 ## Windows service deployment
 

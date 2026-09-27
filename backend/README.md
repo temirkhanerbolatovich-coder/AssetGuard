@@ -28,7 +28,7 @@ Endpoint принимает JSON object до 2 MiB по умолчанию, со
 
 ## Native GLPI Agent transport
 
-`POST /glpi-agent` реализует наблюдаемый GLPI Agent 1.19 legacy XML flow: authenticated `PROLOG` → `<RESPONSE>SEND</RESPONSE>` → `INVENTORY`. Агент использует HTTP Basic user `assetguard`, а password равен rotating `ASSETGUARD_INVENTORY_SHARED_SECRET`. Для endpoint обязателен agent option `no-compression = 1`; вне loopback используется только HTTPS с нормальной проверкой сертификата.
+`POST /glpi-agent` реализует наблюдаемый GLPI Agent 1.19/1.20 XML flow: authenticated `PROLOG` → `<RESPONSE>SEND</RESPONSE>` → `INVENTORY`. Основной путь использует отдельный HTTP Basic username/secret для каждого компьютера; legacy shared credential остаётся временным fallback до завершения миграции пилотного парка. Для endpoint обязателен agent option `no-compression = 1`; вне loopback используется только HTTPS с нормальной проверкой сертификата.
 
 `DirectGlpiAgentAdapter` сохраняет исходный XML и его SHA-256 внутри immutable JSONB evidence, преобразует секции в canonical GLPI-shaped envelope и запускает тот же snapshot/change/incident workflow. Inventory считается `FULL` только при наличии списков `MEMORIES` и `STORAGES`; иначе используется безопасный `PARTIAL`, который не создаёт removals по отсутствующим категориям.
 
@@ -50,11 +50,18 @@ PDF с текстовым слоем разбирается постраничн
 
 Production Docker image включает Tesseract и языковые пакеты. Для локального запуска установите Tesseract отдельно и добавьте его в PATH либо укажите полный путь в `ASSETGUARD_TESSERACT_CMD`; если модели языков размещены отдельно, задайте их каталог через `ASSETGUARD_TESSDATA_DIR`. На Windows также задайте ASCII-путь к доступной на запись временной папке в `ASSETGUARD_OCR_TEMP_DIR`; это избегает ошибок системной кодировки в путях с кириллицей. Если OCR недоступен или в скане не найдены надёжные отдельные позиции, импорт вернёт понятную ошибку, а не создаст фиктивные активы. Лимиты PDF: 10 MiB; OCR-скан — не более 30 страниц.
 
+## Agent credentials и re-enrolment
+
+`POST /admin/agent-credentials` выдаёт секрет один раз, хранит только PBKDF2 hash и после первой инвентаризации связывает credential с endpoint. Отзыв немедленно запрещает новые отправки.
+
+После переустановки Windows installer создаёт 30-минутный запрос через `/agent/re-enrolments`, используя SMBIOS UUID только для сопоставления. Администратор организации подтверждает запрос в панели; старый активный credential отзывается, новый создаётся без хранения claim token в plaintext, а endpoint и история инвентаризации сохраняются. Решение и ограничения зафиксированы в [ADR-005](../docs/decisions/ADR-005-agent-reenrolment.md).
+
 ## Ограничения текущего этапа
 
-- Native endpoint подтверждён локальным end-to-end запуском неизменённого GLPI Agent 1.19; production TLS/DNS acceptance ещё не выполнен.
+- Native endpoint подтверждён GLPI Agent 1.19 и 1.20 на двух реальных Windows-PC через production TLS endpoint; полный fleet lifecycle test на 3–5 ПК ещё не завершён.
 - Vision не поддерживает RTSP, quality gate, multi-frame aggregation и автоматический `ANOMALY`.
-- Иерархия корпус/этаж/кабинет и точечная привязка Vision к кабинету реализованы; импорт не извлекает из PDF кабинет без явных данных и пока не поддерживает RTSP, много кадров и подтверждение аномалий.
-- Deployment acceptance на целевом сервере ещё не выполнен.
+- Иерархия корпус/этаж/кабинет и привязка Vision к кабинету реализованы; импорт не извлекает из PDF кабинет без явных данных.
+- Production HTTPS deployment, R2 upload/download и isolated PostgreSQL restore приняты 2026-09-27. Vision image volume в backup пока не входит.
+- Windows installer `0.1.7` остаётся неподписанным и не должен распространяться массово до code signing и проверки update/rollback.
 
 Эти границы предотвращают ситуацию, когда inventory принимается без неизменяемого RawInventory, payload limit и audit trail.

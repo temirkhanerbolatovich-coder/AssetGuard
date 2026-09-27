@@ -1,5 +1,7 @@
 # Dashboard data audit
 
+> **Исторический аудит.** Замечания использовались при реализации текущего Dashboard. Актуальное поведение описано в [UX workflow](ux-workflow.md), а автоматическая проверка находится в browser E2E.
+
 Дата проверки: 2026-09-23. Источники: GLPI Agent 1.19, сохранённые raw inventories, SQLAlchemy models, REST handlers и browser Dashboard.
 
 ## Фактический путь данных

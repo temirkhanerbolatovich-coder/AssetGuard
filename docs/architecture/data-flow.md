@@ -72,6 +72,26 @@ sequenceDiagram
 
 Bootstrap admin/viewer shared secrets проходят через тот же header, но не имеют named-user lifecycle. Agent traffic использует отдельные per-agent credentials с legacy shared-secret fallback.
 
+## Восстановление Agent после переустановки Windows
+
+```mermaid
+sequenceDiagram
+    participant Installer
+    participant API
+    participant Admin
+    participant DB as PostgreSQL
+    Installer->>API: SMBIOS UUID + hostname + installer version
+    API->>DB: match active endpoint; store token hashes and 30-minute request
+    API-->>Installer: request id + one-time claim token
+    Admin->>API: approve tenant-scoped request
+    API->>DB: revoke old active credential; create new hashed credential
+    Installer->>API: poll with claim token
+    API-->>Installer: approved + Agent username
+    Installer->>API: GLPI inventory using username + claim token
+```
+
+UUID используется для сопоставления, но не считается секретом или самостоятельным доказательством владения устройством. Публичный create-response не раскрывает, найден ли endpoint. Claim token остаётся в памяти installer и хранится сервером только как SHA-256/PBKDF2 hashes. Неизвестный, чужой, отклонённый или просроченный запрос не меняет credentials. Одобрение сохраняет прежний endpoint и историю инвентаризации.
+
 ## Backup и восстановление
 
 Windows- и Linux-скрипты формируют PostgreSQL dump, шифруют его контейнером AGBK1 (AES-256-GCM) и отправляют в Cloudflare R2. Restore rehearsal скачивает последнюю off-site копию, расшифровывает её и проверяет восстановление в отдельной базе. R2 upload/download/restore cycle успешно проверен 2026-09-27 через Windows Task Scheduler и постоянный Linux server; server rehearsal вернул `0024`, `assets=211`, `endpoints=1`. Vision image volume в этот backup не входит и требует отдельного решения до production-сбора фотографий.
@@ -82,4 +102,5 @@ Windows- и Linux-скрипты формируют PostgreSQL dump, шифру�
 - Baseline меняется только явной операцией.
 - События изменений имеют dedup key.
 - Tenant-scoped запросы фильтруются по `organization_id`; доступ к помещениям дополнительно ограничивается grants.
+- В каждый момент с endpoint связан не более чем один активный Agent credential; отозванные credentials сохраняются для аудита.
 - Значимые изменения состояния отражаются в endpoint или asset history.

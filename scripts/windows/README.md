@@ -29,9 +29,7 @@ Upstream GLPI Agent устанавливается отдельно: AssetGuard 
 
 `NetworkTarget` измеряет только четыре ICMP-пробы: адрес цели, число ответов, потери и среднюю задержку. Скорость канала, содержимое трафика, список посещений и учётные данные не собираются.
 
-Для primary native transport настройте поддерживаемый GLPI Agent 1.19 или 1.20 на `https://<host>/glpi-agent`, Basic user `assetguard`, rotating inventory secret и profile `glpi-agent-minimal-profile.cfg`. Новые установки закреплены на версии 1.20; неизвестный будущий релиз установщик отклонит до отдельного contract test. Explicit `send-minimal-inventory.ps1` остаётся fallback для автономного collection режима. Production credentials должны храниться в защищённой конфигурации агента с ограниченным ACL, а не в командном файле.
-
-## Установка Windows-службы агента
+Для primary native transport настройте поддерживаемый GLPI Agent 1.19 или 1.20 на `https://<host>/glpi-agent`, отдельный Basic username/secret устройства и profile `glpi-agent-minimal-profile.cfg`. Новые установки закреплены на версии 1.20; неизвестный будущий релиз установщик отклонит до отдельного contract test. Legacy user `assetguard` с общим rotating secret остаётся только migration fallback. Explicit `send-minimal-inventory.ps1` используется для автономного collection режима. Production credentials должны храниться в защищённой конфигурации агента с ограниченным ACL, а не в командном файле.
 
 ## Графический установщик для других компьютеров
 

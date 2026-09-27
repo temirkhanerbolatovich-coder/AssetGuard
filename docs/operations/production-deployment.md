@@ -137,3 +137,15 @@ commit `7a3f7f2`. It pins clean WinGet installations to GLPI Agent 1.20, keeps
 in the device card. No database migration was required. Post-deployment readiness,
 Alembic head, public `app.js` hash and server monitoring passed; the previous API
 image remains tagged as `assetguard-api:rollback-8434dfb`.
+
+## Repository changes awaiting deployment
+
+Repository commit `3216a11` advances Alembic head to `0025_agent_reenrolment` and adds installer `0.1.7` source with lifecycle version reporting and administrator-approved re-enrolment. Local backend, browser E2E and installer compilation passed, but this revision is not recorded as deployed by this runbook. Before rollout:
+
+1. create and verify a fresh encrypted backup;
+2. retain the current API image under an explicit rollback tag;
+3. deploy the exact commit and apply migration `0025`;
+4. verify readiness, public asset hashes and re-enrolment admin routes;
+5. test `0.1.7` on the third pilot PC before publishing its GitHub release.
+
+Do not rewrite the earlier deployment record: it is evidence of the exact state that was verified on 2026-09-27.

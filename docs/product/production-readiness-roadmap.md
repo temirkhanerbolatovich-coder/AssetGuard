@@ -9,7 +9,7 @@
 - [x] Self-service re-enrolment после переустановки Windows: сопоставление по SMBIOS UUID, одноразовый claim token, подтверждение администратора и автоматический revoke прежнего credential.
 - [ ] Migration от legacy общего inventory secret с датой отключения fallback.
 - [~] Tenant model: school/organisation, tenant-bound users/credentials и job roles `LOCATION_MANAGER`/`INVENTORY_CLERK` есть; отдельная полномочная модель `TENANT_ADMIN`/`OPERATOR` ещё не выделена.
-- [~] Tenant filtering внедрён на assets, endpoints, raw inventories, incidents, Vision, Excel/PDF и identity API; нужен полный matrix-тест всех admin routes перед multi-school rollout.
+- [x] Tenant filtering и исполняемая allow/deny-матрица покрывают все 60 защищённых admin operations, включая Agent credentials и re-enrolment.
 - [ ] SSO/AD или хотя бы MFA для production admin accounts.
 
 ## Этап 2: надёжная эксплуатация
@@ -46,6 +46,6 @@
 - [~] QR-коды карточек, location reports и полный физический обход из карточки кабинета доступны; QR-запуск mobile audit, in-app notifications и 1C/AD/helpdesk integrations ещё нужны.
 - [ ] Vision production track: object storage, quality gate, multi-frame/RTSP, evaluation dataset и human confirmation.
 
-## Не делать до этапа 1
+## Ограничение rollout
 
-Не подключать камеры, RTSP, 1С или массовую установку на реальные школы, пока нет tenant isolation, индивидуальных Agent credentials и production backup/monitoring.
+Не подключать камеры, RTSP, 1С и не начинать массовую установку в реальных школах, пока не завершены fleet test 3–5 ПК, code signing/update rollback, отключение legacy credential, data governance и приёмка изоляции на двух организациях. Наличие автоматических matrix tests не заменяет эксплуатационную приёмку.

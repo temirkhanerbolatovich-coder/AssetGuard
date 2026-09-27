@@ -1,5 +1,7 @@
 # AssetGuard MVP v0.1 — чек-лист завершения
 
+> **Историческая фиксация demo MVP.** Документ сохраняет критерии завершённого этапа. Актуальные Agent lifecycle, schema `0025`, production readiness и следующие задачи ведутся в [current project checklist](current-project-checklist.md).
+
 Дата актуализации: 2026-09-27. Чек-лист включает computer inventory MVP, PDF/OCR импорт, демонстрационный AssetGuard Vision vertical slice и физический обход кабинета.
 
 ## Текущая оценка
@@ -15,7 +17,7 @@
 | GLPI Agent | Готово | GLPI Agent 1.19/1.20 проверены на реальных Windows-PC; новые установки закреплены на 1.20, minimal privacy profile сохранён. |
 | Collection/transport | Готово для 1.19/1.20 | Native uncompressed XML PROLOG/INVENTORY и explicit JSON bridge проверены end-to-end. |
 | Raw evidence | Готово | Append-only JSONB payload, hash, idempotency и processing status. |
-| PostgreSQL | Готово | Migrations для raw inventory, snapshots, baseline, change events, incidents, assets, users и Vision. |
+| PostgreSQL | Готово | Migrations для raw inventory, snapshots, baseline, change events, incidents, assets, users, Agent lifecycle и Vision. |
 | Asset / endpoint | Готово | Assets связаны с актуальным endpoint; один asset имеет только один текущий endpoint. |
 | Snapshots | Готово | Нормализуются RAM, storage, CPU, GPU, motherboard, network и monitor observations. |
 | Baseline | Готово | Принятие только явным действием; automatic baseline update отсутствует. |
@@ -24,7 +26,7 @@
 | PARTIAL safety | Готово | Partial inventory не создаёт ложное удаление RAM/SSD. |
 | Dashboard | Готово | Attention-first обзор, поиск/фильтры, связанные и непривязанные устройства, полная карточка Agent-данных, baseline, читаемое «Было → Стало», incidents и timeline. |
 | AssetGuard Vision | Готово для demo | Image upload, Grounding DINO, bounding boxes, counts, baseline, comparison, `WARNING` и history; кабинет связан с локацией и доступ фильтруется. RTSP и связка каждой detection с endpoint остаются будущим этапом. |
-| Иерархия и права локаций | Частично | Организация → корпус → этаж → кабинет, grants VIEWER/EDITOR и единая карточка кабинета с имуществом, Agent, Vision, инцидентами, физическими обходами и историей работают; полный tenant-route matrix ещё нужен. |
+| Иерархия и права локаций | Готово для текущих routes | Организация → корпус → этаж → кабинет, grants VIEWER/EDITOR и единая карточка кабинета работают; исполняемая матрица покрывает 60 защищённых admin operations. Отдельная роль администратора школы остаётся следующим этапом. |
 | Физический обход | Готово для кабинета | ADMIN/EDITOR отмечает каждую позицию как присутствующую, отсутствующую или повреждённую; акт хранит количества, комментарии, исполнителя и серверное время. Для проблемы автоматически создаётся инцидент с решениями «проверка / перемещение / ремонт / списание / не подтвердилось». Акты и решения append-only. |
 | Перемещение и списание | Готово | Подтверждённая операция меняет кабинет/остаток/статус, частично разделяет только групповые позиции, проверяет доступ к обеим локациям и формирует PDF-акт. |
 | Background demo | Готово | User-level demo tasks и production Compose deployment с restart policy. |
@@ -68,7 +70,7 @@
 
 - RTSP/camera scheduler, quality gate, multi-frame aggregation и `ANOMALY` confirmation;
 - QR-запуск мобильного обхода; подтверждаемые перемещение и списание с PDF-актом уже работают;
-- 1С/AD integrations, Linux/macOS Agent, полный matrix-тест tenant/location границ всех admin API;
+- 1С/AD integrations, Linux/macOS Agent и отдельная роль администратора школы;
 - связывание каждой Vision detection с конкретным endpoint/asset;
 - custom agent, remote desktop, helpdesk, automatic theft detection.
 

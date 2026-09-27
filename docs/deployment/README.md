@@ -23,3 +23,5 @@ Production публикует только Caddy на портах 80/443. Caddy
 - Backup и recovery: разделы production runbook.
 
 Перед production deployment обязательны уникальные secrets, DNS, открытые 80/443, persistent volumes и проверка `/health` и `/health/ready`. End-to-end цикл encrypted upload → download → isolated restore из Cloudflare R2 подтверждён 2026-09-27 через Windows Task Scheduler и постоянный Linux server. Server backup, restore rehearsal и monitor timers установлены; Telegram test alert принят, повторный запуск подавлен дедупликацией.
+
+Текущий repository `head` требует migration `0025_agent_reenrolment`. Последняя доказанная R2-копия была восстановлена на revision `0024`; перед выкладкой `0025` необходимо создать новый backup, применить migration и отдельно проверить rollback API/image по [production runbook](../operations/production-deployment.md). Это ограничение не следует путать с уже подтверждённой общей работоспособностью R2 restore.

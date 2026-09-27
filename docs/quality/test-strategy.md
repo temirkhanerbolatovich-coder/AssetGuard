@@ -1,5 +1,7 @@
 # Стратегия проверки MVP
 
+> **Исторический документ.** Это ранняя стратегия demo MVP. Текущий набор, команды запуска, CI и эксплуатационные проверки описаны в [актуальной стратегии тестирования](../testing/testing-strategy.md).
+
 ## Слои
 
 | Слой | Проверяемое свойство |
@@ -20,4 +22,4 @@
 
 Фикстуры хранятся без secrets и персональных данных в `backend/tests/fixtures/`.
 
-Статус на 2026-09-23: pytest tests проходят на disposable PostgreSQL database. Проверяются fixture-сценарии, JSON bridge и native GLPI XML PROLOG/INVENTORY, полная inventory цепочка, RBAC, endpoint identity и Vision workflow. GitHub Actions поднимает PostgreSQL, запускает tests, `pip check`, JavaScript/PowerShell syntax checks и production Compose validation. Отдельный ручной и еженедельный job `Grounding DINO real-model smoke` устанавливает `backend[vision]`, кэширует Hugging Face model и обрабатывает demo-кадр настоящей моделью. Это runtime smoke, а не тест точности распознавания.
+Статус на 2026-09-23 сохранён как историческое свидетельство: pytest проходил на disposable PostgreSQL database, а GitHub Actions проверял backend, JavaScript/PowerShell и Compose. Документ не отражает более поздние Agent lifecycle, tenant matrix, backup и browser E2E проверки.
