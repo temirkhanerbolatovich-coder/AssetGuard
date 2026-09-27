@@ -87,7 +87,7 @@ Grounding DINO real-model smoke выполняется отдельно по р�
 ## Подтверждённые пробелы
 
 - Нет нагрузочных и длительных soak tests.
-- Нет автоматического production restore test из R2.
+- R2 restore rehearsal реализован как эксплуатационный скрипт: ручной цикл и запуск через Windows Task Scheduler прошли 2026-09-27. Постоянный серверный контур ещё не принят.
 - Real-model smoke проверяет работоспособность pipeline, но не точность модели на репрезентативном датасете.
 - Реальный fleet GLPI Agent и production failover остаются ручными проверками.
 

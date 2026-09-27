@@ -1,12 +1,12 @@
 # AssetGuard MVP v0.1 — чек-лист завершения
 
-Дата актуализации: 2026-09-25. Чек-лист включает computer inventory MVP, PDF/OCR импорт, демонстрационный AssetGuard Vision vertical slice и физический обход кабинета.
+Дата актуализации: 2026-09-27. Чек-лист включает computer inventory MVP, PDF/OCR импорт, демонстрационный AssetGuard Vision vertical slice и физический обход кабинета.
 
 ## Текущая оценка
 
 - Демонстрационный MVP через native GLPI transport и explicit bridge: **готов**.
 - Native GLPI Agent 1.19 `PROLOG → INVENTORY` проверен реальным компьютером через production HTTPS endpoint.
-- Постоянный Oracle Cloud deployment с DuckDNS и TLS работает; локальный encrypted restore rehearsal выполнен, off-site recovery остаётся незакрытым.
+- Постоянный Oracle Cloud deployment с DuckDNS и TLS работает; encrypted off-site recovery из Cloudflare R2 подтверждён ручным rehearsal 2026-09-27.
 
 ## Реализовано
 
@@ -32,7 +32,7 @@
 | GitHub | Готово | Public repository: `temirkhanerbolatovich-coder/AssetGuard`. |
 | Automated tests | Готово | Disposable PostgreSQL, JSON/native inventory, Vision workflow, auth lifecycle, identity conflict и Playwright browser E2E; GitHub Actions workflow. |
 | Бесплатный demo deployment | Готово | Docker Compose + Cloudflare Quick Tunnel, временный публичный HTTPS URL без домена. |
-| Encrypted backup | Готово локально | AES-256-GCM backup, restore и optional off-site copy на диск или `rclone`; fresh local restore rehearsal passed 2026-09-24, off-site здесь не настроен. |
+| Encrypted backup | Готово на Windows | AES-256-GCM backup, Cloudflare R2 upload/download и isolated restore; fresh off-site rehearsal passed 2026-09-27. Daily backup и weekly rehearsal через Windows Task Scheduler в тот же день завершились с кодом `0`; постоянный серверный контур требует отдельной приёмки. |
 | Excel/PDF импорт и экспорт | Готово для поддерживаемых ведомостей | PDF разбирается постранично; сканы — через локальный Tesseract OCR. Перед записью можно проверить все строки, искать, листать по 25 позиций, видеть create/update и исключать строки. Пустые формы и неподтверждённые сводные данные не превращаются в фиктивный реестр. |
 
 ## Оставшаяся работа
@@ -57,11 +57,11 @@
 - [x] Rate limiting, security headers, request logging, immutable evidence retention и backup/restore runbook.
 - [x] Endpoint last-seen policy: `REQUIRES_VERIFICATION`, без автоматического вывода о пропаже или краже.
 - [x] Managed production deployment: Docker restart policy, независимо от интерактивной Windows-сессии.
-- [~] Deployment acceptance: постоянный Oracle Cloud host, DuckDNS и публичный TLS проверены; restore rehearsal на выбранном off-site storage ещё не выполнен.
+- [x] Deployment recovery acceptance: Cloudflare R2 upload/download и isolated restore rehearsal успешно выполнены 2026-09-27.
 - [x] Native GLPI Agent 1.19 protocol spike и `DirectGlpiAgentAdapter`.
 - [x] Browser E2E через Playwright/Chromium в GitHub Actions.
 - [x] Optional real Grounding DINO CI smoke job: ручной и еженедельный workflow с настоящей моделью и demo-кадром.
-- [x] Isolated encrypted-backup restore rehearsal: отдельный disposable PostgreSQL без опубликованных портов, проверка Alembic revision и entity counts; успешно выполнен локально 2026-09-24.
+- [x] Isolated encrypted-backup restore rehearsal: отдельный disposable PostgreSQL без опубликованных портов, проверка Alembic revision и entity counts; локально выполнен 2026-09-24, из свежей R2-копии — 2026-09-27.
 - [x] PDF import preview: все найденные строки выдаются API; применение по-прежнему только после явного подтверждения, отдельные строки можно исключить.
 
 ### За пределами текущего demo

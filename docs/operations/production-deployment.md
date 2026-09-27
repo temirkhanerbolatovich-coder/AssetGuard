@@ -83,3 +83,16 @@ pwsh -File scripts/windows/verify-backup-restore.ps1 `
 ```
 
 Never use `restore-database.ps1` merely to prove that a backup works: that command writes into the operational database.
+
+For the configured Cloudflare R2 remote, create and rehearse an off-site copy without writing to the operational database:
+
+```powershell
+pwsh -File scripts/windows/backup-database.ps1 `
+  -OffsiteTarget 'assetguard-r2:assetguard-backups/daily' `
+  -NonInteractive
+
+pwsh -File scripts/windows/invoke-latest-backup-rehearsal.ps1 `
+  -OffsiteTarget 'assetguard-r2:assetguard-backups/daily'
+```
+
+The R2 token must be an account token with Object Read & Write limited to the backup bucket. Do not store its Access Key ID or Secret Access Key in the repository or runbook. On 2026-09-27 this exact flow uploaded `assetguard-20260927-150843.sql.agbackup`, downloaded it from R2 and restored it into an isolated PostgreSQL container. Verification returned `PASS`, Alembic revision `0024_physical_asset_operations`, `assets=50`, `managed_endpoints=5` and `raw_inventories=18`. The installed Windows daily-backup and weekly-rehearsal tasks were then started through Task Scheduler and both returned `LastTaskResult=0`. A permanent-server schedule and alerting still require a separate acceptance run.

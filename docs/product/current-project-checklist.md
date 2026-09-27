@@ -13,7 +13,7 @@ Production: **https://assetguard-temirkhan.duckdns.org**
 
 AssetGuard уже является работающим pilot MVP: школьный реестр, структура помещений, Windows Agent, техническая инвентаризация, baseline и инциденты, физические обходы, реальные перемещение/списание, Excel/PDF, QR, пользователи и доступы, локальный Vision, постоянный HTTPS-сервер и CI работают.
 
-Для полноценного многопользовательского production-продукта в нескольких школах ещё нужны прежде всего off-site backup, серверный мониторинг, полный аудит tenant/location-доступа, испытание парка реальных ПК, политика хранения данных и безопасное обновление подписанного Agent.
+Для полноценного многопользовательского production-продукта в нескольких школах ещё нужны прежде всего автоматическая приёмка backup/monitoring на постоянном сервере, испытание парка реальных ПК, политика хранения данных и безопасное обновление подписанного Agent.
 
 Обозначения:
 
@@ -52,7 +52,7 @@ AssetGuard уже является работающим pilot MVP: школьн�
 | Сетевые метрики Agent | ✅ базово | Опциональные ICMP availability, packet loss и average latency | Inventory fixture |
 | Безопасность API | ✅ foundation | HTTPS, security headers, payload limits, app rate limiting, секреты вне Git, immutable evidence/history | CI и production config |
 | Dependency scanning | ✅ | `pip check`, строгий `pip-audit`, Dependabot | GitHub Actions |
-| Backup/restore tooling | 🟡 | AES-256-GCM backup, DPAPI-пароль, R2 upload/retention и isolated restore rehearsal реализованы; Windows/Linux AGBK1 совместимость исправлена | После смены PowerShell runtime и ошибки R2 `SignatureDoesNotMatch` нужен повторный end-to-end rehearsal |
+| Backup/restore tooling | ✅ Windows | AES-256-GCM backup, DPAPI-пароль, R2 upload/retention и isolated restore rehearsal реализованы; Windows/Linux AGBK1 совместимость исправлена | Свежий R2 цикл завершён `PASS`; daily/weekly scheduled tasks завершились с кодом `0` 2026-09-27 |
 | Telegram monitoring | ✅ локальный контур | DPAPI credentials, offline Agent / failed ingest / identity conflict / disk alerts, дедупликация | Скрипты и рабочая настройка |
 | Постоянный deployment | ✅ | Oracle Cloud Always Free, Docker Compose, Caddy, DuckDNS, TLS, restart policy | Public health/readiness |
 | CI | ✅ | PostgreSQL tests, browser E2E, dependency audit, JS/PowerShell checks, Compose validation | GitHub Actions |
@@ -63,9 +63,9 @@ AssetGuard уже является работающим pilot MVP: школьн�
 
 | Область | Что уже есть | Чего не хватает до полного production |
 | --- | --- | --- |
-| Multi-tenant | Organization scope есть у пользователей, credentials, assets, endpoints, inventory и Vision; начата route/access matrix, добавлены negative tests чужих snapshot/baseline/change/incident/history и location-scoped endpoint | Параметризовать A/V/E/F-проверки для каждого admin route; отдельная роль tenant administrator; тест двух реальных школ |
+| Multi-tenant | Organization scope есть у пользователей, credentials, assets, endpoints, inventory и Vision; исполняемая allow/deny-матрица покрывает все 57 защищённых admin operations | Отдельная роль tenant administrator и тест двух реальных школ |
 | Мониторинг | `/health`, `/health/ready`, логи и Telegram PowerShell monitor | Постоянный monitor на сервере, метрики API/БД/диска/backup age, escalation и dashboard наблюдаемости |
-| Backup | Зашифрованные копии, расписание, Cloudflare R2, ротация 14 дней локально / 30 дней off-site и restore rehearsal именно из R2 | Повторно авторизовать R2, переустановить задачи на `pwsh`, получить успешные автоматические запуски и сохранить протокол |
+| Backup | Зашифрованные копии, Cloudflare R2, ротация 14 дней локально / 30 дней off-site; ручной R2 rehearsal `PASS`, Windows daily/weekly tasks `LastTaskResult=0` 2026-09-27 | Перенести расписание на постоянный сервер, подтвердить retention и подключить alert по возрасту копии |
 | Vision production | Полный локальный photo workflow и настоящий model smoke в CI | Oracle Free VM не тянет ML runtime; нужны отдельный inference host/GPU либо более мощный сервер, object storage и accuracy evaluation |
 | Хранение данных | Raw evidence и audit защищены от изменения; Vision лежит в persistent volume | Утверждённые сроки хранения, автоматическая очистка/архив Vision, экспорт и процедура удаления по политике |
 | Installer lifecycle | Установка службы и первичное подключение работают | Code signing, SmartScreen reputation, versioned update/rollback и массовое развёртывание |
@@ -106,12 +106,11 @@ AssetGuard уже является работающим pilot MVP: школьн�
 
 ### P0 — обязательны до пилота с реальной школой
 
-1. **Off-site backup:** повторно авторизовать Cloudflare R2, переустановить задачи через PowerShell 7 и подтвердить ежедневное копирование, ротацию и weekly restore rehearsal из внешней копии.
+1. **Production backup operations:** перенести проверенную автоматизацию на постоянный сервер, подтвердить 30-дневную R2-ротацию и alert по возрасту/ошибке копии.
 2. **Серверный мониторинг:** перенести проверки с локального Windows monitor на постоянный контур; контролировать API, БД, диск, возраст backup, ingest errors и Agent last-seen.
-3. **Полная матрица доступа:** перечислить все `/admin/*` routes и для каждого автоматизировать ADMIN / scoped EDITOR / scoped VIEWER / foreign tenant allow-deny tests.
-4. **Fleet test:** установить Agent минимум на 3–5 разных ПК и проверить перезагрузку, отсутствие сети, повторную доставку, смену железа, revoke и восстановление службы.
-5. **Data governance:** утвердить, какие данные собираются, кто имеет доступ, где они хранятся и когда удаляются; отдельно определить срок жизни Vision-фотографий.
-6. **Release безопасности Agent:** подписать installer, зафиксировать SHA-256 и описать обновление/откат.
+3. **Fleet test:** установить Agent минимум на 3–5 разных ПК и проверить перезагрузку, отсутствие сети, повторную доставку, смену железа, revoke и восстановление службы.
+4. **Data governance:** утвердить, какие данные собираются, кто имеет доступ, где они хранятся и когда удаляются; отдельно определить срок жизни Vision-фотографий.
+5. **Release безопасности Agent:** подписать installer, зафиксировать SHA-256 и описать обновление/откат.
 
 ### P1 — следующий продуктовый релиз
 
@@ -138,8 +137,10 @@ AssetGuard уже является работающим pilot MVP: школьн�
 
 Результат: потеря сервера не приводит к потере данных, а ответственный узнаёт о сбое автоматически.
 
-- повторно авторизовать off-site remote и подтвердить backup retention;
-- восстановить свежий off-site backup в изолированную БД и сохранить протокол проверки;
+- [x] повторно авторизовать off-site remote и подтвердить ручной encrypted upload;
+- [x] восстановить свежий off-site backup в изолированную БД и сохранить протокол проверки;
+- [x] запустить Windows daily backup и weekly rehearsal через Task Scheduler; обе задачи завершились с кодом `0` 2026-09-27;
+- перенести расписание на постоянный сервер и подтвердить retention/alerting;
 - развернуть постоянный монитор и Telegram escalation;
 - добавить контроль срока последней успешной копии;
 - оформить rollback и аварийный runbook.
@@ -150,7 +151,7 @@ AssetGuard уже является работающим pilot MVP: школьн�
 
 Результат: пользователь одной организации не может получить данные другой ни одним API-запросом.
 
-- составить route/access matrix;
+- [x] составить исполняемую route/access matrix для всех 57 защищённых admin operations;
 - добавить negative tests для foreign tenant и чужой локации;
 - выделить полномочия tenant administrator;
 - внедрить полный admin audit;

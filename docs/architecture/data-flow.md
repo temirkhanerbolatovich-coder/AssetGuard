@@ -74,7 +74,7 @@ Bootstrap admin/viewer shared secrets проходят через тот же he
 
 ## Backup и восстановление
 
-Windows- и Linux-скрипты формируют PostgreSQL dump и архив файлов Vision, шифруют контейнером AGBK1 (AES-256-GCM) и могут отправлять его в Cloudflare R2. Restore rehearsal расшифровывает архив и проверяет восстановление в отдельной базе. Рабочий offsite rehearsal пока не подтверждён: известная проблема R2 вынесена в [technical debt](../technical-debt.md).
+Windows- и Linux-скрипты формируют PostgreSQL dump и архив файлов Vision, шифруют контейнером AGBK1 (AES-256-GCM) и могут отправлять его в Cloudflare R2. Restore rehearsal скачивает последнюю off-site копию, расшифровывает её и проверяет восстановление в отдельной базе. R2 upload/download/restore cycle успешно проверен 2026-09-27 вручную и через Windows Task Scheduler; расписание на постоянном сервере ещё требует эксплуатационного подтверждения.
 
 ## Инварианты
 
