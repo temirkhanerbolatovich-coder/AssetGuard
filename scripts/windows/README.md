@@ -10,6 +10,7 @@ Upstream GLPI Agent устанавливается отдельно: AssetGuard 
 - `install-pilot-agent-schedule.ps1` — ставит отдельное расписание Agent на каждом pilot-компьютере; поддерживает необязательные измерения packet loss и задержки до указанной цели;
 - `install-assetguard-agent-service.ps1` / `uninstall-assetguard-agent-service.ps1` — ставят upstream GLPI Agent как обычную Windows-службу с автозапуском, recovery и защищённым минимальным AssetGuard profile. Это рекомендуемый путь для pilot-PC;
 - `build-agent-installer.ps1` — собирает versioned `AssetGuard-Agent-Setup-<version>.exe`: мастер установки для передачи на другие Windows-компьютеры;
+- `request-assetguard-agent-reenrolment.ps1` — после переустановки Windows запрашивает восстановление по SMBIOS UUID и держит одноразовый claim token только в памяти до решения администратора;
 - `test-assetguard-agent-readiness.ps1` — собирает без секретов JSON-протокол для каждой фазы fleet test;
 - `start-free-public-demo.ps1` — поднимает контейнерный demo и временный публичный Cloudflare HTTPS URL;
 - `install-quick-tunnel-watchdog.ps1` / `uninstall-quick-tunnel-watchdog.ps1` — поддерживают Quick Tunnel после сбоя и при следующем входе в Windows; текущий URL находится в `%LOCALAPPDATA%\AssetGuard\quick-tunnel.json`;
@@ -56,10 +57,13 @@ winget install --id JRSoftware.InnoSetup --exact --source winget
 
 На каждом целевом ПК:
 
-1. В админ-панели создайте отдельные Agent credentials. Логин и ключ показываются один раз.
-2. Запустите EXE **от имени администратора**.
-3. Укажите `https://ваш-домен/glpi-agent`, уникальный логин и ключ. Для постоянной установки не используйте `trycloudflare.com`.
-4. Оставьте включённой первую инвентаризацию, затем откройте карточку устройства в AssetGuard и убедитесь, что endpoint появился.
+1. Для нового компьютера создайте в админ-панели отдельные Agent credentials. Логин и ключ показываются один раз.
+2. Запустите EXE **от имени администратора** и выберите «Новое подключение» либо «Восстановить после переустановки Windows».
+3. Для нового подключения укажите `https://ваш-домен/glpi-agent`, уникальный логин и ключ. Для постоянной установки не используйте `trycloudflare.com`.
+4. При восстановлении укажите только тот же HTTPS endpoint. Installer отправит SMBIOS UUID и будет ждать решения до 30 минут. Администратор должен открыть «Запросы восстановления Agent», сверить компьютер и UUID, затем подтвердить запрос. Подтверждение немедленно отзывает прежний ключ этого endpoint.
+5. Оставьте включённой первую инвентаризацию, затем откройте карточку устройства в AssetGuard и убедитесь, что новый inventory сохранился у прежнего endpoint.
+
+Re-enrolment не восстанавливает неизвестные устройства и не раскрывает публичному клиенту, существует ли UUID. Claim token становится новым inventory secret только после подтверждения, не записывается установщиком на диск и хранится сервером только как PBKDF2 hash. Отклонённый, просроченный или не подтверждённый запрос не меняет действующие credentials.
 
 Установщик требует Windows x64, доступ к интернету и WinGet. Он запрашивает ровно GLPI Agent 1.20 из источника `winget`, а не произвольную последнюю версию. На ПК без WinGet сначала установите официальный GLPI Agent 1.20 вручную; затем можно выполнить обычный service-скрипт с параметром `-SkipUpstreamInstall`. Уже установленные 1.19 также поддерживаются.
 

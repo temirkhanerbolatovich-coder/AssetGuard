@@ -1,6 +1,6 @@
 # AssetGuard — матрица доступа `/admin`
 
-Дата проверки: 27 сентября 2026 года. Матрица покрывает **57 protected operations** на 50 уникальных путях.
+Дата проверки: 27 сентября 2026 года. Матрица покрывает **60 protected operations** на 53 уникальных путях.
 
 ## Роли и location grants
 
@@ -49,14 +49,15 @@ Bootstrap/shared credential остаётся отдельным platform bootstr
 | `GET/POST/PATCH /admin/users` | Admin | tenant |
 | `GET/DELETE /admin/sessions` | Admin | tenant |
 | Agent credential list/create/revoke | Admin | tenant |
+| Agent re-enrolment list/approve/reject | Admin | tenant; чужой или неподтверждённый endpoint скрыт через `404` |
 | Location access list/create/delete | Admin | tenant |
 | `GET /admin/locations/organizations` | Admin | tenant |
 
 ## Автоматическое доказательство
 
-`tests/unit/test_admin_route_contract.py` хранит исполняемый реестр всех 57 method/path operations. Тест падает при добавлении, удалении или переносе операции между Admin и Viewer level. Там же автоматизирована allow/deny-матрица для всех четырёх ролей и запроса без token.
+`tests/unit/test_admin_route_contract.py` хранит исполняемый реестр всех 60 method/path operations. Тест падает при добавлении, удалении или переносе операции между Admin и Viewer level. Там же автоматизирована allow/deny-матрица для всех четырёх ролей и запроса без token.
 
-`tests/integration/test_tenant_isolation.py` создаёт две организации с asset, endpoint, raw inventory, snapshot, baseline, change, incident, history, Vision room, user, session и Agent credential. Он доказывает фильтрацию списков, `404` для foreign UUID и запрет изменения foreign resources.
+`tests/integration/test_tenant_isolation.py` создаёт две организации с asset, endpoint, raw inventory, snapshot, baseline, change, incident, history, Vision room, user, session, Agent credential и re-enrolment request. Он доказывает фильтрацию списков, `404` для foreign UUID и запрет изменения foreign resources.
 
 `tests/integration/test_location_scoped_resources.py` проверяет grants `VIEWER`/`EDITOR`, фильтрацию exports/Vision и `404` для неразрешённого помещения, включая endpoint detail, report, workspace, inspections и Vision baseline.
 

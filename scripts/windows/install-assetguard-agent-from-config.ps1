@@ -58,12 +58,23 @@ try {
     $secret = [string]$config.inventorySecret
     $installerVersion = [string]$config.installerVersion
     $runNow = [bool]$config.runInventoryNow
+    $reEnrol = [bool]$config.reEnrol
 
-    if ([string]::IsNullOrWhiteSpace($installerVersion) -or [string]::IsNullOrWhiteSpace($gateway) -or [string]::IsNullOrWhiteSpace($username) -or [string]::IsNullOrWhiteSpace($secret)) {
+    if ([string]::IsNullOrWhiteSpace($installerVersion) -or [string]::IsNullOrWhiteSpace($gateway)) {
         throw 'Installer configuration is incomplete.'
     }
-
-    $secureSecret = ConvertTo-SecureString -String $secret -AsPlainText -Force
+    if ($reEnrol) {
+        $reenrolment = & (Join-Path $PSScriptRoot 'request-assetguard-agent-reenrolment.ps1') `
+            -GatewayUri ([uri]$gateway) -InstallerVersion $installerVersion
+        $username = $reenrolment.AgentUsername
+        $secureSecret = $reenrolment.InventorySecret
+    }
+    else {
+        if ([string]::IsNullOrWhiteSpace($username) -or [string]::IsNullOrWhiteSpace($secret)) {
+            throw 'Installer configuration does not contain Agent credentials.'
+        }
+        $secureSecret = ConvertTo-SecureString -String $secret -AsPlainText -Force
+    }
     $arguments = @{
         GatewayUri = [uri]$gateway
         AgentUsername = $username
@@ -80,4 +91,7 @@ catch {
 finally {
     # The only plaintext copy created by the wizard must not remain on disk.
     Remove-OneTimeConfig $ConfigPath
+    $secret = $null
+    $secureSecret = $null
+    $reenrolment = $null
 }

@@ -48,6 +48,9 @@ ADMIN_OPERATIONS: frozenset[Operation] = frozenset(
         ("GET", "/admin/agent-credentials"),
         ("POST", "/admin/agent-credentials"),
         ("POST", "/admin/agent-credentials/{credential_id}/revoke"),
+        ("GET", "/admin/agent-re-enrolments"),
+        ("POST", "/admin/agent-re-enrolments/{request_id}/approve"),
+        ("POST", "/admin/agent-re-enrolments/{request_id}/reject"),
         ("POST", "/admin/vision/scans"),
         ("POST", "/admin/vision/rooms/{room_id}/baseline"),
     }
@@ -208,6 +211,6 @@ def test_access_matrix_documentation_tracks_the_executable_policy() -> None:
         / "security"
         / "admin-route-access-matrix.md"
     ).read_text(encoding="utf-8")
-    assert "57 protected operations" in matrix
+    assert "60 protected operations" in matrix
     for role in ALLOWED_ROLES["viewer"]:
         assert f"`{role}`" in matrix

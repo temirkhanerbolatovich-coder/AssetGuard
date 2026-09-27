@@ -32,14 +32,15 @@
 - Сессия становится недействительной после expiry, отзыва или отключения пользователя.
 - Admin API получает credential в `X-AssetGuard-Admin-Token`.
 - Agent credentials хранятся в хэшированном виде. Для ротации поддержаны previous inventory/admin shared secrets.
+- Re-enrolment после переустановки требует совпадения нормализованного SMBIOS UUID и решения `ADMIN`. Одноразовый claim token действует 30 минут: сервер хранит SHA-256 для lookup и PBKDF2 hash для нового Agent credential, но не plaintext.
 
-MFA, SSO и recovery flow в коде отсутствуют.
+MFA и SSO в коде отсутствуют. Re-enrolment восстанавливает только Agent credential и не является recovery для учётной записи администратора.
 
 ## Authorization
 
 В коде используются роли `ADMIN`, `VIEWER`, `LOCATION_MANAGER` и `INVENTORY_CLERK`. Named principal содержит `organization_id`; tenant-scoped ресурсы фильтруются по нему. Для помещений предусмотрены grants `VIEWER` и `EDITOR`.
 
-Смысл ролей подтверждается route dependencies, исполняемой allow/deny-матрицей всех 57 защищённых operations и tenant/location integration tests. Актуальная матрица находится в [admin-route-access-matrix.md](admin-route-access-matrix.md).
+Смысл ролей подтверждается route dependencies, исполняемой allow/deny-матрицей всех 60 защищённых operations и tenant/location integration tests. Актуальная матрица находится в [admin-route-access-matrix.md](admin-route-access-matrix.md).
 
 ## Защита входных данных
 
@@ -68,6 +69,7 @@ Backup scripts поддерживают шифрование AES-256-GCM и rest
 - `test_tenant_isolation.py` — разделение организаций;
 - `test_location_scoped_resources.py` — доступ к помещениям;
 - `test_native_glpi_transport.py` — agent transport authentication;
+- `test_agent_reenrolment.py` — claim token, admin approval, автоматический revoke и сохранение endpoint;
 - `test_privacy_profile_fixture.py` — минимальный профиль собираемых данных;
 - `test_backup_crypto_interop.py` — совместимость backup crypto;
 - GitHub Actions — Gitleaks и `pip-audit`.

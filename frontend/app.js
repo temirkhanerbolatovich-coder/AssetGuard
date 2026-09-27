@@ -111,7 +111,7 @@ const bytes = (value) => {
 };
 const storageSize = (value) => value == null ? "—" : `${(Number(value) / 1024).toFixed(Number(value) % 1024 ? 1 : 0)} ГБ`;
 const ramBytes = (value) => value == null ? null : (Number(value) < 1048576 ? Number(value) * 1048576 : Number(value));
-const statusLabels = {OK:"В норме",ATTENTION:"Требует внимания",ANOMALY:"Обнаружено расхождение",OFFLINE:"Не в сети",UNCHECKED:"Нет данных Agent",MANUAL:"Ручной учёт",WARNING:"Требует внимания",NOT_CHECKED:"Не проверено",ONLINE:"В норме",REQUIRES_VERIFICATION:"Требует проверки",IDENTITY_CONFLICT:"Конфликт идентификации",OPEN:"Открыто",UNDER_REVIEW:"На проверке",RESOLVED:"Закрыто",DISMISSED:"Не подтверждено",ACTIVE:"Активен",WRITTEN_OFF:"Списан",REVOKED:"Отозван"};
+const statusLabels = {OK:"В норме",ATTENTION:"Требует внимания",ANOMALY:"Обнаружено расхождение",OFFLINE:"Не в сети",UNCHECKED:"Нет данных Agent",MANUAL:"Ручной учёт",WARNING:"Требует внимания",NOT_CHECKED:"Не проверено",ONLINE:"В норме",REQUIRES_VERIFICATION:"Требует проверки",IDENTITY_CONFLICT:"Конфликт идентификации",OPEN:"Открыто",UNDER_REVIEW:"На проверке",RESOLVED:"Закрыто",DISMISSED:"Не подтверждено",ACTIVE:"Активен",WRITTEN_OFF:"Списан",REVOKED:"Отозван",PENDING:"Ожидает решения",APPROVED:"Подтверждён",REJECTED:"Отклонён",EXPIRED:"Истёк"};
 const categoryLabels = {IT:"IT-оборудование",FURNITURE:"Мебель",SPORTS:"Спортинвентарь",EDUCATIONAL:"Учебное оборудование",OTHER:"Другое имущество"};
 const componentLabels = {RAM:"Оперативная память",STORAGE:"Физические накопители",DRIVE:"Разделы дисков",CONTROLLER:"Контроллеры",CPU:"Процессор",GPU:"Видеокарта",MOTHERBOARD:"Материнская плата",NETWORK:"Сетевые интерфейсы",MONITOR:"Мониторы",ENDPOINT:"Устройство"};
 const eventLabels = {COMPONENT_ADDED:"Компонент добавлен",COMPONENT_REMOVED:"Компонент отсутствует",COMPONENT_CHANGED:"Характеристики изменились",COMPONENT_REPLACED:"Компонент заменён",HOSTNAME_CHANGED:"Изменилось имя компьютера",DEVICE_IDENTITY_CHANGED:"Изменился идентификатор устройства",INVENTORY_COMPLETED:"Инвентаризация завершена",BASELINE_ACCEPTED:"Эталон подтверждён",HARDWARE_CHANGE_DETECTED:"Обнаружено изменение оборудования",INCIDENT_CREATED:"Создано обращение",INCIDENT_CLASSIFIED:"Обращение классифицировано",INCIDENT_RESOLVED:"Обращение закрыто",ASSET_CREATED:"Актив добавлен",ASSET_UPDATED:"Карточка обновлена",ASSET_MOVED:"Имущество перемещено",ASSET_WRITTEN_OFF:"Имущество списано",ENDPOINT_LINKED:"Устройство связано с активом",ENDPOINT_UNLINKED:"Устройство отвязано",VISION_SCAN_COMPLETED:"Фотопроверка завершена",PHYSICAL_INSPECTION_COMPLETED:"Физический обход завершён",PHYSICAL_INCIDENT_CREATED:"Создан физический инцидент",PHYSICAL_INCIDENT_CLASSIFIED:"Физический инцидент взят на проверку",PHYSICAL_INCIDENT_RESOLVED:"Физический инцидент закрыт"};
@@ -537,6 +537,18 @@ function renderAgentCredentials() {
   $("create-agent-credential").querySelector("button[type=submit]").disabled=false;
   document.querySelectorAll(".revoke-agent-credential").forEach((button)=>button.onclick=()=>openConfirmation({title:"Отозвать ключ Agent?",description:"Этот компьютер больше не сможет отправлять инвентаризацию. Для возобновления работы понадобится новый ключ.",confirmLabel:"Отозвать ключ",onConfirm:async()=>{await api(`/admin/agent-credentials/${button.dataset.id}/revoke`,{method:"POST"});showToast("Ключ Agent отозван");await loadAdminAccess();}}));
 }
+function renderAgentReenrolments() {
+  if(state.currentUser?.role!=="ADMIN") return;
+  const rows=(state.agentReenrolments||[]).map((item)=>{
+    const pending=item.status==="PENDING", matched=Boolean(item.endpoint_id);
+    const target=matched?`${item.endpoint_hostname||item.computer_name} · ${item.identifier_value}`:`${item.computer_name} · совпадение не найдено`;
+    const actions=pending?`<div class="actions">${matched?`<button type="button" class="approve-agent-reenrolment" data-id="${item.id}">Подтвердить</button>`:""}<button type="button" class="button-secondary reject-agent-reenrolment" data-id="${item.id}">Отклонить</button></div>`:"";
+    return `<div class="credential-row"><div><strong>${escapeHtml(target)}</strong><small>Installer ${escapeHtml(item.installer_version)} · ${escapeHtml(dateTime(item.requested_at))}${item.decided_by?` · решил ${escapeHtml(item.decided_by)}`:""}</small></div>${pill(item.status)}${actions}</div>`;
+  }).join("");
+  $("agent-reenrolments-list").innerHTML=rows||'<p class="empty">Запросов на восстановление пока нет.</p>';
+  document.querySelectorAll(".approve-agent-reenrolment").forEach((button)=>button.onclick=()=>openConfirmation({title:"Восстановить Agent?",description:"Прежний ключ этого компьютера будет сразу отозван. Сверьте hostname и UUID с известным PC.",confirmLabel:"Отозвать старый ключ и восстановить",onConfirm:async()=>{await api(`/admin/agent-re-enrolments/${button.dataset.id}/approve`,{method:"POST"});showToast("Agent подтверждён и получил новый ключ");await loadAdminAccess();}}));
+  document.querySelectorAll(".reject-agent-reenrolment").forEach((button)=>button.onclick=()=>openConfirmation({title:"Отклонить запрос?",description:"Установка на этом PC завершится ошибкой. Действующие ключи не изменятся.",confirmLabel:"Отклонить",onConfirm:async()=>{await api(`/admin/agent-re-enrolments/${button.dataset.id}/reject`,{method:"POST"});showToast("Запрос отклонён");await loadAdminAccess();}}));
+}
 function syncRoleControls() {
   const user=state.currentUser, isAdmin=user?.role==="ADMIN", editableRooms=new Set(user?.editable_room_ids||[]), canEditAssets=isAdmin||editableRooms.size>0;
   $("room-edit-action").hidden=!isAdmin;$("room-vision-action").hidden=!isAdmin;$("room-inspection-action").hidden=!state.roomWorkspace||!canEditRoom(state.roomWorkspace.room.id)||!state.roomWorkspace.inventory.assets.length;
@@ -578,7 +590,7 @@ async function loadAdminAccess() {
   renderAdminAccessVisibility();
   if(state.currentUser?.role!=="ADMIN")return;
   $("access-load-error").hidden=true;
-  try { const [users,locationAccess,organizations,agentCredentials]=await Promise.all([api("/admin/users"),api("/admin/locations/access"),api("/admin/locations/organizations"),api("/admin/agent-credentials")]);state={...state,users,locationAccess,organizations,agentCredentials};renderAdminAccess();renderAgentCredentials();syncRoleControls(); }
+  try { const [users,locationAccess,organizations,agentCredentials,agentReenrolments]=await Promise.all([api("/admin/users"),api("/admin/locations/access"),api("/admin/locations/organizations"),api("/admin/agent-credentials"),api("/admin/agent-re-enrolments")]);state={...state,users,locationAccess,organizations,agentCredentials,agentReenrolments};renderAdminAccess();renderAgentCredentials();renderAgentReenrolments();syncRoleControls(); }
   catch(error) { $("access-load-error").hidden=false;$("access-load-error").textContent=`Не удалось загрузить управление пользователями: ${error.message}. Проверьте вход именно под администратором школы.`; }
 }
 function hardwareBrief(endpoint) {
@@ -868,6 +880,7 @@ $("access-user").addEventListener("change",renderAdminAccess);
 $("refresh-access").onclick=loadAdminAccess;
 $("create-agent-credential").addEventListener("submit",async(event)=>{event.preventDefault();try{const organizationId=state.currentUser?.organization_id||$("agent-organization").value||null;const credential=await api("/admin/agent-credentials",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({organization_id:organizationId})});await loadAdminAccess();$("agent-credential-username").value=credential.username;$("agent-credential-secret").value=credential.secret;openDialog("agent-credential-dialog", "agent-credential-username");showToast("Ключ для компьютера создан. Скопируйте его сейчас.");}catch(error){showToast(error.message,true);}});
 $("refresh-agent-credentials").onclick=loadAdminAccess;
+$("refresh-agent-reenrolments").onclick=loadAdminAccess;
 document.querySelectorAll(".copy-agent-credential").forEach((button)=>button.onclick=async()=>{try{await copyAgentCredential(button.dataset.field);}catch(error){showToast(error.message,true);}});
 $("agent-credential-result").addEventListener("submit",()=>{$("agent-credential-username").value="";$("agent-credential-secret").value="";});
 $("agent-credential-dialog").addEventListener("close",()=>{$("agent-credential-username").value="";$("agent-credential-secret").value="";});

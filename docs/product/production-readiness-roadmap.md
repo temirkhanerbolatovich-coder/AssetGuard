@@ -6,7 +6,7 @@
 
 - [x] Agent credential records: отдельный username + secret для каждого устройства, хранение только password hash.
 - [x] One-time выдача credential администратору и revoke без смены ключей других устройств.
-- [ ] Self-service re-enrolment flow с подтверждением администратора.
+- [x] Self-service re-enrolment после переустановки Windows: сопоставление по SMBIOS UUID, одноразовый claim token, подтверждение администратора и автоматический revoke прежнего credential.
 - [ ] Migration от legacy общего inventory secret с датой отключения fallback.
 - [~] Tenant model: school/organisation, tenant-bound users/credentials и job roles `LOCATION_MANAGER`/`INVENTORY_CLERK` есть; отдельная полномочная модель `TENANT_ADMIN`/`OPERATOR` ещё не выделена.
 - [~] Tenant filtering внедрён на assets, endpoints, raw inventories, incidents, Vision, Excel/PDF и identity API; нужен полный matrix-тест всех admin routes перед multi-school rollout.

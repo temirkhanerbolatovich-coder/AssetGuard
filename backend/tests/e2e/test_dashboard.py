@@ -125,6 +125,28 @@ def test_admin_can_open_dashboard_and_create_asset(live_server):
         confirmation_dialog.wait_for(state="hidden")
         assert page.locator("#agent-credentials-list .credential-row", has_text=agent_username).get_by_text("Отозван", exact=True).is_visible()
 
+        reenrolment_computer = f"UNKNOWN-{uuid4().hex[:8]}"
+        reenrolment_response = page.request.post(
+            f"{base_url}/agent/re-enrolments",
+            data={
+                "identifier_type": "SMBIOS_UUID",
+                "identifier_value": str(uuid4()),
+                "computer_name": reenrolment_computer,
+                "installer_version": "0.1.7",
+            },
+        )
+        assert reenrolment_response.status == 202
+        page.locator("#refresh-agent-reenrolments").click()
+        reenrolment_row = page.locator("#agent-reenrolments-list .credential-row", has_text=reenrolment_computer)
+        reenrolment_row.wait_for()
+        assert reenrolment_row.get_by_text("совпадение не найдено").is_visible()
+        assert reenrolment_row.get_by_role("button", name="Подтвердить").count() == 0
+        reenrolment_row.get_by_role("button", name="Отклонить").click()
+        confirmation_dialog.wait_for(state="visible")
+        confirmation_dialog.get_by_role("button", name="Отклонить").click()
+        confirmation_dialog.wait_for(state="hidden")
+        assert page.locator("#agent-reenrolments-list .credential-row", has_text=reenrolment_computer).get_by_text("Отклонён", exact=True).is_visible()
+
         assert page.locator("body").evaluate("element => element.scrollWidth <= element.clientWidth")
         page.locator("#main-nav a[href='#devices']").click()
         page.locator("#devices").wait_for(state="visible")

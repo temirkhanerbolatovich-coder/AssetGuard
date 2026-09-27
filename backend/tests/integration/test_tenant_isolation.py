@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import httpx
 
@@ -13,8 +13,8 @@ from assetguard.modules.baselines.models import BaselineRecord
 from assetguard.modules.changes.models import ChangeEventRecord
 from assetguard.modules.incidents.models import EndpointHistoryEntryRecord, IncidentRecord
 from assetguard.modules.inventory.models import RawInventoryRecord
-from assetguard.modules.identity.auth import hash_password
-from assetguard.modules.identity.models import AgentCredentialRecord, LocationAccessRecord, UserRecord
+from assetguard.modules.identity.auth import hash_password, token_hash
+from assetguard.modules.identity.models import AgentCredentialRecord, AgentReenrolmentRecord, LocationAccessRecord, UserRecord
 from assetguard.modules.snapshots.models import HardwareSnapshotRecord, ManagedEndpointRecord
 from assetguard.modules.vision.models import VisionRoomRecord
 
@@ -61,6 +61,16 @@ async def _exercise_tenant_isolation() -> None:
             issued_at=now, revoked_at=None,
         )
         session.add_all([incident_b, history_b, foreign_user, foreign_credential]); session.flush()
+        foreign_reenrolment = AgentReenrolmentRecord(
+            token_hash=token_hash("foreign-reenrolment-token"),
+            credential_secret_hash=hash_password("foreign-reenrolment-token"),
+            identifier_type="SMBIOS_UUID", identifier_value="FOREIGN-UUID",
+            computer_name="FOREIGN-PC", installer_version="0.1.7", status="PENDING",
+            managed_endpoint_id=endpoint_b.id, organization_id=school_b.id, credential_id=None,
+            requested_at=now, expires_at=now + timedelta(minutes=30),
+            decided_at=None, decided_by=None,
+        )
+        session.add(foreign_reenrolment); session.flush()
         foreign_grant = LocationAccessRecord(
             user_id=foreign_user.id, scope_type="ROOM", scope_id=room_location_b.id,
             permission="VIEWER", created_at=now,
@@ -97,6 +107,7 @@ async def _exercise_tenant_isolation() -> None:
             ("/admin/vision/rooms", str(room_b.id)),
             ("/admin/users", str(foreign_user.id)),
             ("/admin/agent-credentials", str(foreign_credential.id)),
+            ("/admin/agent-re-enrolments", str(foreign_reenrolment.id)),
         ):
             await assert_not_listed(path, resource_id)
         organizations = await client.get("/admin/locations/organizations", headers=headers)
@@ -126,6 +137,8 @@ async def _exercise_tenant_isolation() -> None:
         assert (await client.patch(f"/admin/users/{foreign_user.id}", headers=headers, json={"active": False})).status_code == 404
         assert (await client.delete(f"/admin/sessions/{foreign_session_id}", headers=headers)).status_code == 404
         assert (await client.post(f"/admin/agent-credentials/{foreign_credential.id}/revoke", headers=headers)).status_code == 404
+        assert (await client.post(f"/admin/agent-re-enrolments/{foreign_reenrolment.id}/approve", headers=headers)).status_code == 404
+        assert (await client.post(f"/admin/agent-re-enrolments/{foreign_reenrolment.id}/reject", headers=headers)).status_code == 404
         assert (await client.post("/admin/locations/access", headers=headers, json={
             "user_id": str(foreign_user.id), "scope_type": "ROOM", "scope_id": str(room_location_b.id), "permission": "EDITOR",
         })).status_code == 404

@@ -30,6 +30,7 @@ SetupLogging=no
 [Files]
 Source: "..\..\scripts\windows\install-assetguard-agent-service.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\..\scripts\windows\install-assetguard-agent-from-config.ps1"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\scripts\windows\request-assetguard-agent-reenrolment.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\..\scripts\windows\uninstall-assetguard-agent-service.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\..\scripts\windows\test-assetguard-agent-readiness.ps1"; DestDir: "{app}"; Flags: ignoreversion
 
@@ -39,6 +40,7 @@ Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile
 [Code]
 var
   GatewayPage: TInputQueryWizardPage;
+  EnrollmentPage: TInputOptionWizardPage;
   CredentialPage: TInputQueryWizardPage;
   OptionsPage: TInputOptionWizardPage;
   OneTimeConfigPath: String;
@@ -97,7 +99,16 @@ begin
   GatewayPage.Add('Адрес сервера (HTTPS):', False);
   GatewayPage.Values[0] := 'https://';
 
-  CredentialPage := CreateInputQueryPage(GatewayPage.ID,
+  EnrollmentPage := CreateInputOptionPage(GatewayPage.ID,
+    'Сценарий подключения',
+    'Новый компьютер или восстановление',
+    'После переустановки Windows выберите восстановление: AssetGuard найдёт прежнюю карточку по SMBIOS UUID, а администратор подтвердит запрос.',
+    True, False);
+  EnrollmentPage.Add('Новое подключение — у меня есть выданные логин и ключ');
+  EnrollmentPage.Add('Восстановление после переустановки Windows');
+  EnrollmentPage.Values[0] := True;
+
+  CredentialPage := CreateInputQueryPage(EnrollmentPage.ID,
     'Учётные данные устройства',
     'Введите данные, выданные администратором AssetGuard',
     'Для каждого компьютера используйте отдельную пару логин и ключ. Ключ показывается только при создании устройства.');
@@ -114,6 +125,11 @@ begin
   OptionsPage.Values[0] := True;
 end;
 
+function ShouldSkipPage(PageID: Integer): Boolean;
+begin
+  Result := (PageID = CredentialPage.ID) and EnrollmentPage.Values[1];
+end;
+
 function NextButtonClick(CurPageID: Integer): Boolean;
 begin
   Result := True;
@@ -123,7 +139,7 @@ begin
       Result := False;
     end;
   end;
-  if (CurPageID = CredentialPage.ID) and Result then begin
+  if (CurPageID = CredentialPage.ID) and Result and EnrollmentPage.Values[0] then begin
     if not IsValidUsername(CredentialPage.Values[0]) then begin
       MsgBox('Логин должен состоять из 3–128 латинских букв, цифр или дефисов.', mbError, MB_OK);
       Result := False;
@@ -140,15 +156,18 @@ var
   ConfigJson: String;
   PowerShell: String;
   RunNowJson: String;
+  ReEnrolJson: String;
 begin
   if CurStep = ssPostInstall then begin
     if OptionsPage.Values[0] then RunNowJson := 'true' else RunNowJson := 'false';
+    if EnrollmentPage.Values[1] then ReEnrolJson := 'true' else ReEnrolJson := 'false';
     OneTimeConfigPath := ExpandConstant('{app}\assetguard-install-once.json');
     ConfigJson := '{' + #13#10 +
       '  "installerVersion": "{#AppVersion}",' + #13#10 +
       '  "gatewayUri": "' + JsonEscape(GatewayPage.Values[0]) + '",' + #13#10 +
       '  "agentUsername": "' + JsonEscape(CredentialPage.Values[0]) + '",' + #13#10 +
       '  "inventorySecret": "' + JsonEscape(CredentialPage.Values[1]) + '",' + #13#10 +
+      '  "reEnrol": ' + ReEnrolJson + ',' + #13#10 +
       '  "runInventoryNow": ' + RunNowJson + #13#10 +
       '}';
     SaveStringToFile(OneTimeConfigPath, ConfigJson, False);
@@ -158,6 +177,8 @@ begin
       RaiseException('Не удалось защитить временный файл учётных данных. Установка отменена.');
     end;
     PowerShell := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+    if EnrollmentPage.Values[1] then
+      MsgBox('Запрос на восстановление будет отправлен после нажатия OK. Администратор школы должен открыть «Подключить Agent» и подтвердить компьютер в течение 30 минут.', mbInformation, MB_OK);
     if not Exec(PowerShell,
       '-NoProfile -ExecutionPolicy Bypass -File "' + ExpandConstant('{app}\install-assetguard-agent-from-config.ps1') + '" -ConfigPath "' + OneTimeConfigPath + '"',
       '', SW_HIDE, ewWaitUntilTerminated, ResultCode) or (ResultCode <> 0) then begin

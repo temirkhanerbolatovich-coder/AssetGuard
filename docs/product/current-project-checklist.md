@@ -63,13 +63,13 @@ AssetGuard уже является работающим pilot MVP: школьн�
 
 | Область | Что уже есть | Чего не хватает до полного production |
 | --- | --- | --- |
-| Multi-tenant | Organization scope есть у пользователей, credentials, assets, endpoints, inventory и Vision; исполняемая allow/deny-матрица покрывает все 57 защищённых admin operations | Отдельная роль tenant administrator и тест двух реальных школ |
+| Multi-tenant | Organization scope есть у пользователей, credentials, assets, endpoints, inventory и Vision; исполняемая allow/deny-матрица покрывает все 60 защищённых admin operations | Отдельная роль tenant administrator и тест двух реальных школ |
 | Мониторинг | Постоянный systemd monitor проверяет API, Compose services, диск, возраст/ошибки backup, ingest и Agent last-seen; доставка, дедупликация и четырёхчасовой repeat Telegram-alert приняты | Dashboard наблюдаемости и формальная on-call escalation |
 | Backup | Зашифрованные копии, Cloudflare R2, 14 дней локально / 30 дней off-site; Windows и постоянные Linux timers работают; server restore rehearsal `PASS` 2026-09-27 | Наблюдать следующий автоматический daily/weekly цикл; backup пока охватывает PostgreSQL, но не Vision volume |
 | Vision production | Полный локальный photo workflow и настоящий model smoke в CI | Oracle Free VM не тянет ML runtime; нужны отдельный inference host/GPU либо более мощный сервер, object storage и accuracy evaluation |
 | Хранение данных | Raw evidence и audit защищены от изменения; Vision лежит в persistent volume | Утверждённые сроки хранения, автоматическая очистка/архив Vision, экспорт и процедура удаления по политике |
 | Installer lifecycle | Установка службы и первичное подключение работают; `0.1.7` передаёт installer version, пишет защищённый lifecycle log, панель предупреждает о неподдерживаемом Agent | Code signing, SmartScreen reputation, versioned update/rollback и массовое развёртывание |
-| Agent lifecycle | Уникальные credentials и revoke работают | Self-service re-enrolment, безопасное перевыпускание после переустановки, отключение legacy shared secret |
+| Agent lifecycle | Уникальные credentials, revoke и подтверждаемое re-enrolment после переустановки работают; прежний ключ автоматически отзывается | Управляемое обновление/rollback и отключение legacy shared secret |
 | Проверка парка ПК | Два реальных Windows-PC проверили transport 1.19/1.20; добавлен единый secret-free JSON-протокол fleet test | Минимум три полных цикла: cold boot, offline queue/retry, reimage, смена железа, service recovery и обновление |
 | PDF import | Типовые таблицы и OCR поддерживаются | Мастер ручного сопоставления нестандартных колонок, список ошибок, объединение дубликатов, больше реальных ведомостей РК |
 | Отчётность | Реестр, PDF/Excel, карточка кабинета, история и акты операций | Сводки по школе/ответственным/категориям/состояниям, журнал операций за период, scheduled reports |
@@ -116,7 +116,7 @@ AssetGuard уже является работающим pilot MVP: школьн�
 2. Сводные отчёты школы и scheduled PDF/Excel reports.
 3. QR кабинета и мобильный/PWA-обход.
 4. Mapping wizard нестандартных Excel/PDF колонок.
-5. Self-service re-enrolment и управляемое обновление Agent.
+5. Управляемое обновление и rollback Agent.
 6. Staging, release tags и автоматизированный rollback.
 7. MFA либо SSO/AD для администраторов.
 
@@ -163,7 +163,7 @@ AssetGuard уже является работающим pilot MVP: школьн�
 Результат: Agent можно безопасно массово установить, обновить, отозвать и восстановить.
 
 - провести fleet test на 3–5 ПК;
-- реализовать re-enrolment и version reporting;
+- проверить re-enrolment и version reporting на 3–5 реальных ПК;
 - добавить подписанный installer;
 - создать update/rollback workflow;
 - проверить offline retry и восстановление после reboot/service failure.

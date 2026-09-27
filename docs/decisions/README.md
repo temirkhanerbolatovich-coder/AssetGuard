@@ -10,6 +10,7 @@ ADR фиксируют решения, которые влияют на архи
 | [ADR-002](ADR-002-baseline-and-evidence.md) | Baseline и сохранение свидетельств | Accepted |
 | [ADR-003](ADR-003-glpi-source-boundary.md) | GLPI Agent как внешняя граница сбора | Accepted |
 | [ADR-004](ADR-004-backend-stack.md) | FastAPI, SQLAlchemy, Alembic и PostgreSQL | Accepted |
+| [ADR-005](ADR-005-agent-reenrolment.md) | Подтверждаемое восстановление Agent по SMBIOS UUID | Accepted |
 
 ## Когда нужен ADR
 

@@ -15,7 +15,7 @@
 | Changes | list, get |
 | Incidents | list, get, decision, resolve |
 | Asset history | get |
-| Authentication | login, logout, list/revoke sessions |
+| Authentication | login, logout, list/revoke sessions; per-Agent credentials; approved re-enrolment after Windows reinstall |
 | Users | list, create, change role/password/active state |
 | Location access | grant/remove VIEWER or EDITOR at building/floor/room scope; location tree and room reports respect grants |
 | Room inspections | list and complete immutable physical inspection acts; every asset must be marked present, missing or damaged and write access requires ADMIN or an EDITOR grant |
@@ -25,6 +25,8 @@
 | Asset import/export | Excel and PDF export; Excel/PDF preview and confirmed selective apply |
 
 Admin actions, изменяющие baseline или incident, обязаны оставлять audit/history. Actor incident decision определяется по аутентифицированной сессии, а не доверяется полю запроса. Inventory ingest не является публичным admin API.
+
+`POST /agent/re-enrolments` создаёт 30-минутный запрос восстановления по SMBIOS UUID и возвращает одноразовый claim token. Публичный ответ не сообщает, найдено ли устройство. Installer проверяет состояние через `GET /agent/re-enrolments/{id}` с этим token только в памяти. `ADMIN` видит запросы своей организации через `GET /admin/agent-re-enrolments` и может подтвердить или отклонить их. Подтверждение атомарно отзывает прежний активный credential endpoint и создаёт новый; plaintext token на сервере не хранится. Неизвестный UUID нельзя подтвердить, а чужая организация получает `404`.
 
 `GET /admin/incidents/{incident_id}` возвращает endpoint, время создания, тип изменения, тип компонента, evidence и append-only decisions. Этого ответа достаточно для прямой ссылки на карточку инцидента и восстановления экрана после refresh.
 
