@@ -1,65 +1,63 @@
 # AssetGuard — матрица доступа `/admin`
 
-Дата проверки: 25 сентября 2026 года.
+Дата проверки: 27 сентября 2026 года. Матрица покрывает **57 protected operations** на 50 уникальных путях.
 
-## Обозначения
+## Роли и location grants
 
-- **A** — именованный `ADMIN` организации: допускается только к своей организации.
-- **V** — пользователь с grant `VIEWER` на помещение: читает только разрешённые помещения.
-- **E** — пользователь с grant `EDITOR` на помещение: имеет права V и может выполнить указанное действие в разрешённом помещении.
-- **F** — ресурс другой организации. Для именованного пользователя ответ всегда `404`, чтобы не раскрывать существование ресурса.
-- Bootstrap/shared credential остаётся платформенным механизмом для первоначальной настройки; он не является tenant-scoped ролью и не используется для проверки F.
+HTTP dependency `require_admin` допускает только роль `ADMIN`. Dependency `require_viewer` допускает `ADMIN`, `VIEWER`, `LOCATION_MANAGER` и `INVENTORY_CLERK`.
+
+| Уровень route | `ADMIN` | `VIEWER` | `LOCATION_MANAGER` | `INVENTORY_CLERK` | Без token |
+| --- | --- | --- | --- | --- | --- |
+| Admin | allow | deny | deny | deny | deny |
+| Viewer | allow | allow | allow | allow | deny |
+
+Route-level допуск не отменяет resource scope. Для не-`ADMIN` ролей grant `VIEWER` даёт чтение, а grant `EDITOR` — чтение и запись в назначенных room/floor/building. Недоступный room, foreign tenant или UUID возвращает `404`, чтобы не раскрывать существование ресурса.
+
+Bootstrap/shared credential остаётся отдельным platform bootstrap механизмом и не участвует в tenant-isolation tests.
 
 ## Реестр и технические события
 
-| Маршрут | A | V | E | F |
-| --- | --- | --- | --- | --- |
-| `GET /admin/assets` | own tenant | allowed rooms | allowed rooms | filtered |
-| `GET /admin/assets/export.xlsx`, `export.pdf` | own tenant | allowed rooms | allowed rooms | filtered |
-| `GET /admin/assets/{id}`, `{id}/qr.svg` | own asset | allowed room | allowed room | 404 |
-| `POST /admin/assets`, `PATCH /admin/assets/{id}` | own tenant | deny | only permitted room on update | 404 |
-| `POST /admin/assets/import.xlsx`, `import.pdf` | own tenant | deny | deny | 403/404 |
-| `GET /admin/endpoints` | own tenant | allowed rooms | allowed rooms | filtered |
-| `GET /admin/endpoints/{id}` | own endpoint | allowed room | allowed room | 404 |
-| `POST /admin/endpoints/{endpoint}/asset/{asset}` | own tenant | deny | deny | 404 |
-| `GET /admin/inventories`, `/inventories/{id}` | own tenant | allowed room | allowed room | filtered/404 |
-| `GET /admin/operations/status` | own tenant | allowed rooms only | allowed rooms only | filtered |
-| `GET /admin/endpoints/{id}/snapshots`, `baseline`, `history` | own endpoint | allowed room | allowed room | 404 |
-| `GET /admin/snapshots/{id}` | own snapshot | allowed room | allowed room | 404 |
-| `POST /admin/snapshots/{id}/baseline` | own snapshot | deny | deny | 404 |
-| `GET /admin/changes`, `/changes/{id}` | own tenant | allowed rooms | allowed rooms | filtered/404 |
-| `GET /admin/incidents`, `/incidents/{id}` | own tenant | allowed rooms | allowed rooms | filtered/404 |
-| `POST /admin/incidents/{id}/decision`, `resolve` | own incident | deny | deny | 404 |
-| `POST /admin/maintenance/evaluate-endpoints` | own platform scope | deny | deny | deny |
+| Операция | Route-level | Resource scope |
+| --- | --- | --- |
+| `GET /admin/assets`; exports | Viewer | tenant + granted locations |
+| `GET /admin/assets/{id}`; QR | Viewer | tenant + granted location |
+| `POST /admin/assets`; `PATCH /admin/assets/{id}` | Viewer | write requires `ADMIN` or `EDITOR` grant |
+| `POST /admin/assets/import.xlsx`; `import.pdf` | Admin | tenant |
+| `GET /admin/endpoints`; `GET /admin/endpoints/{id}` | Viewer | tenant + granted locations |
+| `POST /admin/endpoints/{endpoint}/asset/{asset}` | Admin | tenant |
+| `GET /admin/inventories`; `GET /admin/inventories/{id}` | Viewer | tenant + granted locations |
+| `GET /admin/operations/status` | Viewer | tenant + granted locations |
+| Snapshot, baseline, change, incident and history reads | Viewer | tenant + granted locations |
+| Baseline acceptance and incident decisions | Admin | tenant |
+| `POST /admin/maintenance/evaluate-endpoints` | Admin | platform operation |
 
 ## Помещения, обходы и Vision
 
-| Маршрут | A | V | E | F |
-| --- | --- | --- | --- | --- |
-| `GET /admin/locations/tree` | own tenant | allowed rooms | allowed rooms | filtered |
-| `GET /admin/locations/rooms/{id}/report`, `inspections`, `workspace` | own room | allowed room | allowed room | 404 |
-| `POST /admin/locations/rooms/{id}/inspections` | own room | deny | allowed room | 404 |
-| `POST /admin/locations/physical-incidents/{id}/decision` | own incident | deny | allowed room | 404 |
-| `GET /admin/locations/physical-incidents/{id}/act.pdf` | own incident | allowed room | allowed room | 404 |
-| `POST /admin/locations/buildings`, `floors`, `rooms`; `PATCH /rooms/{id}` | own tenant | deny | deny | 404 |
-| `GET /admin/vision/rooms`, `rooms/{id}/scans`, `baseline` | own tenant/room | allowed room | allowed room | filtered/404 |
-| `GET /admin/vision/scans/{id}`, `/image` | own scan | allowed room | allowed room | 404 |
-| `POST /admin/vision/scans`, `rooms/{id}/baseline` | own tenant/room | deny | deny | 404 |
+| Операция | Route-level | Resource scope |
+| --- | --- | --- |
+| Location tree, room report, inspections and workspace reads | Viewer | tenant + granted locations |
+| Room inspection and physical-incident decision | Viewer | write requires `ADMIN` or `EDITOR` grant |
+| Physical-incident act PDF | Viewer | tenant + granted location |
+| Create building/floor/room; update room | Admin | tenant |
+| Vision room, scan, image and baseline reads | Viewer | tenant + granted locations |
+| Vision scan upload and baseline update | Admin | tenant |
 
 ## Управление доступом и устройствами
 
-| Маршрут | A | V | E | F |
-| --- | --- | --- | --- | --- |
-| `GET/POST/PATCH /admin/users` | own tenant | deny | deny | list filtered; item 404 |
-| `GET/DELETE /admin/sessions` | own tenant | deny | deny | list filtered; item 404 |
-| `GET/POST /admin/agent-credentials`, `POST /{id}/revoke` | own tenant | deny | deny | list filtered; item 404/403 |
-| `GET/POST/DELETE /admin/locations/access` | own tenant | deny | deny | list filtered; item 404 |
-| `GET /admin/locations/organizations` | own tenant | deny | deny | filtered |
+| Операция | Route-level | Resource scope |
+| --- | --- | --- |
+| `GET/POST/PATCH /admin/users` | Admin | tenant |
+| `GET/DELETE /admin/sessions` | Admin | tenant |
+| Agent credential list/create/revoke | Admin | tenant |
+| Location access list/create/delete | Admin | tenant |
+| `GET /admin/locations/organizations` | Admin | tenant |
 
 ## Автоматическое доказательство
 
-`tests/integration/test_tenant_isolation.py` создаёт отдельную организацию с asset, endpoint, raw inventory, snapshot, baseline, change, incident, history, Vision room, user, session и Agent credential. Он доказывает фильтрацию списков, `404` для foreign UUID и для изменения чужих baseline/incident/user/session/credential.
+`tests/unit/test_admin_route_contract.py` хранит исполняемый реестр всех 57 method/path operations. Тест падает при добавлении, удалении или переносе операции между Admin и Viewer level. Там же автоматизирована allow/deny-матрица для всех четырёх ролей и запроса без token.
 
-`tests/integration/test_location_scoped_resources.py` проверяет фильтрацию exports/Vision и `404` для ресурса в неразрешённом помещении, включая endpoint detail, report, workspace, inspections и Vision baseline. Полный набор на момент этой записи: **30 unit/integration + 2 browser E2E**.
+`tests/integration/test_tenant_isolation.py` создаёт две организации с asset, endpoint, raw inventory, snapshot, baseline, change, incident, history, Vision room, user, session и Agent credential. Он доказывает фильтрацию списков, `404` для foreign UUID и запрет изменения foreign resources.
 
-Открытая работа для полного P0: расширить эти сценарии параметризованной проверкой каждого маршрута из таблицы с A/V/E/F и добавить реальные две школы в приемочное тестирование.
+`tests/integration/test_location_scoped_resources.py` проверяет grants `VIEWER`/`EDITOR`, фильтрацию exports/Vision и `404` для неразрешённого помещения, включая endpoint detail, report, workspace, inspections и Vision baseline.
+
+Остающаяся ручная приёмка: повторить tenant/location isolation на двух реальных пилотных организациях перед расширением deployment.

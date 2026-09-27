@@ -15,7 +15,7 @@
 | Static/config checks | JavaScript, PowerShell, shell, Python scripts и Compose config | `.github/workflows/ci.yml` |
 | Security checks | Gitleaks, `pip check`, `pip-audit` | `.github/workflows/ci.yml` |
 
-В текущем наборе 30 unit/integration и 2 browser E2E tests. Число является снимком состояния репозитория и должно обновляться вместе с изменением набора.
+В текущем наборе 43 unit/integration и 2 browser E2E tests. Число является снимком состояния репозитория и должно обновляться вместе с изменением набора.
 
 ## Тестовое окружение
 
@@ -87,7 +87,6 @@ Grounding DINO real-model smoke выполняется отдельно по р�
 ## Подтверждённые пробелы
 
 - Нет нагрузочных и длительных soak tests.
-- Нет полного автоматизированного allow/deny matrix для всех admin routes.
 - Нет автоматического production restore test из R2.
 - Real-model smoke проверяет работоспособность pipeline, но не точность модели на репрезентативном датасете.
 - Реальный fleet GLPI Agent и production failover остаются ручными проверками.

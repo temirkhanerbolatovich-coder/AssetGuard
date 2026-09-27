@@ -39,7 +39,7 @@ MFA, SSO и recovery flow в коде отсутствуют.
 
 В коде используются роли `ADMIN`, `VIEWER`, `LOCATION_MANAGER` и `INVENTORY_CLERK`. Named principal содержит `organization_id`; tenant-scoped ресурсы фильтруются по нему. Для помещений предусмотрены grants `VIEWER` и `EDITOR`.
 
-Смысл ролей подтверждается route dependencies и integration tests, но полный автоматизированный allow/deny matrix для каждого endpoint пока не завершён. Текущий ручной перечень находится в [admin-route-access-matrix.md](admin-route-access-matrix.md).
+Смысл ролей подтверждается route dependencies, исполняемой allow/deny-матрицей всех 57 защищённых operations и tenant/location integration tests. Актуальная матрица находится в [admin-route-access-matrix.md](admin-route-access-matrix.md).
 
 ## Защита входных данных
 

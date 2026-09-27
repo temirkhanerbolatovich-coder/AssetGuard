@@ -8,7 +8,6 @@
 | --- | --- | --- | --- | --- |
 | TD-001 | P0 | Backup/DR | R2 backup/restore rehearsal блокируется `SignatureDoesNotMatch`; локальная crypto interoperability покрыта тестом | Успешный зашифрованный upload, download и restore rehearsal из R2 с зафиксированным результатом |
 | TD-002 | P1 | Operations | Linux backup, restore и monitoring scripts существуют, но репозиторий не подтверждает их установку на постоянном сервере | Timers/services установлены, alerts доставляются, runbook содержит проверенный результат |
-| TD-003 | P0 | Authorization | Роли и scope tests существуют, но полный allow/deny matrix всех admin routes не автоматизирован | Каждая защищённая route/role комбинация отражена в актуальной матрице и negative tests |
 | TD-004 | P1 | Credentials | Bootstrap admin/viewer secrets и legacy shared inventory secret остаются рабочими fallback-механизмами | Named users и per-agent credentials являются обязательным production path; fallback отключаем или строго ограничен и задокументирован |
 | TD-005 | P1 | Data governance | Код хранит raw inventory, историю и Vision images, но утверждённые retention/deletion сроки отсутствуют | Принята policy по классам данных и реализованы проверяемые процедуры retention/export/delete |
 | TD-006 | P1 | Agent lifecycle | Установщик и per-agent credentials есть; централизованная signing/release и подтверждённая ротация fleet отсутствуют | Release artifact подписан, версия прослеживается, credential rotation проверена на pilot fleet |
