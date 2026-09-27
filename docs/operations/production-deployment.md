@@ -107,3 +107,26 @@ sudo /usr/local/lib/assetguard-server-monitor.sh \
 ```
 
 The message is marked `TEST ONLY` and states that production remains online. Repeating the same command inside four hours must print `Unchanged alert suppressed until the repeat interval expires.` instead of sending another message. An unchanged real incident is sent again after four hours. On 2026-09-27 Telegram accepted the first controlled alert, the immediate second run was deduplicated, and a normal run printed `AssetGuard production checks passed.`
+
+## Deployment record: 2026-09-27
+
+Production at `https://assetguard-temirkhan.duckdns.org/` was updated from
+`ad904da` to `8434dfb`. Before the rollout, the server created
+`assetguard-production-20260927-114122.sql.agbackup` and restored it into an
+isolated PostgreSQL instance at Alembic revision
+`0024_physical_asset_operations` with `assets=211` and `endpoints=1`.
+
+The Oracle Free overlay remained enabled, so Vision runtime dependencies were
+not installed on the 1 GB host. The API image and Caddy container were replaced;
+the PostgreSQL container and persistent volume were left running. The previous
+API image was retained locally as `assetguard-api:rollback-ad904da`.
+
+Post-deployment verification confirmed:
+
+- `/health/ready` returned `status=ready`;
+- Alembic reported `0024_physical_asset_operations (head)`;
+- the public `index.html`, `app.js` and `styles.css` hashes matched the files in
+  the deployed API image;
+- the new sidebar dashboard rendered from the public HTTPS endpoint;
+- `assetguard-monitor.service` returned `Result=success`; and
+- systemd reported no failed units.
