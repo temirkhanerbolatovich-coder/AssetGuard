@@ -13,7 +13,7 @@ Production: **https://assetguard-temirkhan.duckdns.org**
 
 AssetGuard уже является работающим pilot MVP: школьный реестр, структура помещений, Windows Agent, техническая инвентаризация, baseline и инциденты, физические обходы, реальные перемещение/списание, Excel/PDF, QR, пользователи и доступы, локальный Vision, постоянный HTTPS-сервер и CI работают.
 
-Для полноценного многопользовательского production-продукта в нескольких школах ещё нужны прежде всего автоматическая приёмка backup/monitoring на постоянном сервере, испытание парка реальных ПК, политика хранения данных и безопасное обновление подписанного Agent.
+Для полноценного многопользовательского production-продукта в нескольких школах ещё нужны прежде всего испытание парка реальных ПК, политика хранения данных и безопасное обновление подписанного Agent.
 
 Обозначения:
 
@@ -52,8 +52,8 @@ AssetGuard уже является работающим pilot MVP: школьн�
 | Сетевые метрики Agent | ✅ базово | Опциональные ICMP availability, packet loss и average latency | Inventory fixture |
 | Безопасность API | ✅ foundation | HTTPS, security headers, payload limits, app rate limiting, секреты вне Git, immutable evidence/history | CI и production config |
 | Dependency scanning | ✅ | `pip check`, строгий `pip-audit`, Dependabot | GitHub Actions |
-| Backup/restore tooling | ✅ Windows | AES-256-GCM backup, DPAPI-пароль, R2 upload/retention и isolated restore rehearsal реализованы; Windows/Linux AGBK1 совместимость исправлена | Свежий R2 цикл завершён `PASS`; daily/weekly scheduled tasks завершились с кодом `0` 2026-09-27 |
-| Telegram monitoring | ✅ локальный контур | DPAPI credentials, offline Agent / failed ingest / identity conflict / disk alerts, дедупликация | Скрипты и рабочая настройка |
+| Backup/restore tooling | ✅ Windows + server | AES-256-GCM backup, R2 upload/retention и isolated restore rehearsal; Windows/Linux AGBK1 совместимость | Windows tasks завершились с кодом `0`; server backup и restore rehearsal завершились `PASS` 2026-09-27 |
+| Telegram monitoring | ✅ базовый production-контур | Каждые 5 минут: readiness, Compose services, disk, backup age/job failures, offline Agent, failed ingest и identity conflicts; дедупликация и повтор через 4 часа | Telegram принял test alert, второй запуск был подавлен, normal run прошёл 2026-09-27 |
 | Постоянный deployment | ✅ | Oracle Cloud Always Free, Docker Compose, Caddy, DuckDNS, TLS, restart policy | Public health/readiness |
 | CI | ✅ | PostgreSQL tests, browser E2E, dependency audit, JS/PowerShell checks, Compose validation | GitHub Actions |
 
@@ -64,8 +64,8 @@ AssetGuard уже является работающим pilot MVP: школьн�
 | Область | Что уже есть | Чего не хватает до полного production |
 | --- | --- | --- |
 | Multi-tenant | Organization scope есть у пользователей, credentials, assets, endpoints, inventory и Vision; исполняемая allow/deny-матрица покрывает все 57 защищённых admin operations | Отдельная роль tenant administrator и тест двух реальных школ |
-| Мониторинг | `/health`, `/health/ready`, логи и Telegram PowerShell monitor | Постоянный monitor на сервере, метрики API/БД/диска/backup age, escalation и dashboard наблюдаемости |
-| Backup | Зашифрованные копии, Cloudflare R2, ротация 14 дней локально / 30 дней off-site; ручной R2 rehearsal `PASS`, Windows daily/weekly tasks `LastTaskResult=0` 2026-09-27 | Перенести расписание на постоянный сервер, подтвердить retention и подключить alert по возрасту копии |
+| Мониторинг | Постоянный systemd monitor проверяет API, Compose services, диск, возраст/ошибки backup, ingest и Agent last-seen; доставка, дедупликация и четырёхчасовой repeat Telegram-alert приняты | Dashboard наблюдаемости и формальная on-call escalation |
+| Backup | Зашифрованные копии, Cloudflare R2, 14 дней локально / 30 дней off-site; Windows и постоянные Linux timers работают; server restore rehearsal `PASS` 2026-09-27 | Наблюдать следующий автоматический daily/weekly цикл; backup пока охватывает PostgreSQL, но не Vision volume |
 | Vision production | Полный локальный photo workflow и настоящий model smoke в CI | Oracle Free VM не тянет ML runtime; нужны отдельный inference host/GPU либо более мощный сервер, object storage и accuracy evaluation |
 | Хранение данных | Raw evidence и audit защищены от изменения; Vision лежит в persistent volume | Утверждённые сроки хранения, автоматическая очистка/архив Vision, экспорт и процедура удаления по политике |
 | Installer lifecycle | Установка службы и первичное подключение работают | Code signing, SmartScreen reputation, versioned update/rollback и массовое развёртывание |
@@ -106,11 +106,9 @@ AssetGuard уже является работающим pilot MVP: школьн�
 
 ### P0 — обязательны до пилота с реальной школой
 
-1. **Production backup operations:** перенести проверенную автоматизацию на постоянный сервер, подтвердить 30-дневную R2-ротацию и alert по возрасту/ошибке копии.
-2. **Серверный мониторинг:** перенести проверки с локального Windows monitor на постоянный контур; контролировать API, БД, диск, возраст backup, ingest errors и Agent last-seen.
-3. **Fleet test:** установить Agent минимум на 3–5 разных ПК и проверить перезагрузку, отсутствие сети, повторную доставку, смену железа, revoke и восстановление службы.
-4. **Data governance:** утвердить, какие данные собираются, кто имеет доступ, где они хранятся и когда удаляются; отдельно определить срок жизни Vision-фотографий.
-5. **Release безопасности Agent:** подписать installer, зафиксировать SHA-256 и описать обновление/откат.
+1. **Fleet test:** установить Agent минимум на 3–5 разных ПК и проверить перезагрузку, отсутствие сети, повторную доставку, смену железа, revoke и восстановление службы.
+2. **Data governance:** утвердить, какие данные собираются, кто имеет доступ, где они хранятся и когда удаляются; отдельно определить срок жизни Vision-фотографий.
+3. **Release безопасности Agent:** подписать installer, зафиксировать SHA-256 и описать обновление/откат.
 
 ### P1 — следующий продуктовый релиз
 
@@ -140,9 +138,10 @@ AssetGuard уже является работающим pilot MVP: школьн�
 - [x] повторно авторизовать off-site remote и подтвердить ручной encrypted upload;
 - [x] восстановить свежий off-site backup в изолированную БД и сохранить протокол проверки;
 - [x] запустить Windows daily backup и weekly rehearsal через Task Scheduler; обе задачи завершились с кодом `0` 2026-09-27;
-- перенести расписание на постоянный сервер и подтвердить retention/alerting;
-- развернуть постоянный монитор и Telegram escalation;
-- добавить контроль срока последней успешной копии;
+- [x] установить server daily backup, weekly restore rehearsal и 5-minute monitor timers;
+- [x] выполнить server backup в R2 и isolated restore: `0024`, `assets=211`, `endpoints=1`, `PASS` 2026-09-27;
+- [x] добавить alert по возрасту копии и failed backup/restore jobs;
+- [x] подтвердить test alert: Telegram accepted, повторный запуск deduplicated, normal run healthy; неизменившаяся проблема повторяется через 4 часа;
 - оформить rollback и аварийный runbook.
 
 Критерий готовности: тестово удалить disposable окружение, восстановить его только из внешней копии и получить автоматическое уведомление при намеренно остановленном API.

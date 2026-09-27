@@ -17,8 +17,9 @@
 - [x] Постоянный Oracle Cloud server, DuckDNS, публичный TLS endpoint и ограничивающие сетевые правила проверены 2026-09-25.
 - [x] Windows Task Scheduler запускает daily encrypted backup и weekly isolated restore rehearsal через PowerShell 7; R2 copy и retention настроены на 14 дней локально / 30 дней off-site. Обе задачи принудительно запущены 2026-09-27 и завершились с `LastTaskResult=0`.
 - [x] Cloudflare R2 повторно авторизован account token с доступом только к `assetguard-backups`; ручной encrypted upload → download → isolated restore завершён `PASS` 2026-09-27.
-- [~] `/health` и `/health/ready` готовы; локальный Windows monitor проверяет disk, Agent last-seen, failed ingest и identity conflicts. Нужен постоянный серверный сбор метрик, включая backup age.
-- [~] Telegram alerting с дедупликацией работает из локального Windows-контура; нужны серверное расписание и правила escalation.
+- [x] Постоянные Linux timers запускают daily backup, weekly restore rehearsal и monitor каждые 5 минут. Ручная server-приёмка 2026-09-27: backup upload и isolated restore `PASS` (`0024`, `assets=211`, `endpoints=1`).
+- [x] Server monitor проверяет readiness, Compose services, disk, backup age/job failures, Agent last-seen, failed ingest и identity conflicts.
+- [x] Telegram server alerting принят 2026-09-27: test alert принят API, второй одинаковый запуск подавлен, normal run healthy; неизменившаяся проблема повторяется через 4 часа.
 - [ ] Staging environment и rollback runbook.
 
 ## Этап 3: secure software supply chain

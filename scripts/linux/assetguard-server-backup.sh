@@ -16,7 +16,7 @@ done
 
 read_env_value() {
   local name="$1" file="$2"
-  sed -n "s/^${name}=//p" "$file" | tail -n 1
+  sed -n "s/^${name}=//p" "$file" | tail -n 1 | sed 's/\r$//'
 }
 
 project_env="$project_dir/.env"

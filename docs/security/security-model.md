@@ -23,7 +23,7 @@
 | Agent → ingestion | Per-agent HTTP Basic; legacy shared-secret fallback | Shared fallback увеличивает blast radius |
 | API → PostgreSQL | Отдельная connection string из environment | Подтверждённого TLS для DB внутри Compose нет |
 | API → Vision storage | Нормализованный storage root и generated scan IDs | Изображения требуют отдельной retention policy |
-| Backup host → R2 | AGBK1 AES-256-GCM archive; account token ограничен одним backup bucket; Windows schedule проверен | Автоматический запуск и alerting на постоянном сервере ещё не подтверждены |
+| Backup host → R2 | AGBK1 AES-256-GCM archive; account token ограничен одним backup bucket; Windows/Linux schedules и server alerting проверены | Vision volume не входит в PostgreSQL backup |
 
 ## Authentication
 
@@ -60,7 +60,7 @@ Caddy удаляет `X-AssetGuard-Admin-Token`, `Authorization` и `Cookie` и�
 
 Raw inventory и исторические записи используются как audit evidence. Database migrations добавляют ограничения неизменяемости для критичных записей. Production volumes сохраняют PostgreSQL, Vision images и model cache вне жизненного цикла контейнера.
 
-Backup scripts поддерживают шифрование AES-256-GCM и restore rehearsal. Ключ backup хранится отдельно от архива: на проверенном Windows-контуре — в DPAPI-хранилище текущего пользователя. Upload, повторное скачивание и восстановление свежей копии из Cloudflare R2 успешно выполнены 2026-09-27 вручную и через Windows Task Scheduler. Для постоянного сервера остаётся подтвердить расписание, мониторинг возраста копии и доставку alert.
+Backup scripts поддерживают шифрование AES-256-GCM и restore rehearsal. Ключ backup хранится отдельно от архива: на Windows-контуре — в DPAPI-хранилище текущего пользователя, на Linux-сервере — в root-only configuration. Upload, повторное скачивание и восстановление свежей копии из Cloudflare R2 успешно выполнены 2026-09-27 через Windows Task Scheduler и постоянный server systemd. Server monitor проверяет возраст копии и failed backup/restore jobs; test alert был принят Telegram, второй запуск подавлен дедупликацией. Vision image volume в PostgreSQL backup не входит.
 
 ## Проверки
 
@@ -74,4 +74,4 @@ Backup scripts поддерживают шифрование AES-256-GCM и rest
 
 ## Известные риски
 
-Приоритетный незакрытый security/operations debt: отказ от общих bootstrap/agent secrets, формальная retention policy, автоматизированный backup monitoring и проверка production hardening. Он ведётся в [technical-debt.md](../technical-debt.md).
+Приоритетный незакрытый security/operations debt: отказ от общих bootstrap/agent secrets, формальная retention policy и дальнейшая проверка production hardening. Он ведётся в [technical-debt.md](../technical-debt.md).

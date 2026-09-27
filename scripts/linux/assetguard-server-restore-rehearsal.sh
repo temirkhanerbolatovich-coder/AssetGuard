@@ -4,7 +4,7 @@ set -euo pipefail
 project_dir="/opt/assetguard"
 config_file="/etc/assetguard/server-backup.env"
 while [[ $# -gt 0 ]]; do case "$1" in --project-dir) project_dir="$2"; shift 2;; --config) config_file="$2"; shift 2;; *) exit 2;; esac; done
-value() { sed -n "s/^$1=//p" "$2" | tail -n 1; }
+value() { sed -n "s/^$1=//p" "$2" | tail -n 1 | sed 's/\r$//'; }
 config_file="$(readlink -f "$config_file")"
 target="$(value ASSETGUARD_R2_TARGET "$config_file")"; passphrase="$(value ASSETGUARD_BACKUP_PASSPHRASE "$config_file")"
 status="/var/lib/assetguard/backup-status.env"; name="$(value ASSETGUARD_BACKUP_OBJECT "$status")"

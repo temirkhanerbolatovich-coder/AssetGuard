@@ -22,4 +22,4 @@ Production публикует только Caddy на портах 80/443. Caddy
 - Наблюдаемость: [observability.md](../operations/observability.md).
 - Backup и recovery: разделы production runbook.
 
-Перед production deployment обязательны уникальные secrets, DNS, открытые 80/443, persistent volumes и проверка `/health` и `/health/ready`. End-to-end цикл encrypted upload → download → isolated restore из Cloudflare R2 подтверждён 2026-09-27 вручную и через Windows Task Scheduler. Установка расписания и alerting на постоянном сервере остаются эксплуатационной задачей.
+Перед production deployment обязательны уникальные secrets, DNS, открытые 80/443, persistent volumes и проверка `/health` и `/health/ready`. End-to-end цикл encrypted upload → download → isolated restore из Cloudflare R2 подтверждён 2026-09-27 через Windows Task Scheduler и постоянный Linux server. Server backup, restore rehearsal и monitor timers установлены; Telegram test alert принят, повторный запуск подавлен дедупликацией.

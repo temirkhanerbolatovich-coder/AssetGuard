@@ -95,4 +95,15 @@ pwsh -File scripts/windows/invoke-latest-backup-rehearsal.ps1 `
   -OffsiteTarget 'assetguard-r2:assetguard-backups/daily'
 ```
 
-The R2 token must be an account token with Object Read & Write limited to the backup bucket. Do not store its Access Key ID or Secret Access Key in the repository or runbook. On 2026-09-27 this exact flow uploaded `assetguard-20260927-150843.sql.agbackup`, downloaded it from R2 and restored it into an isolated PostgreSQL container. Verification returned `PASS`, Alembic revision `0024_physical_asset_operations`, `assets=50`, `managed_endpoints=5` and `raw_inventories=18`. The installed Windows daily-backup and weekly-rehearsal tasks were then started through Task Scheduler and both returned `LastTaskResult=0`. A permanent-server schedule and alerting still require a separate acceptance run.
+The R2 token must be an account token with Object Read & Write limited to the backup bucket. Do not store its Access Key ID or Secret Access Key in the repository or runbook. On 2026-09-27 the Windows flow uploaded `assetguard-20260927-150843.sql.agbackup`, restored it into an isolated PostgreSQL container and returned `PASS`; the daily and weekly Task Scheduler jobs returned `LastTaskResult=0`. The permanent server then uploaded `assetguard-production-20260927-105228.sql.agbackup` and completed its isolated rehearsal with revision `0024_physical_asset_operations`, `assets=211` and `endpoints=1`. The daily backup, weekly rehearsal and five-minute monitor timers were active; backup, rehearsal and monitor services all returned `Result=success`. At verification time R2 contained two valid production objects and none older than 30 days. PostgreSQL backups do not include the Vision image volume.
+
+Use the monitor's explicit test mode to verify Telegram delivery without stopping production:
+
+```bash
+sudo /usr/local/lib/assetguard-server-monitor.sh \
+  --project-dir /opt/assetguard \
+  --config /etc/assetguard/server-monitor.env \
+  --test-alert
+```
+
+The message is marked `TEST ONLY` and states that production remains online. Repeating the same command inside four hours must print `Unchanged alert suppressed until the repeat interval expires.` instead of sending another message. An unchanged real incident is sent again after four hours. On 2026-09-27 Telegram accepted the first controlled alert, the immediate second run was deduplicated, and a normal run printed `AssetGuard production checks passed.`
