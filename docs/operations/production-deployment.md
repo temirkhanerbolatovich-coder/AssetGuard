@@ -130,3 +130,10 @@ Post-deployment verification confirmed:
 - the new sidebar dashboard rendered from the public HTTPS endpoint;
 - `assetguard-monitor.service` returned `Result=success`; and
 - systemd reported no failed units.
+
+The Agent 0.1.6 pilot release was deployed later on 2026-09-27 from application
+commit `7a3f7f2`. It pins clean WinGet installations to GLPI Agent 1.20, keeps
+1.19 compatible, rejects unknown versions and exposes the reported Agent version
+in the device card. No database migration was required. Post-deployment readiness,
+Alembic head, public `app.js` hash and server monitoring passed; the previous API
+image remains tagged as `assetguard-api:rollback-8434dfb`.
