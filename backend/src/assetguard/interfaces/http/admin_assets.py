@@ -48,6 +48,8 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 AssetType = Literal["Desktop", "Laptop", "Printer", "Projector", "Network", "Furniture", "Sports", "Educational", "Other"]
 AssetCategory = Literal["IT", "FURNITURE", "SPORTS", "EDUCATIONAL", "OTHER"]
 TrackingMode = Literal["INDIVIDUAL", "GROUPED"]
+SUPPORTED_AGENT_VERSIONS = frozenset({"1.19", "1.20"})
+ASSETGUARD_INSTALLER_TAG_PREFIX = "assetguard-installer-"
 
 
 class AssetCreate(BaseModel):
@@ -882,6 +884,24 @@ def _components(session: Session, snapshot: HardwareSnapshotRecord | None) -> li
     ))]
 
 
+def _installer_version(content: dict) -> str | None:
+    """Read the version tag written by the AssetGuard installer from GLPI inventory."""
+    tags = content.get("tag")
+    values = tags if isinstance(tags, list) else [tags]
+    for value in values:
+        if isinstance(value, str) and value.startswith(ASSETGUARD_INSTALLER_TAG_PREFIX):
+            version = value.removeprefix(ASSETGUARD_INSTALLER_TAG_PREFIX).strip()
+            if version and len(version) <= 32:
+                return version
+    return None
+
+
+def _agent_version_status(version: str | None) -> str:
+    if not version:
+        return "UNKNOWN"
+    return "SUPPORTED" if version in SUPPORTED_AGENT_VERSIONS else "UNSUPPORTED"
+
+
 def _system_sections(
     session: Session, endpoint: ManagedEndpointRecord, snapshot: HardwareSnapshotRecord | None,
 ) -> tuple[dict, dict | None]:
@@ -896,10 +916,13 @@ def _system_sections(
     ).order_by(RawInventoryRecord.received_at.desc()).limit(50)))
     merged_objects = {"hardware": {}, "bios": {}, "operatingsystem": {}, "assetguard_network": {}}
     latest_lists = {"drives": [], "controllers": []}
+    installer_version = None
     for inventory in inventories:
         content = inventory.payload.get("content") if isinstance(inventory.payload, dict) else None
         if not isinstance(content, dict):
             continue
+        if installer_version is None:
+            installer_version = _installer_version(content)
         for section in merged_objects:
             value = content.get(section)
             if isinstance(value, dict):
@@ -926,6 +949,9 @@ def _system_sections(
         "id": str(latest_raw.id), "received_at": latest_raw.received_at, "source": latest_raw.source,
         "source_version": latest_raw.source_version, "type": latest_raw.inventory_type,
         "processing_status": latest_raw.processing_status,
+        "installer_version": installer_version,
+        "agent_version_status": _agent_version_status(latest_raw.source_version),
+        "supported_agent_versions": sorted(SUPPORTED_AGENT_VERSIONS),
     }
 
 

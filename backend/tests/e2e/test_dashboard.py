@@ -342,6 +342,7 @@ def test_incident_detail_supports_direct_link_and_managed_decision(live_server):
         initial = json.loads((FIXTURES / "glpi-agent-minimal-sanitized.json").read_text(encoding="utf-8"))
         initial["deviceid"] = device_id
         initial["content"]["hardware"]["uuid"] = hardware_uuid
+        initial["content"]["tag"] = ["assetguard-installer-0.1.6"]
         initial["content"]["networks"][0]["macaddr"] = f"02:00:{unique[0:2]}:{unique[2:4]}:{unique[4:6]}:{unique[6:8]}"
         first = page.request.post(f"{base_url}/internal/inventories", headers=inventory_headers(), data=initial)
         assert first.ok
@@ -389,6 +390,8 @@ def test_incident_detail_supports_direct_link_and_managed_decision(live_server):
         page.locator("#detail-title").filter(has_text="Incident E2E workstation").wait_for()
         assert page.locator("#device-general").get_by_text("Версия Agent").is_visible()
         assert page.locator("#device-general").get_by_text("1.20", exact=True).is_visible()
+        assert page.locator("#device-general").get_by_text("Версия установщика").is_visible()
+        assert page.locator("#device-general").get_by_text("0.1.6", exact=True).is_visible()
 
         asset_detail_requests = []
         page.on(

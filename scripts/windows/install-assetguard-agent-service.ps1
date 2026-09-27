@@ -25,6 +25,9 @@ param(
     [ValidatePattern('^[A-Za-z0-9-]{3,128}$')]
     [string]$AgentUsername = 'assetguard',
 
+    [ValidatePattern('^\d+\.\d+\.\d+$')]
+    [string]$InstallerVersion = '0.1.7',
+
     [string]$AgentRoot = "$env:ProgramFiles\GLPI-Agent",
     [switch]$AllowTemporaryTunnel,
     [switch]$SkipUpstreamInstall,
@@ -36,8 +39,9 @@ $serviceName = 'glpi-agent'
 $registryPath = 'HKLM:\SOFTWARE\GLPI-Agent'
 $registrySubKey = 'SOFTWARE\GLPI-Agent'
 $registryAclBackupPath = Join-Path $env:ProgramData 'AssetGuard\glpi-agent-registry-acl.sddl'
+$lifecycleLogPath = Join-Path $env:ProgramData 'AssetGuard\agent-lifecycle.jsonl'
 $legacyConfigPath = Join-Path $AgentRoot 'etc\conf.d\99-assetguard.cfg'
-$managedRegistryValues = @('server', 'user', 'password', 'no-category', 'no-compression', 'no-httpd', 'delaytime')
+$managedRegistryValues = @('server', 'user', 'password', 'tag', 'no-category', 'no-compression', 'no-httpd', 'delaytime')
 $pinnedAgentVersion = '1.20'
 $supportedAgentVersions = @('1.19', '1.20')
 
@@ -70,6 +74,23 @@ function Get-GlpiAgentVersion([string]$Launcher) {
         throw "The installed GLPI Agent returned an unrecognized version string. Supported versions: $($supportedAgentVersions -join ', ')."
     }
     return $versionMatch.Groups['version'].Value
+}
+
+function Write-AgentLifecycleEvent([string]$Status, [string]$AgentVersion, [string]$Message) {
+    $directory = Split-Path -Parent $lifecycleLogPath
+    New-Item -ItemType Directory -Force -Path $directory | Out-Null
+    $event = [ordered]@{
+        occurred_at = [DateTimeOffset]::UtcNow.ToString('O')
+        operation = 'INSTALL_OR_RECONFIGURE'
+        status = $Status
+        installer_version = $InstallerVersion
+        agent_version = $AgentVersion
+        gateway_host = $GatewayUri.Host
+        message = $Message
+    }
+    Add-Content -LiteralPath $lifecycleLogPath -Value ($event | ConvertTo-Json -Compress) -Encoding utf8
+    & icacls.exe $lifecycleLogPath '/inheritance:r' '/grant:r' '*S-1-5-18:(F)' '*S-1-5-32-544:(F)' | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Could not protect '$lifecycleLogPath' with Windows ACLs." }
 }
 
 function Protect-AgentRegistryConfiguration {
@@ -157,6 +178,7 @@ try {
         'server' = $GatewayUri.AbsoluteUri
         'user' = $AgentUsername
         'password' = $plainSecret
+        'tag' = "assetguard-installer-$InstallerVersion"
         'no-category' = $excludedCategories
         'no-compression' = '1'
         'no-httpd' = '1'
@@ -196,6 +218,8 @@ try {
         if ($currentService.Status -eq 'Running') { Restart-Service -Name $serviceName -Force } else { Start-Service -Name $serviceName }
     }
 
+    Write-AgentLifecycleEvent 'SUCCEEDED' $installedAgentVersion 'Agent installed or reconfigured successfully.'
+
     [pscustomobject]@{
         Service = $serviceName
         AgentVersion = $installedAgentVersion
@@ -206,6 +230,11 @@ try {
         PrivacyProfile = 'hardware-only; users, software, processes, USB and browser-related categories disabled'
         TemporaryTunnel = $GatewayUri.Host -like '*.trycloudflare.com'
     }
+}
+catch {
+    try { Write-AgentLifecycleEvent 'FAILED' $installedAgentVersion 'Agent installation or reconfiguration failed. Review the protected installer diagnostic.' }
+    catch { }
+    throw
 }
 finally {
     if ($secretBstr -ne [IntPtr]::Zero) { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($secretBstr) }

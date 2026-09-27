@@ -301,6 +301,7 @@ async def _complete_mvp_workflow() -> None:
         assert len(replacements) == 1
 
         partial = fixture("glpi-agent-partial-software-sanitized.json")
+        partial["content"]["tag"] = ["assetguard-installer-0.1.6"]
         assert (await client.post("/internal/inventories", headers=ingest_headers(uuid4().hex, "PARTIAL"), json=partial)).status_code == 202
         changes_after_partial = (await client.get(f"/admin/changes?endpoint_id={endpoint_id}", headers=admin_headers())).json()
         assert len(changes_after_partial) == len(changes)
@@ -311,6 +312,9 @@ async def _complete_mvp_workflow() -> None:
         assert asset["endpoint"]["hardware_summary"]["ram_bytes"] == 8 * 1024**3
         assert asset["endpoint"]["identifiers"]
         assert asset["latest_inventory"]["processing_status"] == "PROCESSED"
+        assert asset["latest_inventory"]["installer_version"] == "0.1.6"
+        assert asset["latest_inventory"]["agent_version_status"] == "SUPPORTED"
+        assert asset["latest_inventory"]["supported_agent_versions"] == ["1.19", "1.20"]
         assert asset["system"]["hardware"]["uuid"] == "fixture-smbios-uuid"
         assert any(component["type"] == "CPU" and "raw_data" in component for component in asset["current_hardware"])
         assert next(component for component in asset["current_hardware"] if component["type"] == "RAM")["capacity"] == 8 * 1024**3

@@ -68,9 +68,9 @@ AssetGuard уже является работающим pilot MVP: школьн�
 | Backup | Зашифрованные копии, Cloudflare R2, 14 дней локально / 30 дней off-site; Windows и постоянные Linux timers работают; server restore rehearsal `PASS` 2026-09-27 | Наблюдать следующий автоматический daily/weekly цикл; backup пока охватывает PostgreSQL, но не Vision volume |
 | Vision production | Полный локальный photo workflow и настоящий model smoke в CI | Oracle Free VM не тянет ML runtime; нужны отдельный inference host/GPU либо более мощный сервер, object storage и accuracy evaluation |
 | Хранение данных | Raw evidence и audit защищены от изменения; Vision лежит в persistent volume | Утверждённые сроки хранения, автоматическая очистка/архив Vision, экспорт и процедура удаления по политике |
-| Installer lifecycle | Установка службы и первичное подключение работают | Code signing, SmartScreen reputation, versioned update/rollback и массовое развёртывание |
+| Installer lifecycle | Установка службы и первичное подключение работают; `0.1.7` передаёт installer version, пишет защищённый lifecycle log, панель предупреждает о неподдерживаемом Agent | Code signing, SmartScreen reputation, versioned update/rollback и массовое развёртывание |
 | Agent lifecycle | Уникальные credentials и revoke работают | Self-service re-enrolment, безопасное перевыпускание после переустановки, отключение legacy shared secret |
-| Проверка парка ПК | Один реальный Windows-PC проверен | Несколько моделей ПК, cold boot, offline queue/retry, reimage, смена железа, service recovery и обновление |
+| Проверка парка ПК | Два реальных Windows-PC проверили transport 1.19/1.20; добавлен единый secret-free JSON-протокол fleet test | Минимум три полных цикла: cold boot, offline queue/retry, reimage, смена железа, service recovery и обновление |
 | PDF import | Типовые таблицы и OCR поддерживаются | Мастер ручного сопоставления нестандартных колонок, список ошибок, объединение дубликатов, больше реальных ведомостей РК |
 | Отчётность | Реестр, PDF/Excel, карточка кабинета, история и акты операций | Сводки по школе/ответственным/категориям/состояниям, журнал операций за период, scheduled reports |
 | QR-инвентаризация | QR актива открывает карточку | QR кабинета, мобильный режим обхода, offline/PWA и сканирование камерой телефона |

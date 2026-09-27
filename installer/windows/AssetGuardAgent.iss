@@ -4,7 +4,7 @@
 ; AssetGuard-owned privacy-limited profile. It does not package or modify GLPI Agent.
 
 #define AppName "AssetGuard Agent"
-#define AppVersion "0.1.6"
+#define AppVersion "0.1.7"
 #define AppPublisher "AssetGuard"
 #define AppGuid "{{7BF917A0-D474-45CA-89E5-2F19C83142B3}"
 
@@ -31,6 +31,7 @@ SetupLogging=no
 Source: "..\..\scripts\windows\install-assetguard-agent-service.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\..\scripts\windows\install-assetguard-agent-from-config.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\..\scripts\windows\uninstall-assetguard-agent-service.ps1"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\scripts\windows\test-assetguard-agent-readiness.ps1"; DestDir: "{app}"; Flags: ignoreversion
 
 [UninstallRun]
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\uninstall-assetguard-agent-service.ps1"""; Flags: runhidden waituntilterminated; RunOnceId: "AssetGuardAgentRemoveConfiguration"
@@ -144,6 +145,7 @@ begin
     if OptionsPage.Values[0] then RunNowJson := 'true' else RunNowJson := 'false';
     OneTimeConfigPath := ExpandConstant('{app}\assetguard-install-once.json');
     ConfigJson := '{' + #13#10 +
+      '  "installerVersion": "{#AppVersion}",' + #13#10 +
       '  "gatewayUri": "' + JsonEscape(GatewayPage.Values[0]) + '",' + #13#10 +
       '  "agentUsername": "' + JsonEscape(CredentialPage.Values[0]) + '",' + #13#10 +
       '  "inventorySecret": "' + JsonEscape(CredentialPage.Values[1]) + '",' + #13#10 +

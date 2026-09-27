@@ -9,7 +9,8 @@ Upstream GLPI Agent устанавливается отдельно: AssetGuard 
 - `install-background-demo.ps1` / `uninstall-background-demo.ps1` — управляют demo Scheduled Tasks;
 - `install-pilot-agent-schedule.ps1` — ставит отдельное расписание Agent на каждом pilot-компьютере; поддерживает необязательные измерения packet loss и задержки до указанной цели;
 - `install-assetguard-agent-service.ps1` / `uninstall-assetguard-agent-service.ps1` — ставят upstream GLPI Agent как обычную Windows-службу с автозапуском, recovery и защищённым минимальным AssetGuard profile. Это рекомендуемый путь для pilot-PC;
-- `build-agent-installer.ps1` — собирает `AssetGuard-Agent-Setup-0.1.6.exe`: мастер установки для передачи на другие Windows-компьютеры;
+- `build-agent-installer.ps1` — собирает versioned `AssetGuard-Agent-Setup-<version>.exe`: мастер установки для передачи на другие Windows-компьютеры;
+- `test-assetguard-agent-readiness.ps1` — собирает без секретов JSON-протокол для каждой фазы fleet test;
 - `start-free-public-demo.ps1` — поднимает контейнерный demo и временный публичный Cloudflare HTTPS URL;
 - `install-quick-tunnel-watchdog.ps1` / `uninstall-quick-tunnel-watchdog.ps1` — поддерживают Quick Tunnel после сбоя и при следующем входе в Windows; текущий URL находится в `%LOCALAPPDATA%\AssetGuard\quick-tunnel.json`;
 - `backup-database.ps1` / `restore-database.ps1` — создают AES-256-GCM encrypted backup, опционально копируют его на внешний диск или `rclone` remote и восстанавливают БД;
@@ -47,7 +48,11 @@ winget install --id JRSoftware.InnoSetup --exact --source winget
 .\scripts\windows\build-agent-installer.ps1
 ```
 
-Готовые файлы появятся в `installer-output\AssetGuard-Agent-Setup-0.1.6.exe` и `AssetGuard-Agent-Setup-0.1.6.exe.sha256` (эта папка намеренно не попадает в Git). Передавайте их вместе. Для production-пилота перед распространением подпишите EXE сертификатом code signing: без подписи Windows SmartScreen может попросить дополнительное подтверждение.
+Готовые EXE и `.sha256` появятся в `installer-output` с версией из `AssetGuardAgent.iss` в имени файла (эта папка намеренно не попадает в Git). Передавайте их вместе. Для production-пилота перед распространением подпишите EXE сертификатом code signing: без подписи Windows SmartScreen может попросить дополнительное подтверждение.
+
+Начиная с `0.1.7`, installer передаёт свою версию в защищённый GLPI `tag`. Это штатный параметр Agent: официальная [GLPI Agent configuration](https://glpi-agent.readthedocs.io/en/1.13/configuration.html) подтверждает, что Windows-служба читает конфигурацию из `HKLM\SOFTWARE\GLPI-Agent`, а `--tag` добавляет значение в каждый inventory. После следующей инвентаризации карточка компьютера показывает версию installer и upstream Agent. Локальный журнал `%ProgramData%\AssetGuard\agent-lifecycle.jsonl` содержит только время, версии, host и результат; inventory secret туда не записывается.
+
+Пошаговый fleet test и имена фаз описаны в `docs/operations/agent-fleet-pilot.md`.
 
 На каждом целевом ПК:
 

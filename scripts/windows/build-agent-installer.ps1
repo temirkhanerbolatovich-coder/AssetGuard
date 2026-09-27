@@ -17,6 +17,12 @@ $ErrorActionPreference = 'Stop'
 $repositoryRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $source = Join-Path $repositoryRoot 'installer\windows\AssetGuardAgent.iss'
 if (-not (Test-Path -LiteralPath $source)) { throw "Inno Setup source was not found: $source" }
+$versionMatch = [regex]::Match(
+    (Get-Content -LiteralPath $source -Raw),
+    '(?m)^#define AppVersion "(?<version>\d+\.\d+\.\d+)"$'
+)
+if (-not $versionMatch.Success) { throw "Could not read AppVersion from $source." }
+$installerVersion = $versionMatch.Groups['version'].Value
 
 if ([string]::IsNullOrWhiteSpace($InnoSetupCompiler)) {
     $candidatePaths = @(
@@ -33,7 +39,7 @@ if ([string]::IsNullOrWhiteSpace($InnoSetupCompiler) -or -not (Test-Path -Litera
 & $InnoSetupCompiler $source
 if ($LASTEXITCODE -ne 0) { throw "Inno Setup build failed with exit code $LASTEXITCODE." }
 
-$output = Join-Path $repositoryRoot 'installer-output\AssetGuard-Agent-Setup-0.1.6.exe'
+$output = Join-Path $repositoryRoot "installer-output\AssetGuard-Agent-Setup-$installerVersion.exe"
 if (-not (Test-Path -LiteralPath $output)) { throw "Expected installer output was not found: $output" }
 $hash = Get-FileHash -LiteralPath $output -Algorithm SHA256
 $checksum = "$output.sha256"

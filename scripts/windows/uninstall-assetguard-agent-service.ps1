@@ -11,7 +11,7 @@ $legacyConfigPath = Join-Path $AgentRoot 'etc\conf.d\99-assetguard.cfg'
 $registryPath = 'HKLM:\SOFTWARE\GLPI-Agent'
 $registrySubKey = 'SOFTWARE\GLPI-Agent'
 $registryAclBackupPath = Join-Path $env:ProgramData 'AssetGuard\glpi-agent-registry-acl.sddl'
-$managedRegistryValues = @('server', 'user', 'password', 'no-category', 'no-compression', 'no-httpd', 'delaytime')
+$managedRegistryValues = @('server', 'user', 'password', 'tag', 'no-category', 'no-compression', 'no-httpd', 'delaytime')
 
 function Test-Administrator {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()

@@ -56,9 +56,10 @@ try {
     $gateway = [string]$config.gatewayUri
     $username = [string]$config.agentUsername
     $secret = [string]$config.inventorySecret
+    $installerVersion = [string]$config.installerVersion
     $runNow = [bool]$config.runInventoryNow
 
-    if ([string]::IsNullOrWhiteSpace($gateway) -or [string]::IsNullOrWhiteSpace($username) -or [string]::IsNullOrWhiteSpace($secret)) {
+    if ([string]::IsNullOrWhiteSpace($installerVersion) -or [string]::IsNullOrWhiteSpace($gateway) -or [string]::IsNullOrWhiteSpace($username) -or [string]::IsNullOrWhiteSpace($secret)) {
         throw 'Installer configuration is incomplete.'
     }
 
@@ -67,6 +68,7 @@ try {
         GatewayUri = [uri]$gateway
         AgentUsername = $username
         InventorySecret = $secureSecret
+        InstallerVersion = $installerVersion
     }
     if ($runNow) { $arguments.RunInventoryNow = $true }
     & (Join-Path $PSScriptRoot 'install-assetguard-agent-service.ps1') @arguments
