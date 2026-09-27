@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import secrets
 import re
 from html import escape
 from io import BytesIO
@@ -10,7 +9,7 @@ from typing import Annotated, Literal
 from urllib.parse import urlsplit
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import Response, StreamingResponse
 from openpyxl import Workbook, load_workbook
 import pdfplumber
@@ -18,8 +17,6 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 import segno
 from pydantic import BaseModel, Field
@@ -28,6 +25,9 @@ from sqlalchemy.orm import Session
 
 from assetguard.infrastructure.config import get_settings
 from assetguard.infrastructure.database import get_session
+from assetguard.interfaces.http.authorization import require_admin, require_viewer
+from assetguard.interfaces.http.pdf_support import pdf_font_name
+from assetguard.interfaces.http.resource_scope import scoped_endpoint
 from assetguard.modules.assets.models import AssetRecord, OrganizationRecord, RoomRecord, FloorRecord, BuildingRecord
 from assetguard.modules.baselines.models import BaselineRecord
 from assetguard.modules.changes.models import ChangeEventRecord
@@ -35,7 +35,7 @@ from assetguard.modules.history.service import append_asset_history
 from assetguard.modules.endpoints.service import evaluate_last_seen
 from assetguard.modules.incidents.models import AssetHistoryEntryRecord, IncidentRecord
 from assetguard.modules.inventory.models import RawInventoryRecord
-from assetguard.modules.identity.auth import AuthPrincipal, session_principal
+from assetguard.modules.identity.auth import AuthPrincipal
 from assetguard.modules.identity.location_access import permitted_room_ids, require_room_access
 from assetguard.modules.snapshots.models import (
     ComponentObservationRecord, EndpointIdentifierRecord,
@@ -43,36 +43,6 @@ from assetguard.modules.snapshots.models import (
 )
 
 router = APIRouter(prefix="/admin", tags=["admin"])
-
-
-def require_admin(
-    token: Annotated[str | None, Header(alias="X-AssetGuard-Admin-Token")] = None,
-    session: Session = Depends(get_session),
-) -> AuthPrincipal:
-    settings = get_settings()
-    valid = [settings.admin_shared_secret, settings.previous_admin_shared_secret]
-    shared = bool(token and any(candidate and secrets.compare_digest(token, candidate) for candidate in valid))
-    if shared:
-        return AuthPrincipal(user_id=None, username="bootstrap-admin", role="ADMIN", session_id=None, organization_id=None)
-    principal = session_principal(session, token) if token else None
-    if not principal or principal.role != "ADMIN":
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid administrator credentials.")
-    return principal
-
-
-def require_viewer(
-    token: Annotated[str | None, Header(alias="X-AssetGuard-Admin-Token")] = None,
-    session: Session = Depends(get_session),
-) -> AuthPrincipal:
-    settings = get_settings()
-    valid = [settings.admin_shared_secret, settings.previous_admin_shared_secret, settings.viewer_shared_secret]
-    if token and any(candidate and secrets.compare_digest(token, candidate) for candidate in valid):
-        role = "VIEWER" if settings.viewer_shared_secret and secrets.compare_digest(token, settings.viewer_shared_secret) else "ADMIN"
-        return AuthPrincipal(user_id=None, username=f"shared-{role.lower()}", role=role, session_id=None, organization_id=None)
-    principal = session_principal(session, token) if token else None
-    if not principal or principal.role not in {"ADMIN", "VIEWER", "LOCATION_MANAGER", "INVENTORY_CLERK"}:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid AssetGuard credentials.")
-    return principal
 
 
 AssetType = Literal["Desktop", "Laptop", "Printer", "Projector", "Network", "Furniture", "Sports", "Educational", "Other"]
@@ -171,18 +141,6 @@ def _ensure_room_for_legacy_location(asset: AssetRecord, session: Session) -> No
     if not room:
         room = RoomRecord(floor_id=floor.id, name=asset.room, created_at=datetime.now(UTC)); session.add(room); session.flush()
     asset.room_id = room.id
-
-
-def scoped_endpoint(session: Session, endpoint_id: UUID, principal: AuthPrincipal) -> ManagedEndpointRecord:
-    endpoint = session.get(ManagedEndpointRecord, endpoint_id)
-    if not endpoint or (principal.organization_id and endpoint.organization_id != principal.organization_id):
-        raise HTTPException(404, "Endpoint was not found.")
-    if endpoint.asset_id:
-        asset = session.get(AssetRecord, endpoint.asset_id)
-        require_room_access(session, asset.room_id if asset else None, principal)
-    elif permitted_room_ids(session, principal) is not None:
-        raise HTTPException(404, "Endpoint was not found.")
-    return endpoint
 
 
 def _latest_snapshot(session: Session, endpoint_id: UUID) -> HardwareSnapshotRecord | None:
@@ -333,22 +291,8 @@ def _assets_for_principal(session: Session, principal: AuthPrincipal) -> list[tu
     return result
 
 
-def _pdf_font_name() -> str:
-    """Use a font with Cyrillic glyphs in both the Docker image and local Windows runs."""
-    candidates = (
-        ("AssetGuardDejaVu", Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf")),
-        ("AssetGuardArial", Path("C:/Windows/Fonts/arial.ttf")),
-    )
-    for name, path in candidates:
-        if path.is_file():
-            if name not in pdfmetrics.getRegisteredFontNames():
-                pdfmetrics.registerFont(TTFont(name, str(path)))
-            return name
-    raise RuntimeError("A Unicode font is required for PDF export. Install fonts-dejavu-core.")
-
-
 def _export_assets_pdf(assets: list[tuple[AssetRecord, str]]) -> BytesIO:
-    font = _pdf_font_name()
+    font = pdf_font_name()
     output = BytesIO()
     document = SimpleDocTemplate(
         output, pagesize=landscape(A4), leftMargin=10 * mm, rightMargin=10 * mm,

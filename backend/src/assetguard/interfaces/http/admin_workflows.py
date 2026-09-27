@@ -9,7 +9,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from assetguard.infrastructure.database import get_session
-from assetguard.interfaces.http.admin_assets import require_admin, require_viewer, scoped_endpoint
+from assetguard.interfaces.http.authorization import require_admin, require_viewer
+from assetguard.interfaces.http.resource_scope import scoped_endpoint
 from assetguard.modules.baselines.models import BaselineRecord
 from assetguard.modules.baselines.service import accept_snapshot_as_baseline
 from assetguard.modules.changes.models import ChangeEventRecord

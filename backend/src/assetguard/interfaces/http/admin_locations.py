@@ -19,7 +19,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from assetguard.infrastructure.database import get_session
-from assetguard.interfaces.http.admin_assets import _pdf_font_name, require_admin, require_viewer
+from assetguard.interfaces.http.authorization import require_admin, require_viewer
+from assetguard.interfaces.http.pdf_support import pdf_font_name
 from assetguard.modules.baselines.models import BaselineRecord
 from assetguard.modules.incidents.models import (
     AssetHistoryEntryRecord, EndpointHistoryEntryRecord, IncidentRecord,
@@ -531,7 +532,7 @@ def decide_physical_incident(
 
 def _physical_operation_pdf(incident: PhysicalIncidentRecord, decision: PhysicalIncidentDecisionRecord) -> BytesIO:
     snapshot = decision.operation_snapshot or {}
-    font = _pdf_font_name()
+    font = pdf_font_name()
     output = BytesIO()
     document = SimpleDocTemplate(
         output, pagesize=A4, leftMargin=18 * mm, rightMargin=18 * mm,

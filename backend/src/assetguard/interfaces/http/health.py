@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from assetguard.infrastructure.database import get_session
 from assetguard.infrastructure.config import get_settings
-from assetguard.interfaces.http.admin_assets import require_viewer
+from assetguard.interfaces.http.authorization import require_viewer
 from assetguard.modules.assets.models import AssetRecord
 from assetguard.modules.identity.auth import AuthPrincipal
 from assetguard.modules.identity.location_access import permitted_room_ids

@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from assetguard.infrastructure.database import get_session
-from assetguard.interfaces.http.admin_assets import require_admin, require_viewer
+from assetguard.interfaces.http.authorization import require_admin, require_viewer
 from assetguard.modules.identity.auth import AuthPrincipal, create_session, hash_password, revoke_session_token, verify_password
 from assetguard.modules.identity.location_access import permitted_room_ids
 from assetguard.modules.identity.models import AgentCredentialRecord, AuthSessionRecord, UserRecord
