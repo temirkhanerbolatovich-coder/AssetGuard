@@ -57,7 +57,7 @@ AssetGuard уже является работающим pilot MVP: школьн�
 | Постоянный deployment | ✅ | Oracle Cloud Always Free, Docker Compose, Caddy, DuckDNS, TLS, restart policy | Public health/readiness |
 | CI | ✅ | PostgreSQL tests, browser E2E, dependency audit, JS/PowerShell checks, Compose validation | GitHub Actions |
 
-Последняя подтверждённая локальная проверка: **32 backend-теста пройдены раздельными CI-наборами**: 30 unit/integration и 2 browser E2E. Единый запуск всех наборов пока требует изоляции тестовой БД и rate limiter.
+Последняя подтверждённая локальная проверка: **все 32 backend-теста пройдены единым запуском**: 30 unit/integration и 2 browser E2E. Disposable PostgreSQL очищается перед каждым тестом, а in-memory rate limiter не переносит состояние между сценариями.
 
 ## Реализовано частично
 

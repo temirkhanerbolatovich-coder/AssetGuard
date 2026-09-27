@@ -18,6 +18,6 @@
         Referrer-Policy "no-referrer"
     }
     request_body {
-        max_size 3MB
+        max_size 10MB
     }
 }

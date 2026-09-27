@@ -6,8 +6,9 @@ from uuid import uuid4
 import pytest
 from alembic import command
 from alembic.config import Config
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 
+from assetguard.app import app
 from assetguard.infrastructure.config import get_settings
 from assetguard.infrastructure.database import get_session_factory
 
@@ -48,3 +49,27 @@ def isolated_postgresql_database():
         else:
             os.environ["ASSETGUARD_DATABASE_URL"] = original_env
         get_settings.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def reset_test_state(isolated_postgresql_database):
+    """Keep every test independent inside the disposable session database."""
+    factory = get_session_factory()
+    engine = factory.kw["bind"]
+    with engine.begin() as connection:
+        tables = connection.execute(
+            text(
+                "SELECT tablename FROM pg_tables "
+                "WHERE schemaname = 'public' AND tablename <> 'alembic_version'"
+            )
+        ).scalars().all()
+        if tables:
+            quoted_tables = ", ".join(f'"{table.replace(chr(34), chr(34) * 2)}"' for table in tables)
+            connection.exec_driver_sql(f"TRUNCATE TABLE {quoted_tables} RESTART IDENTITY CASCADE")
+
+    middleware = app.middleware_stack
+    while middleware is not None:
+        if hasattr(middleware, "_requests"):
+            middleware._requests.clear()
+            break
+        middleware = getattr(middleware, "app", None)

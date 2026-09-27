@@ -5,7 +5,7 @@
 - HTTPS и нормальная проверка сертификата для GLPI Agent;
 - аутентификация и авторизация admin API/UI;
 - secrets вне исходного кода и логов;
-- ограничение размера payload, schema validation и basic rate limiting;
+- единый лимит входящего payload 10 MB на Caddy и API, schema validation и basic rate limiting;
 - audit важный административных действий;
 - отсутствие публичного доступа к PostgreSQL.
 
@@ -26,4 +26,4 @@
 - Caddy удаляет custom admin token, `Authorization` и `Cookie` из runtime-логов до их записи;
 - raw evidence и audit history защищены append-only database triggers.
 
-Постоянный Oracle Cloud deployment с публичным TLS endpoint принят 2026-09-25. До production-пилота остаются внешний proxy-level rate limit, encrypted off-host backup, репетиция восстановления из off-site копии, secret/SAST/container scanning, MFA/SSO и утверждённая retention policy для Vision images. Локальная изолированная репетиция восстановления encrypted backup успешно выполнена 2026-09-24; это подтверждает процедуру восстановления, но не заменяет внешний backup.
+Постоянный Oracle Cloud deployment с публичным TLS endpoint принят 2026-09-25. Автоматический secret scan всей Git-истории и локальный pre-commit hook включены. До production-пилота остаются внешний proxy-level rate limit, encrypted off-host backup, репетиция восстановления из off-site копии, SAST/container scanning, MFA/SSO и утверждённая retention policy для Vision images. Локальная изолированная репетиция восстановления encrypted backup успешно выполнена 2026-09-24; это подтверждает процедуру восстановления, но не заменяет внешний backup.
