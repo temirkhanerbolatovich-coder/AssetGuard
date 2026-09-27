@@ -144,4 +144,4 @@ $env:ASSETGUARD_RUN_BROWSER_E2E='1'
 .venv/Scripts/python.exe -m pytest tests/e2e -q
 ```
 
-Ожидаемый результат: `28 passed` для unit/integration и `2 passed` для browser E2E, включая отдельный direct-link/decision сценарий инцидента (`30 passed` суммарно).
+Ожидаемый результат: `30 passed` для unit/integration и `2 passed` для browser E2E, включая backup interoperability и отдельный direct-link/decision сценарий инцидента (`32 passed` суммарно).

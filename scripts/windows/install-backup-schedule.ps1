@@ -13,6 +13,7 @@ param(
     [string]$BackupTime = '02:00',
     [ValidatePattern('^([01]\d|2[0-3]):[0-5]\d$')]
     [string]$RehearsalTime = '03:00',
+    [string]$OffsiteTarget,
     [string]$TaskPrefix = 'AssetGuard'
 )
 $ErrorActionPreference = 'Stop'
@@ -20,11 +21,12 @@ $secretPath = Join-Path $env:LOCALAPPDATA 'AssetGuard\backup-passphrase.dpapi'
 if (-not (Test-Path -LiteralPath $secretPath)) {
     throw "Create the protected passphrase first: .\set-backup-passphrase.ps1 (expected '$secretPath')."
 }
-$powershell = (Get-Command powershell.exe -ErrorAction Stop).Source
+$powershell = (Get-Command pwsh.exe -ErrorAction Stop).Source
 $backupScript = Join-Path $PSScriptRoot 'backup-database.ps1'
 $rehearsalScript = Join-Path $PSScriptRoot 'invoke-latest-backup-rehearsal.ps1'
-$backupArgs = "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$backupScript`" -RepositoryRoot `"$RepositoryRoot`" -SavedPassphrasePath `"$secretPath`" -NonInteractive"
-$rehearsalArgs = "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$rehearsalScript`" -RepositoryRoot `"$RepositoryRoot`" -SavedPassphrasePath `"$secretPath`""
+$offsiteArgs = if ($OffsiteTarget) { " -OffsiteTarget `"$OffsiteTarget`"" } else { '' }
+$backupArgs = "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$backupScript`" -RepositoryRoot `"$RepositoryRoot`" -SavedPassphrasePath `"$secretPath`" -NonInteractive$offsiteArgs"
+$rehearsalArgs = "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$rehearsalScript`" -RepositoryRoot `"$RepositoryRoot`" -SavedPassphrasePath `"$secretPath`"$offsiteArgs"
 $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Hours 2)
 $principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Limited
 Register-ScheduledTask -TaskName "$TaskPrefix Daily Encrypted Backup" -Action (New-ScheduledTaskAction -Execute $powershell -Argument $backupArgs) `

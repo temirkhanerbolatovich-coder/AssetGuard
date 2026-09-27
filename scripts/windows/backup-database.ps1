@@ -4,11 +4,29 @@ param(
     [string]$OutputDirectory = (Join-Path $RepositoryRoot '.local\backups'),
     [Security.SecureString]$Passphrase,
     [string]$OffsiteTarget,
+    [ValidateRange(1, 3650)]
+    [int]$LocalRetentionDays = 14,
+    [ValidateRange(1, 3650)]
+    [int]$OffsiteRetentionDays = 30,
     [string]$SavedPassphrasePath = (Join-Path $env:LOCALAPPDATA 'AssetGuard\backup-passphrase.dpapi'),
     [switch]$NonInteractive
 )
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'backup-crypto.ps1')
+
+function Resolve-RcloneExecutable {
+    $command = Get-Command rclone -ErrorAction SilentlyContinue
+    if ($command) { return $command.Source }
+
+    $wingetPackages = Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Packages'
+    $candidate = Get-ChildItem -LiteralPath $wingetPackages -Directory -Filter 'Rclone.Rclone_*' -ErrorAction SilentlyContinue |
+        ForEach-Object { Get-ChildItem -LiteralPath $_.FullName -Filter 'rclone.exe' -Recurse -File -ErrorAction SilentlyContinue } |
+        Select-Object -First 1
+    if ($candidate) { return $candidate.FullName }
+
+    throw 'rclone is required for a cloud OffsiteTarget. Install it with: winget install --id Rclone.Rclone --exact'
+}
+
 $envPath = Join-Path $RepositoryRoot '.env'
 foreach ($line in Get-Content -LiteralPath $envPath) {
     if ($line -match '^([^#=]+)=(.*)$') { Set-Item -Path "Env:$($matches[1])" -Value $matches[2] }
@@ -31,11 +49,18 @@ if ($OffsiteTarget) {
         New-Item -ItemType Directory -Force -Path $OffsiteTarget | Out-Null
         Copy-Item -LiteralPath $destination -Destination (Join-Path $OffsiteTarget $name) -Force
     } else {
-        if (-not (Get-Command rclone -ErrorAction SilentlyContinue)) { throw 'rclone is required for a cloud OffsiteTarget.' }
+        $rclone = Resolve-RcloneExecutable
         $remote = "$($OffsiteTarget.TrimEnd('/'))/$name"
-        & rclone copyto $destination $remote
+        & $rclone copyto $destination $remote
         if ($LASTEXITCODE -ne 0) { throw 'Encrypted off-site upload failed.' }
+        & $rclone delete $OffsiteTarget --min-age "$($OffsiteRetentionDays)d"
+        if ($LASTEXITCODE -ne 0) { throw 'Off-site backup retention cleanup failed.' }
     }
     Write-Host "Encrypted off-site copy created: $OffsiteTarget"
 }
+
+$localCutoff = (Get-Date).ToUniversalTime().AddDays(-$LocalRetentionDays)
+Get-ChildItem -LiteralPath $OutputDirectory -Filter '*.agbackup' -File |
+    Where-Object { $_.LastWriteTimeUtc -lt $localCutoff } |
+    ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force }
 Write-Host "Encrypted backup created: $destination"

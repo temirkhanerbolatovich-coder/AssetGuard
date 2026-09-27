@@ -103,14 +103,22 @@ $passphrase = Read-Host 'Backup passphrase' -AsSecureString
 
 ## Автоматический backup и rehearsal
 
+Для шифрования требуется PowerShell 7 (`pwsh`): Windows PowerShell 5.1 не
+содержит `System.Security.Cryptography.AesGcm`. Планировщик регистрирует обе
+задачи через `pwsh.exe`.
+
 На pilot-компьютере с запущенным Docker Desktop сначала один раз сохраните пароль. Это DPAPI-blob: он читается только этим Windows-пользователем на этом компьютере и не передаётся в Task Scheduler как открытый аргумент.
 
 ```powershell
 .\scripts\windows\set-backup-passphrase.ps1
-.\scripts\windows\install-backup-schedule.ps1 -BackupTime '02:00' -RehearsalTime '03:00'
+.\scripts\windows\install-backup-schedule.ps1 `
+  -BackupTime '02:00' -RehearsalTime '03:00' `
+  -OffsiteTarget 'assetguard-r2:assetguard-backups/daily'
 ```
 
 Появятся две задачи: ежедневный `AssetGuard Daily Encrypted Backup` и воскресный `AssetGuard Weekly Restore Rehearsal`. Они запускаются лишь когда данный пользователь вошёл в Windows — это осознанное ограничение desktop-pilot, потому что и Docker Desktop, и DPAPI принадлежат интерактивному пользователю. Для постоянного сервера следующим шагом нужен отдельный service account и secret manager.
+
+При передаче `-OffsiteTarget` ежедневная задача хранит в R2 30 последних дней, а локально — 14 дней. Воскресная rehearsal скачивает последнюю копию именно из R2, восстанавливает её в изолированный контейнер без открытых портов и удаляет только временно скачанный зашифрованный файл.
 
 ## Уведомления в Telegram
 

@@ -4,7 +4,9 @@ function Get-AssetGuardPassphraseBytes {
     try {
         $plain = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($pointer)
         if ($plain.Length -lt 16) { throw 'Backup passphrase must contain at least 16 characters.' }
-        return [Text.Encoding]::UTF8.GetBytes($plain)
+        # Keep byte[] intact. PowerShell otherwise enumerates it into Object[],
+        # which changes PBKDF2 overload resolution and breaks Linux interop.
+        return ,([Text.Encoding]::UTF8.GetBytes($plain))
     } finally {
         if ($null -ne $plain) { $plain = $null }
         [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer)
@@ -44,7 +46,7 @@ function Protect-AssetGuardBackup {
     $nonce = [byte[]]::new(12)
     [Security.Cryptography.RandomNumberGenerator]::Fill($salt)
     [Security.Cryptography.RandomNumberGenerator]::Fill($nonce)
-    $passphraseBytes = Get-AssetGuardPassphraseBytes $Passphrase
+    [byte[]]$passphraseBytes = Get-AssetGuardPassphraseBytes $Passphrase
     $derive = [Security.Cryptography.Rfc2898DeriveBytes]::new($passphraseBytes, $salt, 210000, [Security.Cryptography.HashAlgorithmName]::SHA256)
     try {
         $key = $derive.GetBytes(32)
@@ -87,7 +89,7 @@ function Unprotect-AssetGuardBackup {
     [byte[]]$nonce = $input[21..32]
     [byte[]]$tag = $input[33..48]
     [byte[]]$ciphertext = $input[49..($input.Length - 1)]
-    $passphraseBytes = Get-AssetGuardPassphraseBytes $Passphrase
+    [byte[]]$passphraseBytes = Get-AssetGuardPassphraseBytes $Passphrase
     $derive = [Security.Cryptography.Rfc2898DeriveBytes]::new($passphraseBytes, $salt, 210000, [Security.Cryptography.HashAlgorithmName]::SHA256)
     try {
         $key = $derive.GetBytes(32)

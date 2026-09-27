@@ -15,8 +15,8 @@
 ## Этап 2: надёжная эксплуатация
 
 - [x] Постоянный Oracle Cloud server, DuckDNS, публичный TLS endpoint и ограничивающие сетевые правила проверены 2026-09-25.
-- [~] Automated encrypted backup + weekly isolated restore rehearsal доступны через Windows Task Scheduler; свежая локальная копия проверена восстановлением 2026-09-24. Off-site ротация и отдельная политика хранения ключа ещё не настроены.
-- [x] Изолированная локальная restore rehearsal: зашифрованная копия восстановлена в отдельный временный PostgreSQL и сравнена с текущей БД; off-site recovery остаётся незакрытым.
+- [~] Automated encrypted backup + weekly isolated restore rehearsal реализованы для Windows Task Scheduler: исправлен запуск через PowerShell 7, настроены R2 copy и retention 14 дней локально / 30 дней off-site. Требуется переустановка задач и первый успешный автоматический запуск.
+- [~] Изолированная off-site restore rehearsal проходила 2026-09-26, но текущая R2-конфигурация 2026-09-27 возвращает `SignatureDoesNotMatch`; после повторной авторизации нужен новый сохранённый `PASS`.
 - [~] `/health` и `/health/ready` готовы; локальный Windows monitor проверяет disk, Agent last-seen, failed ingest и identity conflicts. Нужен постоянный серверный сбор метрик, включая backup age.
 - [~] Telegram alerting с дедупликацией работает из локального Windows-контура; нужны серверное расписание и правила escalation.
 - [ ] Staging environment и rollback runbook.
