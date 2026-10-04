@@ -9,6 +9,8 @@ Production: **https://assetguard-temirkhan.duckdns.org**
 
 Рабочая точка 2026-10-05: **первый этап UI/UX принят на production**, application commit `d8f6a63`. 96 backend tests и 6 browser E2E прошли; GitHub CI success, включая Secret scan и dependency audit. На публичном сайте проверены anonymous login, hash-link, controls, отсутствие private запросов/page errors и ширины 320–1920 px. Реализованы отдельный вход, профиль/контекст, loading/error/retry, очистка/revoke сессии и защита карточек от позднего ответа. [Приёмка UI](../../outputs/assetguard-ui-stage1-2026-10-05.md), [описание](../features/frontend-shell-and-auth.md), [ТЗ UI/UX](ui-ux-modernization-spec.md). Следующий продуктовый этап — реестр/карточка и единый центр инцидентов; затем кабинеты/импорт, Agent/admin и полная accessibility/performance/usability приёмка.
 
+Этап UI/UX 2 реализован локально: реестр, приоритетные задачи, единый центр инцидентов и защищённое чтение evidence. 97 backend + 7 browser E2E прошли; публикация и production приёмка ещё выполняются. [Контракт функции](../features/registry-and-incident-center.md).
+
 Telegram ранее принят на `0b90607`, schema `0026`; после UI-релиза очередь и штатное подавление повтора проверены вновь, таймеры активны. [Приёмка Telegram](../../outputs/assetguard-telegram-2026-10-05.md), [функция и настройка](../features/telegram-notifications.md). Fleet acceptance остаётся самостоятельной задачей.
 
 Последняя проверенная production/R2 restore revision: **`0026_telegram_notifications`**, 2026-10-05 по времени клиента, **216 assets / 11 endpoints**.
@@ -85,7 +87,7 @@ Production read-only counts: **216 assets, 11 endpoints, 51 raw inventories, 51 
 
 | Область | Что уже есть | Чего не хватает до полного production |
 | --- | --- | --- |
-| Multi-tenant | Organization scope и scoped ADMIN; матрица 60 admin operations; negative tests для native Agent ingestion и Excel/PDF import | Явные platform/onboarding полномочия, отказ от legacy global fallback и приёмка двух реальных школ |
+| Multi-tenant | Organization scope и scoped ADMIN; матрица 62 admin operations; negative tests для native Agent ingestion и Excel/PDF import | Явные platform/onboarding полномочия, отказ от legacy global fallback и приёмка двух реальных школ |
 | Мониторинг | Постоянный systemd monitor проверяет API, Compose services, диск, возраст/ошибки backup, ingest и Agent last-seen; доставка, дедупликация и четырёхчасовой repeat Telegram-alert приняты | Dashboard наблюдаемости и формальная on-call escalation |
 | Backup | Зашифрованные копии, Cloudflare R2, 14 дней локально / 30 дней off-site; Windows и Linux timers; свежий restore `0026` прошёл 2026-10-05 по времени клиента | Backup пока охватывает PostgreSQL, но не Vision volume; длительное наблюдение за регулярными циклами |
 | Vision production | Полный локальный photo workflow и настоящий model smoke в CI | Oracle Free VM не тянет ML runtime; нужны отдельный inference host/GPU либо более мощный сервер, object storage и accuracy evaluation |
@@ -176,7 +178,7 @@ Publication/CI/server/backup/migration/controlled alert для application `93ff
 
 Результат: пользователь одной организации не может получить данные другой ни одним API-запросом.
 
-- [x] составить исполняемую route/access matrix для всех 60 защищённых admin operations;
+- [x] составить исполняемую route/access matrix для всех 62 защищённых admin operations;
 - [x] добавить negative tests для foreign tenant/локации, native ingestion и Excel/PDF imports;
 - уточнить platform/onboarding полномочия с учётом существующего tenant-scoped ADMIN;
 - внедрить полный admin audit;

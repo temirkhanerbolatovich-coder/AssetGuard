@@ -683,3 +683,152 @@ def test_late_asset_response_does_not_replace_new_route(live_server):
         assert page.locator("#detail").is_hidden()
         assert page.get_by_role("heading", name="Центр контроля", exact=True).is_visible()
         browser.close()
+
+
+def test_registry_pages_and_unified_physical_incident_workflow(live_server):
+    playwright = pytest.importorskip("playwright.sync_api")
+    settings = get_settings()
+    headers = {"X-AssetGuard-Admin-Token": settings.admin_shared_secret}
+    with playwright.sync_playwright() as runtime:
+        browser = runtime.chromium.launch()
+        page = browser.new_page(viewport={"width": 1366, "height": 900})
+        page.set_default_timeout(10_000)
+        failures = []
+        page.on("pageerror", lambda error: failures.append(str(error)))
+        def post(path, data):
+            response = page.request.post(live_server + path, headers=headers, data=data)
+            assert response.ok, response.text()
+            return response.json()
+        room_ids = []
+        for name in ("North", "South"):
+            building = post("/admin/locations/buildings", {"name": name})
+            floor = post(f"/admin/locations/buildings/{building['id']}/floors", {"name": "1"})
+            room_ids.append(post(f"/admin/locations/floors/{floor['id']}/rooms", {"name": "101"})["id"])
+        assets = [post("/admin/assets", {"inventory_number": f"DESK-{index:02d}", "name": f"Desk {index:02d}",
+            "asset_type": "Furniture", "category": "FURNITURE", "tracking_mode": "GROUPED", "quantity": 3, "unit": "шт.",
+            "room_id": room_ids[index // 22]}) for index in range(44)]
+        for index in (0, 22):
+            room_assets = assets[index:index+22]
+            post(f"/admin/locations/rooms/{room_ids[index//22]}/inspections", {"comment": "Controlled inspection",
+                "items": [{"asset_id": asset["id"], "result": "MISSING" if asset == room_assets[0] else "PRESENT",
+                    "affected_quantity": 2 if asset == room_assets[0] else 0, "comment": "Two desks absent" if asset == room_assets[0] else ""} for asset in room_assets]})
+        post("/admin/assets", {"inventory_number": "PRINTER", "name": "Printer no Agent", "asset_type": "Printer", "room_id": room_ids[0]})
+        physical = page.request.get(live_server + "/admin/locations/physical-incidents", headers=headers).json()
+        incident = next(item for item in physical if item["asset_id"] == assets[0]["id"])
+        initial = json.loads((FIXTURES / "glpi-agent-minimal-sanitized.json").read_text(encoding="utf-8"))
+        unique = uuid4().hex
+        initial["deviceid"] = unique
+        initial["content"]["hardware"]["uuid"] = unique
+        inventory_headers = {"X-AssetGuard-Ingest-Token": settings.inventory_shared_secret,
+            "X-AssetGuard-Idempotency-Key": uuid4().hex, "X-AssetGuard-Source": "GLPI_AGENT",
+            "X-AssetGuard-Source-Version": "1.20", "X-AssetGuard-Schema-Version": "ui-stage2", "X-AssetGuard-Inventory-Type": "FULL"}
+        first = page.request.post(live_server + "/internal/inventories", headers=inventory_headers, data=initial)
+        assert first.ok
+        snapshot_id = first.json()["snapshot_id"]
+        endpoint_id = page.request.get(f"{live_server}/admin/snapshots/{snapshot_id}", headers=headers).json()["endpoint_id"]
+        computer = post("/admin/assets", {"inventory_number": "PC", "name": "Computer Agent", "asset_type": "Desktop", "room_id": room_ids[0]})
+        post(f"/admin/endpoints/{endpoint_id}/asset/{computer['id']}", {})
+        post(f"/admin/snapshots/{snapshot_id}/baseline", {"reason": "Controlled baseline"})
+        removed = json.loads((FIXTURES / "glpi-agent-hardware-ram-removed.json").read_text(encoding="utf-8"))
+        removed["deviceid"] = unique
+        removed["content"]["hardware"]["uuid"] = unique
+        inventory_headers["X-AssetGuard-Idempotency-Key"] = uuid4().hex
+        assert page.request.post(live_server + "/internal/inventories", headers=inventory_headers, data=removed).ok
+
+        page.goto(live_server + "/#devices")
+        page.locator("#login-mode").click()
+        page.locator("#token").fill(settings.admin_shared_secret)
+        page.locator("#login").click()
+        page.locator("#status").filter(has_text="Данные актуальны").wait_for()
+        def capture(name):
+            if os.environ.get("ASSETGUARD_CAPTURE_UI_PREVIEWS") == "1":
+                output = Path(__file__).resolve().parents[3] / "outputs/ui-stage2-preview-2026-10-05"
+                output.mkdir(parents=True, exist_ok=True)
+                page.screenshot(path=str(output / name))
+        capture("registry-desktop.png")
+        for width in (320, 390, 768, 1366):
+            page.set_viewport_size({"width": width, "height": 900})
+            assert_no_page_overflow(page, width)
+            if width == 390: capture("registry-mobile.png")
+        assert page.locator("#assets tr.device-row").count() == 20
+        page.locator("#devices .device-filters summary").click()
+        page.locator("#device-category-filter").select_option("FURNITURE")
+        page.locator("#device-search").fill("Desk")
+        page.locator("#device-sort").select_option("name")
+        assert "из 44" in page.locator("#device-result-count").inner_text()
+        page.locator("#device-pagination").get_by_role("button", name="Следующая").click()
+        assert page.locator("#device-pagination").get_by_text("Страница 2 из 3").is_visible()
+        page.locator("#assets .device-open-link", has_text="Desk 20").click()
+        page.locator("#detail-title").filter(has_text="Desk 20").wait_for()
+        assert page.get_by_role("tab", name="Оборудование", exact=True).is_hidden()
+        assert page.locator("#detail-status").get_by_text("Ручной учёт").is_visible()
+        page.locator("#detail-back").click()
+        page.locator("#devices").wait_for(state="visible")
+        assert page.locator("#device-search").input_value() == "Desk"
+        assert page.locator("#device-pagination").get_by_text("Страница 2 из 3").is_visible()
+        page.locator("#device-room-filter").select_option(room_ids[1])
+        assert "из 22" in page.locator("#device-result-count").inner_text()
+        assert page.locator("#device-pagination").get_by_text("Страница 1 из 2").is_visible()
+        page.locator("#clear-device-filters").click()
+        assert page.locator("#device-sort").input_value() == "recent"
+        page.locator("#device-search").fill("PRINTER")
+        assert page.locator("#assets").get_by_text("Ручной учёт", exact=True).is_visible()
+
+        page.locator("#main-nav a[href='#incidents']").click()
+        assert page.locator("#incident-center-list").get_by_text("Agent · технический", exact=False).count() > 0
+        assert page.locator("#incident-center-list").get_by_text("Обход · физический", exact=False).count() == 2
+        capture("incidents-desktop.png")
+        for width in (320, 390, 768, 1366):
+            page.set_viewport_size({"width": width, "height": 900})
+            assert_no_page_overflow(page, width)
+            if width == 390: capture("incidents-mobile.png")
+        page.locator(".incident-filters summary").click()
+        page.locator("#incident-type-filter").select_option("PHYSICAL")
+        page.locator("#incident-room-filter").select_option(room_ids[0])
+        assert page.locator("#incident-center-list .incident-card").count() == 1
+        page.locator("#incident-date-from").fill("2099-12-31")
+        page.locator("#incident-date-to").fill("2000-01-01")
+        assert page.locator("#incident-filter-error").is_visible()
+        page.locator("#incident-date-from").fill("")
+        page.locator("#incident-date-to").fill("")
+        page.locator("#incident-center-list .open-physical-incident").click()
+        page.locator("#incident-detail-title").filter(has_text="Desk 00").wait_for()
+        assert page.url.endswith(f"#physical-incident={incident['id']}")
+        assert page.locator("#incident-detail-comparison").get_by_text("Two desks absent", exact=True).is_visible()
+        assert "Two desks absent" in page.locator("#incident-detail-evidence").text_content()
+        capture("physical-incident-desktop.png")
+        page.locator("#incident-detail-back").click()
+        page.locator("#incidents").wait_for(state="visible")
+        assert page.locator("#incident-type-filter").input_value() == "PHYSICAL"
+        assert page.locator("#incident-room-filter").input_value() == room_ids[0]
+        page.locator("#incident-center-list .open-physical-incident").click()
+        page.locator("#physical-detail-decision").wait_for()
+        page.reload()
+        page.locator("#physical-detail-decision").wait_for()
+        for width in (320, 390, 768, 1366):
+            page.set_viewport_size({"width": width, "height": 900})
+            assert_no_page_overflow(page, width)
+        page.locator("#physical-detail-decision").click()
+        page.locator("#physical-incident-dialog").wait_for(state="visible")
+        page.locator("#physical-incident-action-select").select_option("WRITE_OFF")
+        page.locator("#physical-incident-quantity").fill("1")
+        page.locator("#physical-incident-comment").fill("Approved damaged unit disposal")
+        page.locator("#physical-incident-document-number").fill("UI-STAGE2-ACT")
+        page.locator("#physical-incident-submit").click()
+        page.locator("#physical-incident-dialog").wait_for(state="hidden")
+        page.locator("#incident-detail-decisions").get_by_text("UI-STAGE2-ACT", exact=False).wait_for()
+        assert page.url.endswith(f"#physical-incident={incident['id']}")
+        detail = page.request.get(f"{live_server}/admin/assets/{assets[0]['id']}", headers=headers).json()
+        assert detail["quantity"] == 2
+        physical_detail = page.request.get(f"{live_server}/admin/locations/physical-incidents/{incident['id']}", headers=headers).json()
+        assert len(physical_detail["decisions"]) == 1
+        assert page.request.get(f"{live_server}/admin/locations/physical-incidents/{incident['id']}/act.pdf", headers=headers).status == 200
+        page.locator("#incident-detail-back").click()
+        page.locator("#incidents").wait_for(state="visible")
+        if not page.locator(".incident-filters").evaluate("element => element.open"):
+            page.locator(".incident-filters summary").click()
+        page.locator("#clear-incident-filters").click()
+        page.locator("#incident-status-filter").select_option("RESOLVED")
+        assert page.locator("#incident-center-list .incident-card").count() == 1
+        assert failures == [], failures
+        browser.close()

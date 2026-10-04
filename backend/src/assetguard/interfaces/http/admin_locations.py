@@ -233,6 +233,57 @@ def _physical_incident_view(session: Session, incident: PhysicalIncidentRecord) 
     }
 
 
+@router.get("/physical-incidents")
+def list_physical_incidents(
+    session: Annotated[Session, Depends(get_session)],
+    principal: Annotated[AuthPrincipal, Depends(require_viewer)],
+) -> list[dict]:
+    """Read incident summaries in the caller's organization and assigned rooms."""
+    query = (
+        select(PhysicalIncidentRecord, AssetRecord, RoomRecord)
+        .join(AssetRecord, PhysicalIncidentRecord.asset_id == AssetRecord.id)
+        .join(RoomRecord, PhysicalIncidentRecord.room_id == RoomRecord.id)
+        .join(FloorRecord, RoomRecord.floor_id == FloorRecord.id)
+        .join(BuildingRecord, FloorRecord.building_id == BuildingRecord.id)
+        .order_by(PhysicalIncidentRecord.created_at.desc(), PhysicalIncidentRecord.id)
+    )
+    if principal.organization_id:
+        query = query.where(BuildingRecord.organization_id == principal.organization_id)
+    allowed = permitted_room_ids(session, principal)
+    if allowed is not None:
+        query = query.where(PhysicalIncidentRecord.room_id.in_(allowed))
+    return [{
+        "id": str(incident.id), "asset_id": str(asset.id), "asset_name": asset.name,
+        "inventory_number": asset.inventory_number, "room_id": str(room.id), "room": room.name,
+        "issue_type": incident.issue_type, "affected_quantity": incident.affected_quantity,
+        "status": incident.status, "severity": incident.severity, "title": incident.title,
+        "created_at": incident.created_at,
+    } for incident, asset, room in session.execute(query)]
+
+
+@router.get("/physical-incidents/{incident_id}")
+def physical_incident_detail(
+    incident_id: UUID, session: Annotated[Session, Depends(get_session)],
+    principal: Annotated[AuthPrincipal, Depends(require_viewer)],
+) -> dict:
+    """Read the original inspection evidence and decisions after location authorization."""
+    incident = session.get(PhysicalIncidentRecord, incident_id)
+    if not incident:
+        raise HTTPException(404, "Physical incident was not found.")
+    _room(session, incident.room_id, principal)
+    item = session.get(RoomInspectionItemRecord, incident.inspection_item_id)
+    inspection = session.get(RoomInspectionRecord, item.inspection_id)
+    return {
+        **_physical_incident_view(session, incident),
+        "room_path": _room_path(session, incident.room_id),
+        "evidence": {
+            "inspection_id": str(inspection.id), "completed_at": inspection.completed_at,
+            "inspector_name": inspection.inspector_name, "expected_quantity": item.expected_quantity,
+            "affected_quantity": item.affected_quantity, "result": item.result, "comment": item.comment,
+        },
+    }
+
+
 @router.get("/tree")
 def location_tree(session: Annotated[Session, Depends(get_session)], principal: Annotated[AuthPrincipal, Depends(require_viewer)]):
     query = select(BuildingRecord).order_by(BuildingRecord.name)

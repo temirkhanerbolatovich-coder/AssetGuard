@@ -1,6 +1,6 @@
 # AssetGuard — матрица доступа `/admin`
 
-Дата проверки: 27 сентября 2026 года. Матрица покрывает **60 protected operations** на 53 уникальных путях.
+Дата проверки: 5 октября 2026 года. Матрица покрывает **62 protected operations** на 55 уникальных путях.
 
 ## Роли и location grants
 
@@ -37,6 +37,7 @@ Bootstrap/shared credential остаётся отдельным platform bootstr
 | --- | --- | --- |
 | Location tree, room report, inspections and workspace reads | Viewer | tenant + granted locations |
 | Room inspection and physical-incident decision | Viewer | write requires `ADMIN` or `EDITOR` grant |
+| Physical-incident list/detail (`GET /admin/locations/physical-incidents[/id]`) | Viewer | tenant + granted original incident location; detail includes inspection evidence |
 | Physical-incident act PDF | Viewer | tenant + granted location |
 | Create building/floor/room; update room | Admin | tenant |
 | Vision room, scan, image and baseline reads | Viewer | tenant + granted locations |
@@ -55,7 +56,7 @@ Bootstrap/shared credential остаётся отдельным platform bootstr
 
 ## Автоматическое доказательство
 
-`tests/unit/test_admin_route_contract.py` хранит исполняемый реестр всех 60 method/path operations. Тест падает при добавлении, удалении или переносе операции между Admin и Viewer level. Там же автоматизирована allow/deny-матрица для всех четырёх ролей и запроса без token.
+`tests/unit/test_admin_route_contract.py` хранит исполняемый реестр всех 62 method/path operations. Тест падает при добавлении, удалении или переносе операции между Admin и Viewer level. Там же автоматизирована allow/deny-матрица для всех четырёх ролей и запроса без token.
 
 `tests/integration/test_tenant_isolation.py` создаёт две организации с asset, endpoint, raw inventory, snapshot, baseline, change, incident, history, Vision room, user, session, Agent credential и re-enrolment request. Он доказывает фильтрацию списков, `404` для foreign UUID и запрет изменения foreign resources.
 

@@ -19,7 +19,7 @@
 | Users | list, create, change role/password/active state |
 | Location access | grant/remove VIEWER or EDITOR at building/floor/room scope; location tree and room reports respect grants |
 | Room inspections | list and complete immutable physical inspection acts; every asset must be marked present, missing or damaged and write access requires ADMIN or an EDITOR grant |
-| Physical incidents | automatic incident for every missing/damaged inspection item; ADMIN/EDITOR can investigate or resolve it as move, repair, write-off or false positive |
+| Physical incidents | tenant/location-scoped list and original inspection evidence/detail reads; automatic incident for every missing/damaged inspection item; ADMIN/EDITOR can investigate or resolve it as move, repair, write-off or false positive |
 | Vision rooms | list, scan history, get/save baseline |
 | Vision scans | multipart upload/detect, get details, original/annotated image |
 | Asset import/export | Excel and PDF export; Excel/PDF preview and confirmed selective apply |
@@ -29,6 +29,8 @@ Admin actions, изменяющие baseline или incident, обязаны о�
 `POST /agent/re-enrolments` создаёт 30-минутный запрос восстановления по SMBIOS UUID и возвращает одноразовый claim token. Публичный ответ не сообщает, найдено ли устройство. Installer проверяет состояние через `GET /agent/re-enrolments/{id}` с этим token только в памяти. `ADMIN` видит запросы своей организации через `GET /admin/agent-re-enrolments` и может подтвердить или отклонить их. Подтверждение атомарно отзывает прежний активный credential endpoint и создаёт новый; plaintext token на сервере не хранится. Неизвестный UUID нельзя подтвердить, а чужая организация получает `404`.
 
 `GET /admin/incidents/{incident_id}` возвращает endpoint, время создания, тип изменения, тип компонента, evidence и append-only decisions. Этого ответа достаточно для прямой ссылки на карточку инцидента и восстановления экрана после refresh.
+
+`GET /admin/locations/physical-incidents` и `GET /admin/locations/physical-incidents/{incident_id}` объединяют физические расхождения с техническими в UI. Чтение ограничено tenant и исходным кабинетом инцидента, включая VIEWER grants; evidence/detail и ограничения pagination описаны в [контракте функции](../features/registry-and-incident-center.md).
 
 Inventory envelope проходит version-tolerant минимальную проверку (`content` object и обязательный `deviceid` для `GLPI_AGENT`) после сохранения immutable raw evidence. Конкретные source adapters могут расширять этот контракт, не меняя canonical model.
 

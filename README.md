@@ -20,7 +20,7 @@ AssetGuard — система учёта и контролируемой инв�
 - отдельные Agent credentials, отзыв ключа и подтверждаемое re-enrolment после переустановки Windows;
 - физический обход кабинета, перемещение, списание и PDF-акты;
 - Excel/PDF import/export, локальный OCR и QR карточки;
-- tenant/location authorization matrix для 60 защищённых admin operations;
+- tenant/location authorization matrix для 62 защищённых admin operations;
 - production HTTPS deployment, encrypted PostgreSQL backup в Cloudflare R2 и isolated restore rehearsal;
 - CI, dependency audit, secret scanning и browser E2E.
 
