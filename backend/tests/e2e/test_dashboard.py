@@ -5,6 +5,7 @@ import json
 import socket
 import threading
 import time
+from datetime import UTC, datetime
 from io import BytesIO
 from pathlib import Path
 from uuid import uuid4
@@ -15,6 +16,8 @@ from openpyxl import Workbook
 
 from assetguard.app import app
 from assetguard.infrastructure.config import get_settings
+from assetguard.infrastructure.database import get_session_factory
+from assetguard.modules.assets.models import OrganizationRecord
 
 
 FIXTURES = Path(__file__).parents[1] / "fixtures"
@@ -80,6 +83,7 @@ def test_admin_can_open_dashboard_and_create_asset(live_server):
         console_errors = []
         page.on("console", lambda message: console_errors.append(message.text) if message.type == "error" else None)
         page.goto(base_url)
+        page.locator("#login-mode").click()
         page.locator("#token").fill(admin_secret)
         page.get_by_role("button", name="Войти").click()
         page.locator("#status").filter(has_text="Данные актуальны").wait_for()
@@ -390,6 +394,7 @@ def test_incident_detail_supports_direct_link_and_managed_decision(live_server):
         incident = next(item for item in incidents if item["status"] == "OPEN")
 
         page.goto(f"{base_url}/#incident={incident['id']}")
+        page.locator("#login-mode").click()
         page.locator("#token").fill(settings.admin_shared_secret)
         page.get_by_role("button", name="Войти").click()
         page.locator("#incident-detail-title").filter(has_text="Оперативная память").wait_for()
@@ -470,4 +475,199 @@ def test_incident_detail_supports_direct_link_and_managed_decision(live_server):
         confirmation.wait_for(state="hidden")
         assert page.locator("#baseline-summary").get_by_text("Согласованная замена модуля").is_visible()
         assert console_errors == []
+        browser.close()
+
+
+def test_sign_in_screen_named_account_keyboard_and_mobile(live_server):
+    playwright = pytest.importorskip("playwright.sync_api")
+    settings = get_settings()
+    username = f"ui-review-{uuid4().hex[:6]}"
+    password = "Browser-test-password-123"
+    with get_session_factory()() as session:
+        organization = OrganizationRecord(name="Школа · тестовый интерфейс", created_at=datetime.now(UTC))
+        session.add(organization)
+        session.commit()
+        organization_id = str(organization.id)
+    with playwright.sync_playwright() as runtime:
+        browser = runtime.chromium.launch()
+        page = browser.new_page(viewport={"width": 1366, "height": 900})
+        page.set_default_timeout(10_000)
+        requests = []
+        page.on("request", lambda request: requests.append(request.url))
+        page.goto(f"{live_server}/#devices")
+        assert page.locator("#auth-screen").is_visible()
+        assert page.locator("#app-main").is_hidden()
+        assert page.locator("#app-header").is_hidden()
+        assert not any("/admin/" in url or "/auth/me" in url for url in requests)
+        assert page.locator(".skeleton:visible").count() == 0
+        preview_dir = Path(__file__).resolve().parents[3] / "outputs/ui-stage1-preview-2026-10-05"
+        def capture(name):
+            if os.environ.get("ASSETGUARD_CAPTURE_UI_PREVIEWS") == "1":
+                preview_dir.mkdir(parents=True, exist_ok=True)
+                page.screenshot(path=str(preview_dir / name), full_page=name.startswith("login"))
+        capture("login-desktop.png")
+        for width in (320, 360, 390, 768, 1024, 1366, 1920):
+            page.set_viewport_size({"width": width, "height": 900})
+            assert page.locator("body").evaluate("element => element.scrollWidth <= element.clientWidth")
+        page.set_viewport_size({"width": 390, "height": 844})
+        capture("login-mobile.png")
+        page.locator("#login").click()
+        assert page.locator("#login-error").is_visible()
+        assert page.locator("#login-error").evaluate("element => element === document.activeElement")
+        page.locator("#login-error-field").click()
+        assert page.locator("#username").evaluate("element => element === document.activeElement")
+        created = page.request.post(f"{live_server}/admin/users", headers={"X-AssetGuard-Admin-Token": settings.admin_shared_secret}, data={"username": username, "password": password, "role": "ADMIN", "organization_id": organization_id})
+        assert created.status == 201
+        page.locator("#username").fill(username)
+        page.locator("#token").fill("Incorrect-password-123")
+        page.locator("#login").click()
+        playwright.expect(page.locator("#login-error-text")).to_contain_text("Неверный логин или пароль")
+        assert page.locator("#app-main").is_hidden()
+        assert page.evaluate("sessionStorage.getItem('assetguard-admin-token')") is None
+        page.locator("#token").fill(password)
+        page.locator("#token").press("Enter")
+        page.locator("#status").filter(has_text="Данные актуальны").wait_for()
+        assert page.url.endswith("#devices")
+        assert page.locator("#devices").is_visible()
+        assert page.locator("#session-state").inner_text() == username
+        assert page.locator("#session-state").is_visible()
+        assert page.locator("#organization-context").inner_text() == "Школа · тестовый интерфейс"
+        assert page.locator("#token").input_value() == ""
+        assert page.locator("#username").is_hidden()
+        page.locator("#nav-toggle").click()
+        assert page.locator("#nav-toggle").get_attribute("aria-expanded") == "true"
+        page.keyboard.press("Escape")
+        assert page.locator("#nav-toggle").get_attribute("aria-expanded") == "false"
+        assert page.locator("#nav-toggle").evaluate("element => element === document.activeElement")
+        page.locator("#nav-toggle").click()
+        page.locator("#main-nav a[href='#overview']").click()
+        page.locator("#overview").wait_for(state="visible")
+        page.locator("#toast").wait_for(state="hidden")
+        for width in (320, 360, 390, 768, 1024, 1366, 1920):
+            page.set_viewport_size({"width": width, "height": 900})
+            assert page.locator("body").evaluate("element => element.scrollWidth <= element.clientWidth")
+        page.set_viewport_size({"width": 390, "height": 844})
+        capture("workspace-mobile.png")
+        page.set_viewport_size({"width": 1366, "height": 900})
+        capture("workspace-desktop.png")
+        previous_session = page.evaluate("sessionStorage.getItem('assetguard-admin-token')")
+        page.locator("#logout").click()
+        page.locator("#auth-screen").wait_for(state="visible")
+        assert page.locator("#app-header").is_hidden()
+        assert page.evaluate("sessionStorage.getItem('assetguard-admin-token')") is None
+        # The server must revoke named sessions, not just hide the interface.
+        page.wait_for_function("() => document.querySelector('#toast').textContent.includes('вышли')")
+        for _ in range(30):
+            response = page.request.get(f"{live_server}/auth/me", headers={"X-AssetGuard-Admin-Token": previous_session})
+            if response.status == 401:
+                break
+            page.wait_for_timeout(50)
+        assert response.status == 401
+        browser.close()
+
+
+def test_workspace_error_retry_expiry_and_logout_during_loading(live_server):
+    playwright = pytest.importorskip("playwright.sync_api")
+    with playwright.sync_playwright() as runtime:
+        browser = runtime.chromium.launch()
+        page = browser.new_page()
+        page.set_default_timeout(10_000)
+        page.route("**/admin/assets", lambda route: route.fulfill(status=503, json={"detail": "test unavailable"}))
+        page.goto(f"{live_server}/#devices")
+        page.locator("#login-mode").click()
+        page.locator("#token").fill(get_settings().admin_shared_secret)
+        page.locator("#login").click()
+        page.locator("#retry-load").wait_for(state="visible")
+        assert page.locator("#devices").is_hidden()
+        assert page.locator("#status").inner_text() == "Данные не обновлены"
+        assert "Вход выполнен" not in page.locator("#toast").inner_text()
+        page.unroute("**/admin/assets")
+        page.locator("#retry-load").click()
+        page.locator("#devices").wait_for(state="visible")
+        assert page.url.endswith("#devices")
+        page.route("**/admin/assets", lambda route: route.fulfill(status=403, json={"detail": "test forbidden"}))
+        page.locator("#refresh-data").click()
+        page.locator("#retry-load").wait_for(state="visible")
+        playwright.expect(page.locator("#feedback-description")).to_contain_text("нет доступа")
+        assert page.locator("#devices").is_hidden()
+        page.unroute("**/admin/assets")
+        page.locator("#retry-load").click()
+        page.locator("#devices").wait_for(state="visible")
+        page.route("**/auth/me", lambda route: route.fulfill(status=401, json={"detail": "test expired"}))
+        page.locator("#refresh-data").click()
+        page.locator("#auth-screen").wait_for(state="visible")
+        assert page.evaluate("sessionStorage.getItem('assetguard-admin-token')") is None
+        assert page.locator("#app-main").is_hidden()
+        page.unroute("**/auth/me")
+        page.locator("#token").fill(get_settings().admin_shared_secret)
+        page.locator("#login").click()
+        page.locator("#status").filter(has_text="Данные актуальны").wait_for()
+        held = []
+        page.route("**/admin/assets", lambda route: held.append(route))
+        page.locator("#refresh-data").click()
+        page.wait_for_function("() => document.querySelector('#app-main').dataset.loadState === 'loading'")
+        page.wait_for_timeout(100)
+        assert held
+        page.locator("#logout").click()
+        page.locator("#auth-screen").wait_for(state="visible")
+        assert page.locator("#app-main").is_hidden()
+        assert page.locator("#token").input_value() == ""
+        assert page.evaluate("sessionStorage.getItem('assetguard-admin-token')") is None
+        page.wait_for_timeout(100)
+        assert page.locator("#app-main").is_hidden()
+        browser.close()
+
+
+def test_cached_session_timeout_has_retry_and_no_infinite_loading(live_server):
+    playwright = pytest.importorskip("playwright.sync_api")
+    with playwright.sync_playwright() as runtime:
+        browser = runtime.chromium.launch()
+        page = browser.new_page()
+        page.set_default_timeout(10_000)
+        page.clock.install()
+        page.add_init_script("sessionStorage.setItem('assetguard-admin-token', 'test-stored-expired-session')")
+        held = []
+        page.route("**/auth/me", lambda route: held.append(route))
+        page.goto(f"{live_server}/#locations")
+        assert page.locator("#token").input_value() == ""
+        assert page.locator("#app-main").is_hidden()
+        assert held
+        page.clock.fast_forward(21_000)
+        playwright.expect(page.locator("#login-error-text")).to_contain_text("20 секунд")
+        assert page.locator("#retry-session").is_visible()
+        assert page.locator("#login").is_enabled()
+        assert page.url.endswith("#locations")
+        page.unroute("**/auth/me")
+        page.locator("#retry-session").click()
+        playwright.expect(page.locator("#login-error-text")).to_contain_text("недействительны")
+        assert page.evaluate("sessionStorage.getItem('assetguard-admin-token')") is None
+        browser.close()
+
+
+def test_late_asset_response_does_not_replace_new_route(live_server):
+    playwright = pytest.importorskip("playwright.sync_api")
+    with playwright.sync_playwright() as runtime:
+        browser = runtime.chromium.launch()
+        page = browser.new_page(viewport={"width": 1366, "height": 900})
+        page.set_default_timeout(10_000)
+        headers = {"X-AssetGuard-Admin-Token": get_settings().admin_shared_secret}
+        created = page.request.post(f"{live_server}/admin/assets", headers=headers, data={"inventory_number": f"LATE-{uuid4().hex[:8]}", "name": "Отложенная карточка", "asset_type": "Furniture"})
+        assert created.status == 201
+        asset_id = created.json()["id"]
+        detail = page.request.get(f"{live_server}/admin/assets/{asset_id}", headers=headers).json()
+        held = []
+        page.route(f"**/admin/assets/{asset_id}", lambda route: held.append(route))
+        page.goto(f"{live_server}/#asset={asset_id}")
+        page.locator("#login-mode").click()
+        page.locator("#token").fill(get_settings().admin_shared_secret)
+        page.locator("#login").click()
+        page.locator("#detail-title").filter(has_text="Загрузка").wait_for()
+        assert held
+        page.locator("#main-nav a[href='#overview']").click()
+        page.locator("#overview").wait_for(state="visible")
+        held[0].fulfill(status=200, json=detail)
+        page.wait_for_timeout(100)
+        assert page.url.endswith("#overview")
+        assert page.locator("#detail").is_hidden()
+        assert page.get_by_role("heading", name="Центр контроля", exact=True).is_visible()
         browser.close()

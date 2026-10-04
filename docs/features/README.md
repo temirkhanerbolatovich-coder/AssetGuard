@@ -10,6 +10,7 @@
 | Named users, sessions, roles, tenant и room scope | [Security model](../security/security-model.md) |
 | Per-Agent credentials, revoke и подтверждаемое re-enrolment | [Agent ADR](../decisions/ADR-005-agent-reenrolment.md), [Windows operations](../../scripts/windows/README.md) |
 | Dashboard, поиск, карточка оборудования и история | [UX workflow](../product/ux-workflow.md), browser E2E tests |
+| Экран входа, каркас и состояния запросов | [Этап UI/UX 1](frontend-shell-and-auth.md), [ТЗ](../product/ui-ux-modernization-spec.md) |
 | PDF/OCR import, QR и PDF-акты | [PDF/OCR](../operations/pdf-import-ocr.md), unit tests |
 | AssetGuard Vision | [Vision requirements](../product/assetguard-vision-requirements.md), [data flow](../architecture/data-flow.md) |
 | Encrypted R2 backup, restore rehearsal и Telegram monitoring | [Production runbook](../operations/production-deployment.md), [observability](../operations/observability.md) |

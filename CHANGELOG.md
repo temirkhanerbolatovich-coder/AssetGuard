@@ -6,6 +6,8 @@
 
 ### Added
 
+- Первый этап UI/UX: отдельный экран входа, явный bootstrap-вариант, профиль пользователя/область работы, загрузка/error/retry и адаптивный каркас.
+
 - Уведомления о новых технических/физических инцидентах: PostgreSQL outbox, organization-scoped Telegram worker, retry/429 и подтверждение назначения; migration `0026`.
 - Operations counters pending/retrying, мониторинг failed notification job, русские сообщения и ссылки в Telegram.
 - Отдельное ТЗ UI/UX с исследованными примерами, критериями доступности и пятью этапами модернизации.
@@ -27,6 +29,9 @@
 - Исправлен tenant fallback при Excel/PDF import без колонки организации; preview/create/update используют только разрешённый scope.
 
 ### Fixed
+
+- Ошибочная индикация успешного входа после неудачной загрузки; сохранённый session token больше не помещается в password input.
+- Поздние ответы чтения после выхода/смены карточки; ограничение ожидания JSON reads/login/logout, обработка expiry и серверный revoke именованной сессии.
 
 - Operations freshness считается по last_seen даже до maintenance; просроченные ONLINE/REQUIRES_VERIFICATION попадают в stale.
 - Monitor очищает fingerprint после recovery, проверяет Telegram acceptance и повторяет попытку после отказа; malformed metrics становятся alert condition.

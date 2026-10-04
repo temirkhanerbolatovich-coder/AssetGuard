@@ -1,12 +1,21 @@
 const $ = (id) => document.getElementById(id);
 let token = sessionStorage.getItem("assetguard-admin-token") || "";
-let state = {assets: [], endpoints: [], devices: [], changes: [], incidents: [], operations: null, locations: [], users: [], locationAccess: [], organizations: [], agentCredentials: [], currentUser: null, visionRooms: [], selectedAsset: null, assetTab: "overview", selectedIncident: null, incidentDecisionMode: null, linkingEndpoint: null, visionRoomId: null, visionScan: null, visionImageUrl: null, assetQrUrl: null, roomWorkspace: null, roomTab: "overview", physicalIncidentId: null};
+function emptyState() {
+  return {assets: [], endpoints: [], devices: [], changes: [], incidents: [], operations: null, locations: [], users: [], locationAccess: [], organizations: [], agentCredentials: [], currentUser: null, visionRooms: [], selectedAsset: null, assetTab: "overview", selectedIncident: null, incidentDecisionMode: null, linkingEndpoint: null, visionRoomId: null, visionScan: null, visionImageUrl: null, assetQrUrl: null, roomWorkspace: null, roomTab: "overview", physicalIncidentId: null};
+}
+let state = emptyState();
+let sessionGeneration = 0;
+let viewGeneration = 0;
+let loadGeneration = 0;
+let loginMode = "password";
+let loginInProgress = false;
+const pendingReadControllers = new Set();
+const readTimeoutMs = 20_000;
 let confirmationAction = null;
 const dialogFocusOrigins = new WeakMap();
 const routeDataCache = new Map();
 const routeRequestCache = new Map();
 const routeCacheLifetimeMs = 15_000;
-$("token").value = token;
 
 function openDialog(dialogId, focusTarget = null) {
   const dialog = $(dialogId);
@@ -39,7 +48,7 @@ installAccessibleDialogs();
 
 const routeMeta = {
   overview: ["Состояние инфраструктуры", "Центр контроля"],
-  devices: ["Реестр школы", "Устройства и имущество"],
+  devices: ["Реестр школы", "Реестр имущества"],
   "data-exchange": ["Данные реестра", "Импорт и экспорт"],
   incidents: ["Контроль изменений", "Инциденты"],
   locations: ["Структура школы", "Помещения"],
@@ -55,9 +64,13 @@ function setPageHeading(route) {
   document.querySelector(".page-intro .eyebrow").textContent = meta[0];
   document.querySelector(".page-intro h1").textContent = meta[1];
   document.title = `${meta[1]} — AssetGuard`;
+  document.querySelectorAll("#main-nav a").forEach((link) => link.removeAttribute("aria-current"));
+  document.querySelector(`#main-nav a[href="#${CSS.escape(route)}"]`)?.setAttribute("aria-current", "page");
+  closeNavigation();
 }
 
 function showPrimaryRoute(route) {
+  viewGeneration += 1;
   let target = primaryRoutes.has(route) ? route : "overview";
   if(target === "location-access" && !state.currentUser) target = "overview";
   if(target === "agent-credentials" && state.currentUser?.role !== "ADMIN") target = "overview";
@@ -74,6 +87,9 @@ function showPrimaryRoute(route) {
   $("nav-toggle").setAttribute("aria-expanded", "false");
   $("nav-toggle").setAttribute("aria-label", "Открыть меню");
   window.scrollTo({top: 0, behavior: "instant"});
+  const heading = document.querySelector(".page-intro h1");
+  heading.tabIndex = -1;
+  heading.focus({preventScroll: true});
 }
 
 function navigateToAsset(assetId) {
@@ -140,19 +156,118 @@ function openConfirmation({title,description,confirmLabel="Подтвердит�
 }
 function setAuthenticatedUi() {
   const signedIn = Boolean(state.currentUser);
-  $("username").disabled = signedIn; $("token").disabled = signedIn;
-  $("login").hidden = signedIn; $("logout").hidden = !signedIn;
-  $("session-state").hidden = !signedIn;
-  $("session-state").textContent = signedIn ? `${state.currentUser.username || "Администратор"} · ${userRoleLabel(state.currentUser.role)}` : "";
+  $("auth-screen").hidden = signedIn;
+  $("app-header").hidden = !signedIn;
+  $("app-main").hidden = !signedIn;
+  $("skip-navigation").hidden = !signedIn;
+  $("session-state").textContent = signedIn ? state.currentUser.username || "Администратор" : "";
+  $("session-role").textContent = signedIn ? userRoleLabel(state.currentUser.role) : "";
+  const organization = state.organizations.find((item) => item.id === state.currentUser?.organization_id);
+  $("organization-context").textContent = organization?.name || (state.currentUser?.organization_id ? "Назначенная организация" : "Область администратора платформы");
 }
-async function api(path, options = {}) {
-  const response = await fetch(path, {...options, headers: {...options.headers, "X-AssetGuard-Admin-Token": token}});
-  if (!response.ok) {
-    const body = await response.json().catch(() => ({}));
-    throw new Error(response.status === 401 ? "Не удалось войти. Проверьте логин, пароль или токен." : body.detail || `Ошибка API: ${response.status}`);
+
+function setLoginBusy(busy, message = "Проверяем данные входа…") {
+  loginInProgress = busy;
+  ["login", "username", "token", "login-mode", "retry-session", "toggle-password"].forEach((id) => $(id).disabled = busy);
+  $("login").textContent = busy ? "Входим…" : "Войти";
+  $("token-form").setAttribute("aria-busy", String(busy));
+  $("login-progress").hidden = !busy;
+  $("login-progress").textContent = busy ? message : "";
+}
+
+function showLoginError(message, field = "token") {
+  $("login-error-text").textContent = message;
+  $("login-error-field").href = `#${field}`;
+  $("login-error").hidden = false;
+  $(field).setAttribute("aria-invalid", "true");
+  $(field).setAttribute("aria-describedby", "login-error-text");
+  $("login-error").focus();
+}
+
+function clearLoginError() {
+  $("login-error").hidden = true;
+  ["username", "token"].forEach((id) => { $(id).removeAttribute("aria-invalid"); $(id).removeAttribute("aria-describedby"); });
+}
+
+function setLoadState(phase, message = "") {
+  $("app-main").dataset.loadState = phase;
+  $("app-main").setAttribute("aria-busy", String(phase === "loading"));
+  $("app-feedback").hidden = phase === "ready";
+  $("feedback-symbol").textContent = phase === "error" ? "!" : "…";
+  $("feedback-title").textContent = phase === "error" ? "Не удалось загрузить данные" : "Загружаем рабочее пространство";
+  $("feedback-description").textContent = message || "Получаем реестр, кабинеты и актуальное состояние. Это займёт несколько секунд.";
+  $("retry-load").hidden = phase !== "error";
+  $("refresh-data").disabled = phase === "loading";
+  if (phase === "error") $("app-feedback").focus();
+}
+
+function endSession(message = "") {
+  sessionGeneration += 1;
+  viewGeneration += 1;
+  loadGeneration += 1;
+  pendingReadControllers.forEach((controller) => controller.abort());
+  pendingReadControllers.clear();
+  clearRouteDataCache();
+  token = "";
+  sessionStorage.removeItem("assetguard-admin-token");
+  if (state.visionImageUrl) URL.revokeObjectURL(state.visionImageUrl);
+  if (state.assetQrUrl) URL.revokeObjectURL(state.assetQrUrl);
+  state = emptyState();
+  ["assets", "attention-list", "activity-list", "location-tree", "agent-credentials-list", "agent-reenrolments-list", "current-hardware", "baseline-hardware", "detail-changes", "detail-history", "detail-incidents", "device-general", "device-system", "device-identifiers", "incident-detail-evidence", "incident-detail-comparison", "incident-detail-decisions", "room-tab-content", "vision-history", "vision-counts", "vision-comparison"].forEach((id) => $(id)?.replaceChildren());
+  ["detail-title", "detail-meta", "incident-detail-title", "incident-detail-meta", "room-detail-title", "room-detail-path"].forEach((id) => $(id).textContent = "");
+  document.querySelectorAll("#app-main form, dialog form").forEach((form) => form.reset());
+  document.querySelectorAll("dialog[open]").forEach((dialog) => dialog.close());
+  document.querySelectorAll("#app-main > .page-section").forEach((section) => section.hidden = true);
+  $("token").value = "";
+  $("token").type = "password";
+  $("toggle-password").textContent = "Показать";
+  $("toggle-password").setAttribute("aria-label", "Показать пароль");
+  $("toggle-password").setAttribute("aria-pressed", "false");
+  $("agent-credential-secret").value = "";
+  setLoginBusy(false);
+  clearLoginError();
+  $("retry-session").hidden = true;
+  setAuthenticatedUi();
+  if (message) showLoginError(message);
+  else $(loginMode === "password" ? "username" : "token").focus();
+}
+
+async function requestJson(path, options = {}, credential = token) {
+  const generation = sessionGeneration;
+  // Bound reads and authentication only; long-running Vision writes retain their existing behavior.
+  const bounded = !options.method || options.method === "GET" || path === "/auth/login" || path === "/auth/logout";
+  const controller = bounded ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), readTimeoutMs) : null;
+  if (controller) pendingReadControllers.add(controller);
+  try {
+    const response = await fetch(path, {...options, signal: controller?.signal, headers: {...options.headers, ...(credential ? {"X-AssetGuard-Admin-Token": credential} : {})}});
+    let body = null;
+    if (response.status !== 204) {
+      try { body = await response.json(); }
+      catch (error) {
+        if (error.name === "AbortError") throw error;
+        if (response.ok) throw new Error("Сервер вернул некорректный ответ. Повторите загрузку.");
+      }
+    }
+    if (generation !== sessionGeneration) throw Object.assign(new Error("Сессия изменилась."), {stale: true});
+    if (!response.ok) {
+      const messages = {401: "Сессия истекла или данные входа неверны. Войдите снова.", 403: "У вас нет доступа к этому действию.", 404: "Запись не найдена или недоступна вам.", 429: "Слишком много запросов. Подождите немного и повторите попытку."};
+      const message = messages[response.status] || (response.status >= 500 ? "Сервер временно не может обработать запрос. Повторите попытку." : typeof body?.detail === "string" ? body.detail : "Проверьте заполненные поля и повторите попытку.");
+      if (response.status === 401 && state.currentUser && credential === token) endSession(messages[401]);
+      throw Object.assign(new Error(message), {status: response.status});
+    }
+    return body;
+  } catch (error) {
+    if (generation !== sessionGeneration) throw Object.assign(new Error("Сессия изменилась."), {stale: true});
+    if (error.name === "AbortError") throw new Error("Сервер не ответил за 20 секунд. Проверьте подключение и повторите попытку.");
+    if (error instanceof TypeError) throw new Error("Нет связи с сервером. Проверьте подключение и повторите попытку.");
+    throw error;
+  } finally {
+    if (timer) clearTimeout(timer);
+    if (controller) pendingReadControllers.delete(controller);
   }
-  return response.status === 204 ? null : response.json();
 }
+async function api(path, options = {}) { return requestJson(path, options); }
 
 function clearRouteDataCache() {
   routeDataCache.clear();
@@ -160,26 +275,31 @@ function clearRouteDataCache() {
 }
 
 function readRouteData(kind, id, path) {
+  const generation = sessionGeneration;
   const key = `${kind}:${id}`;
   const cached = routeDataCache.get(key);
   if (cached && Date.now() - cached.loadedAt < routeCacheLifetimeMs) return Promise.resolve(cached.value);
   const pending = routeRequestCache.get(key);
   if (pending) return pending;
   const request = api(path).then((value) => {
+    if (generation !== sessionGeneration) throw Object.assign(new Error("Сессия изменилась."), {stale: true});
     routeDataCache.set(key, {value, loadedAt: Date.now()});
-    routeRequestCache.delete(key);
+    if (routeRequestCache.get(key) === request) routeRequestCache.delete(key);
     return value;
   }).catch((error) => {
-    routeRequestCache.delete(key);
+    if (routeRequestCache.get(key) === request) routeRequestCache.delete(key);
     throw error;
   });
   routeRequestCache.set(key, request);
   return request;
 }
 async function apiBlob(path) {
+  const generation = sessionGeneration;
   const response = await fetch(path, {headers: {"X-AssetGuard-Admin-Token": token}});
+  const blob = response.ok ? await response.blob() : null;
+  if (generation !== sessionGeneration) throw Object.assign(new Error("Сессия изменилась."), {stale: true});
   if (!response.ok) throw new Error("Не удалось загрузить изображение результата.");
-  return response.blob();
+  return blob;
 }
 async function copyAgentCredential(fieldId) {
   const field=$(fieldId), value=field.value;
@@ -411,16 +531,20 @@ function renderRoomTab() {
   document.querySelectorAll(".physical-incident-act").forEach((button)=>button.onclick=()=>downloadPhysicalIncidentAct(button.dataset.id,button.dataset.number));
 }
 async function openRoomWorkspace(roomId, scroll = true) {
+  const requestView = ++viewGeneration;
   document.querySelectorAll("main > .page-section").forEach((section) => { section.hidden = section.id !== "room-detail"; });
   setPageHeading("locations");
   $("room-detail").hidden=false; $("room-detail-title").textContent="Загрузка кабинета…"; $("room-detail-error").hidden=true; $("room-tab-content").innerHTML='<div class="skeleton"></div>';
   try {
-    const workspace=await readRouteData("room",roomId,`/admin/locations/rooms/${roomId}/workspace`); state.roomWorkspace=workspace; state.roomTab="overview";
+    const workspace=await readRouteData("room",roomId,`/admin/locations/rooms/${roomId}/workspace`);
+    if (requestView !== viewGeneration) return;
+    state.roomWorkspace=workspace; state.roomTab="overview";
     $("room-detail-title").textContent=`Кабинет ${workspace.room.name}`; $("room-detail-path").textContent=[workspace.path.building,workspace.path.floor&&`этаж ${workspace.path.floor}`,workspace.room.purpose].filter(Boolean).join(" · ");
     $("room-edit-action").hidden=state.currentUser?.role!=="ADMIN"; $("room-vision-action").hidden=state.currentUser?.role!=="ADMIN"; $("room-inspection-action").hidden=!canEditRoom(workspace.room.id)||!workspace.inventory.assets.length;
     const attention=workspace.incidents.length||(workspace.physical_incidents||[]).some((item)=>["OPEN","UNDER_REVIEW"].includes(item.status))||workspace.agents.some((item)=>item.status!=="ONLINE")||workspace.vision?.latest_scan?.status==="WARNING"; $("room-detail-state").textContent=attention?"Требует внимания":"В норме"; $("room-detail-state").className=`status-pill ${attention?"warning":"ok"}`;
     renderRoomTab(); if(scroll)window.scrollTo({top:0,behavior:"smooth"});
   } catch(error) {
+    if (requestView !== viewGeneration || error.stale) return;
     $("room-detail-title").textContent="Не удалось открыть кабинет";
     $("room-detail-error").innerHTML=`<span class="attention-icon">!</span><div><strong>Ошибка загрузки</strong><p>${escapeHtml(error.message)}</p><button type="button" class="button-secondary retry-route">Повторить</button></div>`;
     $("room-detail-error").hidden=false;
@@ -591,7 +715,7 @@ async function loadAdminAccess() {
   if(state.currentUser?.role!=="ADMIN")return;
   $("access-load-error").hidden=true;
   try { const [users,locationAccess,organizations,agentCredentials,agentReenrolments]=await Promise.all([api("/admin/users"),api("/admin/locations/access"),api("/admin/locations/organizations"),api("/admin/agent-credentials"),api("/admin/agent-re-enrolments")]);state={...state,users,locationAccess,organizations,agentCredentials,agentReenrolments};renderAdminAccess();renderAgentCredentials();renderAgentReenrolments();syncRoleControls(); }
-  catch(error) { $("access-load-error").hidden=false;$("access-load-error").textContent=`Не удалось загрузить управление пользователями: ${error.message}. Проверьте вход именно под администратором школы.`; }
+  catch(error) { if(error.stale)return; $("access-load-error").hidden=false;$("access-load-error").textContent=`Не удалось загрузить управление пользователями: ${error.message}. Проверьте вход именно под администратором школы.`; }
 }
 function hardwareBrief(endpoint) {
   const summary = endpoint?.hardware_summary; if (!summary) return "Нет данных";
@@ -692,11 +816,17 @@ function selectAssetTab(requestedTab, updateHash = false) {
   }
 }
 async function detail(assetId, scroll = true, requestedTab = state.assetTab || "overview") {
+  const requestView = ++viewGeneration;
+  $("detail").dataset.loadState = "loading";
+  ["detail-meta", "detail-status", "detail-actions"].forEach((id) => $(id).replaceChildren());
   try {
     document.querySelectorAll("main > .page-section").forEach((section) => { section.hidden = section.id !== "detail"; });
     setPageHeading("devices");
     $("detail").hidden = false; $("detail-title").textContent = "Загрузка…"; $("detail-error").hidden=true;
-    const asset = await readRouteData("asset",assetId,`/admin/assets/${assetId}`); state.selectedAsset = assetId; const endpoint = asset.endpoint; const status = deviceStatus(endpoint,asset);
+    const asset = await readRouteData("asset",assetId,`/admin/assets/${assetId}`);
+    if (requestView !== viewGeneration) return;
+    $("detail").dataset.loadState = "ready";
+    state.selectedAsset = assetId; const endpoint = asset.endpoint; const status = deviceStatus(endpoint,asset);
     $("detail-title").textContent = asset.name; $("detail-status").innerHTML = pill(status);
     $("detail-meta").textContent = [asset.inventory_number,endpoint?.hostname,locationLabel(asset)].filter(Boolean).join(" · ") || "Карточка актива";
     $("detail-actions").innerHTML = `${canEditAsset(asset)?'<button id="edit-asset" class="button-secondary">Редактировать</button>':""}<button id="show-asset-qr" class="button-secondary">QR для обхода</button>`;
@@ -737,6 +867,8 @@ async function detail(assetId, scroll = true, requestedTab = state.assetTab || "
     selectAssetTab(requestedTab);
     if(scroll) $("detail").scrollIntoView({behavior:"smooth",block:"start"});
   } catch(error) {
+    if (requestView !== viewGeneration || error.stale) return;
+    $("detail").dataset.loadState = "error";
     $("detail-title").textContent="Не удалось открыть карточку";
     $("detail-status").innerHTML=""; $("detail-meta").textContent=""; $("detail-actions").innerHTML=""; $("detail-agent-guidance").hidden=true;
     $("detail-error").innerHTML=`<span class="attention-icon">!</span><div><strong>Ошибка загрузки</strong><p>${escapeHtml(error.message)}</p><button type="button" class="button-secondary retry-route">Повторить</button></div>`;
@@ -775,6 +907,9 @@ function historyMessage(entry) {
   return entry.message;
 }
 async function openIncidentDetail(id, scroll = true) {
+  const requestView = ++viewGeneration;
+  $("incident-detail").dataset.loadState = "loading";
+  ["incident-detail-meta", "incident-detail-status"].forEach((id) => $(id).replaceChildren());
   document.querySelectorAll("main > .page-section").forEach((section) => { section.hidden = section.id !== "incident-detail"; });
   setPageHeading("incidents");
   state.selectedIncident = id;
@@ -785,7 +920,8 @@ async function openIncidentDetail(id, scroll = true) {
   $("incident-detail-decisions").innerHTML = '<div class="skeleton short"></div>';
   try {
     const incident = await readRouteData("incident",id,`/admin/incidents/${id}`);
-    if (state.selectedIncident !== id) return;
+    if (requestView !== viewGeneration || state.selectedIncident !== id) return;
+    $("incident-detail").dataset.loadState = "ready";
     const summary = state.incidents.find((item) => item.id === id);
     const change = state.changes.find((item) => item.id === incident.change_event_id);
     const endpointId = summary?.endpoint_id || incident.endpoint_id || change?.endpoint_id;
@@ -807,6 +943,8 @@ async function openIncidentDetail(id, scroll = true) {
     $("incident-detail-decisions").innerHTML = incident.decisions.length ? incident.decisions.slice().reverse().map((decision) => `<article><time>${dateTime(decision.created_at)}</time><div><b>${escapeHtml(incidentClassificationLabels[decision.classification] || decision.classification)}</b><p>${escapeHtml(decision.comment || "Без комментария")} · ${escapeHtml(decision.actor || "Оператор")}</p></div></article>`).join("") : '<div class="empty-state"><strong>Решений пока нет</strong><p>Возьмите инцидент на проверку или зафиксируйте итог.</p></div>';
     if (scroll) $("incident-detail").scrollIntoView({behavior:"smooth",block:"start"});
   } catch (error) {
+    if (requestView !== viewGeneration || error.stale) return;
+    $("incident-detail").dataset.loadState = "error";
     $("incident-detail-title").textContent = "Не удалось открыть инцидент";
     $("incident-detail-error").innerHTML = `<span class="attention-icon">!</span><div><strong>Ошибка загрузки</strong><p>${escapeHtml(error.message)}</p><button type="button" class="button-secondary retry-route">Повторить</button></div>`;
     $("incident-detail-error").hidden = false;
@@ -842,23 +980,121 @@ async function loadVisionHistory(roomId) { if(!roomId){$("vision-history").inner
 function renderVisionRooms(rooms) { state.visionRooms=rooms; const locationRooms=state.locations.flatMap((building)=>building.floors.flatMap((floor)=>floor.rooms.map((room)=>({id:room.id,label:`${building.name} · этаж ${floor.name} · кабинет ${room.name}`})))); const locationSelect=$("vision-location-room"),selectedLocation=locationSelect.value; locationSelect.innerHTML=locationRooms.length?'<option value="">Выберите кабинет</option>'+locationRooms.map((room)=>`<option value="${room.id}">${escapeHtml(room.label)}</option>`).join(""):'<option value="">Сначала создайте корпус, этаж и кабинет</option>'; if(locationRooms.some((room)=>room.id===selectedLocation))locationSelect.value=selectedLocation;locationSelect.disabled=!locationRooms.length; $("vision-run").disabled=!locationRooms.length; $("vision-room-select").innerHTML=rooms.length?rooms.map((room)=>`<option value="${room.id}">${escapeHtml(room.name)}</option>`).join(""):'<option value="">Проверок пока нет</option>'; syncVisionAssetsForRoom(locationSelect.value); if(rooms.length){const selected=rooms.find((room)=>room.id===state.visionRoomId)||rooms[0];state.visionRoomId=selected.id;$("vision-room-select").value=selected.id;loadVisionHistory(selected.id);if(!state.visionScan&&selected.latest_scan)renderVisionScan(selected.latest_scan,selected.name);}else loadVisionHistory(null); }
 
 async function load(showLoading=true) {
-  if(showLoading){$("status").textContent="Обновляем данные…";$("attention-banner").className="attention-banner is-loading";}
+  if (!token) return false;
+  const generation = sessionGeneration;
+  const requestLoad = ++loadGeneration;
+  if (showLoading || !state.currentUser) setLoadState("loading");
+  $("status").textContent = "Обновляем данные…";
+  $("refresh-data").disabled = true;
   clearRouteDataCache();
-  try { const [assets,endpoints,changes,incidents,visionRooms,operations,locations,currentUser]=await Promise.all([api("/admin/assets"),api("/admin/endpoints"),api("/admin/changes"),api("/admin/incidents"),api("/admin/vision/rooms"),api("/admin/operations/status"),api("/admin/locations/tree"),api("/auth/me")]); state={...state,assets,endpoints,changes,incidents,visionRooms,operations,locations,currentUser}; syncRoleControls(); buildDevices(); renderDashboard(); renderOperations(operations); renderLocations(locations); renderDevices(); renderVisionRooms(visionRooms); await loadAdminAccess(); $("status").textContent=`Данные актуальны · ${dateTime(new Date())}`; }
-  catch(error){$("status").textContent=error.message;$("attention-banner").className="attention-banner error";$("attention-banner").innerHTML=`<span class="attention-icon">!</span><div><strong>Не удалось загрузить Dashboard</strong><p>${escapeHtml(error.message)}</p></div>`;showToast(error.message,true);}
+  try {
+    const currentUser = await api("/auth/me");
+    if (!currentUser || typeof currentUser.username !== "string" || !["ADMIN", "VIEWER", "LOCATION_MANAGER", "INVENTORY_CLERK"].includes(currentUser.role)) throw new Error("Сервер не подтвердил учётную запись. Повторите вход.");
+    if (generation !== sessionGeneration || requestLoad !== loadGeneration) return false;
+    state.currentUser = currentUser;
+    sessionStorage.setItem("assetguard-admin-token", token);
+    setAuthenticatedUi();
+    const [assets,endpoints,changes,incidents,visionRooms,operations,locations] = await Promise.all([
+      api("/admin/assets"),api("/admin/endpoints"),api("/admin/changes"),api("/admin/incidents"),
+      api("/admin/vision/rooms"),api("/admin/operations/status"),api("/admin/locations/tree"),
+    ]);
+    if (generation !== sessionGeneration || requestLoad !== loadGeneration) return false;
+    state = {...state,assets,endpoints,changes,incidents,visionRooms,operations,locations};
+    syncRoleControls(); buildDevices(); renderDashboard(); renderOperations(operations); renderLocations(locations); renderDevices(); renderVisionRooms(visionRooms);
+    await loadAdminAccess();
+    if (generation !== sessionGeneration || requestLoad !== loadGeneration) return false;
+    setLoadState("ready");
+    $("status").textContent = `Данные актуальны · ${dateTime(new Date())}`;
+    return true;
+  } catch (error) {
+    if (generation !== sessionGeneration || requestLoad !== loadGeneration || error.stale) return false;
+    if (error.status === 401) endSession("Данные входа недействительны или сессия истекла. Войдите снова.");
+    else if (!state.currentUser) { showLoginError(error.message); $("retry-session").hidden = false; }
+    else { $("status").textContent = "Данные не обновлены"; setLoadState("error", error.message); }
+    return false;
+  } finally {
+    if (requestLoad === loadGeneration) $("refresh-data").disabled = false;
+  }
 }
-function openRouteFromHash() {
+async function openRouteFromHash() {
+  if (!state.currentUser || $("app-main").dataset.loadState !== "ready") return;
   const assetMatch = location.hash.match(/^#asset=([0-9a-f-]{36})(?:&tab=([a-z-]+))?$/i);
   const roomMatch = location.hash.match(/^#room=([0-9a-f-]{36})$/i);
   const incidentMatch = location.hash.match(/^#incident=([0-9a-f-]{36})$/i);
-  if(assetMatch){if(token){const tab=assetMatch[2]||"overview";if(state.selectedAsset===assetMatch[1]&&!$("detail").hidden)selectAssetTab(tab);else detail(assetMatch[1],false,tab);}return;}
-  if(roomMatch){if(token)openRoomWorkspace(roomMatch[1],false);return;}
-  if(incidentMatch){if(token)openIncidentDetail(incidentMatch[1],false);return;}
+  if(assetMatch){const tab=assetMatch[2]||"overview";if(state.selectedAsset===assetMatch[1]&&!$("detail").hidden)selectAssetTab(tab);else await detail(assetMatch[1],false,tab);return;}
+  if(roomMatch){await openRoomWorkspace(roomMatch[1],false);return;}
+  if(incidentMatch){await openIncidentDetail(incidentMatch[1],false);return;}
   showPrimaryRoute(location.hash.slice(1)||"overview");
 }
 
-$("token-form").addEventListener("submit",async(event)=>{event.preventDefault();const username=$("username").value.trim(),secret=$("token").value;try{if(username){const response=await fetch("/auth/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username,password:secret})});if(!response.ok)throw new Error("Неверный логин или пароль");token=(await response.json()).access_token;}else token=secret;sessionStorage.setItem("assetguard-admin-token",token);$("token").value="";await load();openRouteFromHash();showToast("Вход выполнен");}catch(error){$("status").textContent=error.message;showToast(error.message,true);}});
+$("token-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (loginInProgress) return;
+  clearLoginError();
+  $("retry-session").hidden = true;
+  const username = $("username").value.trim(), secret = $("token").value;
+  if (loginMode === "password" && !username) { showLoginError("Введите логин сотрудника.", "username"); return; }
+  if (!secret) { showLoginError(loginMode === "password" ? "Введите пароль." : "Введите ключ администратора."); return; }
+  let attemptGeneration = sessionGeneration;
+  setLoginBusy(true);
+  try {
+    const credential = loginMode === "password" ? (await requestJson("/auth/login", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({username,password:secret})}, "")).access_token : secret;
+    if (typeof credential !== "string" || !credential) throw new Error("Сервер не подтвердил вход. Повторите попытку.");
+    sessionGeneration += 1;
+    attemptGeneration = sessionGeneration;
+    token = credential;
+    $("token").value = "";
+    if (await load()) {
+      await openRouteFromHash();
+      if (attemptGeneration === sessionGeneration && state.currentUser) { $("app-main").focus(); showToast("Вход выполнен"); }
+    }
+  } catch (error) {
+    if (!error.stale && attemptGeneration === sessionGeneration) showLoginError(error.status === 401 ? "Неверный логин или пароль. Проверьте данные и повторите вход." : error.message);
+  } finally { if (attemptGeneration === sessionGeneration) setLoginBusy(false); }
+});
+
+$("login-mode").onclick = () => {
+  loginMode = loginMode === "password" ? "key" : "password";
+  const keyMode = loginMode === "key";
+  clearLoginError();
+  $("username-field").hidden = keyMode;
+  $("username").required = !keyMode;
+  $("secret-label").textContent = keyMode ? "Ключ администратора" : "Пароль";
+  $("token").placeholder = keyMode ? "Введите ключ администратора" : "Введите пароль";
+  $("token").autocomplete = keyMode ? "off" : "current-password";
+  $("token").value = "";
+  $("token").type = "password";
+  $("toggle-password").textContent = "Показать";
+  $("toggle-password").setAttribute("aria-label", "Показать пароль");
+  $("toggle-password").setAttribute("aria-pressed", "false");
+  $("login-mode").textContent = keyMode ? "Вход по логину и паролю" : "Вход по ключу администратора";
+  $("login-description").textContent = keyMode ? "Этот вариант предназначен для первичной настройки администратором. Используйте защищённый ключ вашего сервера." : "Используйте учётную запись, которую выдал администратор вашей организации.";
+  $("login-help").textContent = keyMode ? "Не передавайте ключ сотрудникам. Для ежедневной работы создайте именованную учётную запись." : "Нет учётной записи? Обратитесь к администратору школы.";
+  $(keyMode ? "token" : "username").focus();
+};
+$("toggle-password").onclick = () => {
+  const visible = $("token").type === "password";
+  $("token").type = visible ? "text" : "password";
+  $("toggle-password").textContent = visible ? "Скрыть" : "Показать";
+  $("toggle-password").setAttribute("aria-label", visible ? "Скрыть пароль" : "Показать пароль");
+  $("toggle-password").setAttribute("aria-pressed", String(visible));
+};
+$("login-error-field").onclick = (event) => { event.preventDefault(); $($("login-error-field").hash.slice(1)).focus(); };
+$("skip-navigation").onclick = (event) => { event.preventDefault(); $("app-main").focus(); };
+async function reloadWorkspace() { if (await load()) await openRouteFromHash(); }
+$("refresh-data").onclick = reloadWorkspace;
+$("retry-load").onclick = reloadWorkspace;
+$("retry-session").onclick = async () => { const generation = sessionGeneration; clearLoginError(); setLoginBusy(true,"Восстанавливаем сессию…"); try { await reloadWorkspace(); } finally { if (generation === sessionGeneration) setLoginBusy(false); } };
+function closeNavigation(returnFocus = false) {
+  const wasOpen = $("app-header").classList.contains("nav-open");
+  $("app-header").classList.remove("nav-open");
+  $("nav-toggle").setAttribute("aria-expanded", "false");
+  $("nav-toggle").setAttribute("aria-label", "Открыть меню");
+  if (wasOpen && returnFocus) $("nav-toggle").focus();
+}
 $("nav-toggle").addEventListener("click",()=>{const header=document.querySelector(".app-header"),open=header.classList.toggle("nav-open");$("nav-toggle").setAttribute("aria-expanded",String(open));$("nav-toggle").setAttribute("aria-label",open?"Закрыть меню":"Открыть меню");});
+document.addEventListener("keydown", (event) => { if (event.key === "Escape") closeNavigation(true); });
+document.addEventListener("click", (event) => { if (!$("app-header").contains(event.target)) closeNavigation(); });
 document.querySelectorAll("#main-nav a").forEach((link)=>link.addEventListener("click",()=>{document.querySelector(".app-header").classList.remove("nav-open");$("nav-toggle").setAttribute("aria-expanded","false");$("nav-toggle").setAttribute("aria-label","Открыть меню");document.querySelectorAll("#main-nav a").forEach((item)=>item.removeAttribute("aria-current"));link.setAttribute("aria-current","location");}));
 function syncTrackingMode() { const grouped=$("asset-tracking-mode").value==="GROUPED", field=$("asset-quantity-field"), input=field.querySelector("input");field.hidden=!grouped;input.disabled=!grouped;input.required=grouped; }
 $("asset-tracking-mode").addEventListener("change",syncTrackingMode);
@@ -868,7 +1104,18 @@ $("asset-edit-form").addEventListener("submit",async(event)=>{event.preventDefau
 $("asset-qr-cancel").onclick=()=>$("asset-qr-dialog").close();
 $("asset-qr-form").addEventListener("submit",async(event)=>{event.preventDefault();const asset=state.qrAsset;if(!asset)return;const raw=$("asset-qr-public-url").value.trim();let publicUrl="";try{if(raw){const normalized=new URL(raw);if(normalized.protocol!=="https:")throw new Error("Для телефона нужен HTTPS-адрес.");publicUrl=normalized.origin;localStorage.setItem("assetguardPublicUrl",publicUrl);}await printAssetQr(asset,publicUrl);$("asset-qr-dialog").close();}catch(error){showToast(error.message,true);}});
 $("clear-device-filters").addEventListener("click",clearDeviceFilters);
-$("logout").onclick=()=>{const previousToken=token, isNamedSession=Boolean(state.currentUser?.id);token="";sessionStorage.removeItem("assetguard-admin-token");if(state.visionImageUrl)URL.revokeObjectURL(state.visionImageUrl);if(state.assetQrUrl)URL.revokeObjectURL(state.assetQrUrl);state={assets:[],endpoints:[],devices:[],changes:[],incidents:[],operations:null,locations:[],users:[],locationAccess:[],organizations:[],agentCredentials:[],currentUser:null,visionRooms:[],selectedAsset:null,linkingEndpoint:null,visionRoomId:null,visionScan:null,visionImageUrl:null,assetQrUrl:null,roomWorkspace:null,roomTab:"overview",physicalIncidentId:null};$("detail").hidden=true;$("room-detail").hidden=true;$("create-asset").hidden=true;$("assets").innerHTML='<tr><td colspan="6"><div class="empty-state"><strong>Войдите, чтобы открыть реестр</strong><p>После входа здесь появятся доступные вам имущество и компьютеры.</p></div></td></tr>';$("location-tree").innerHTML='<p class="empty">Войдите, чтобы посмотреть структуру школы.</p>';$("attention-list").innerHTML='<p class="empty">Войдите, чтобы увидеть состояние имущества.</p>';$("activity-list").innerHTML='';$("setup-guide").hidden=true;syncRoleControls();renderAdminAccessVisibility();history.replaceState(null,"","#overview");showPrimaryRoute("overview");$("attention-banner").className="attention-banner is-loading";$("attention-banner").innerHTML='<span class="attention-icon">→</span><div><strong>Войдите в AssetGuard</strong><p>После входа здесь появятся состояние инфраструктуры и задачи, требующие внимания.</p></div>';$("status").textContent="Сессия завершена. Войдите снова, чтобы загрузить данные.";showToast("Вы вышли из системы");if(previousToken&&isNamedSession)fetch("/auth/logout",{method:"POST",headers:{"X-AssetGuard-Admin-Token":previousToken}}).catch(()=>{});};
+$("logout").onclick = async () => {
+  const previousToken = token, isNamedSession = Boolean(state.currentUser?.id);
+  endSession();
+  closeNavigation();
+  history.replaceState(null, "", "#overview");
+  document.title = "Вход — AssetGuard";
+  showToast("Вы вышли из системы");
+  if (previousToken && isNamedSession) {
+    try { await requestJson("/auth/logout", {method: "POST"}, previousToken); }
+    catch (error) { if (!error.stale && error.status !== 401) showToast("Выход на этом устройстве выполнен. Сервер не подтвердил отзыв сессии; она завершится по сроку действия.", true); }
+  }
+};
 $("show-create").onclick=()=>{if(!$("create-asset").hidden){$("create-asset").hidden=true;return;}openAssetCreateForm();};
 $("cancel-create").onclick=()=>{$("create-asset").hidden=true;};
 $("create-building").addEventListener("submit",async(event)=>{event.preventDefault();const form=event.currentTarget;try{await api("/admin/locations/buildings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(Object.fromEntries(new FormData(form).entries()))});form.reset();showToast("Корпус создан");await load(false);}catch(error){showToast(error.message,true);}});
@@ -978,4 +1225,8 @@ syncRoleControls();
 renderAdminAccessVisibility();
 if(!location.hash)history.replaceState(null,"","#overview");
 openRouteFromHash();
-if(token)load().then(openRouteFromHash);
+if (token) {
+  const generation = sessionGeneration;
+  setLoginBusy(true, "Восстанавливаем сессию…");
+  reloadWorkspace().finally(() => { if (generation === sessionGeneration) setLoginBusy(false); });
+} else document.title = "Вход — AssetGuard";
