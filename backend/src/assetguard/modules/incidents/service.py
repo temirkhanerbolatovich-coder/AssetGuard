@@ -7,6 +7,8 @@ from assetguard.modules.changes.models import ChangeEventRecord
 from assetguard.modules.history.service import append_history
 from assetguard.modules.incidents.models import IncidentDecisionRecord, IncidentRecord
 from assetguard.modules.snapshots.models import ManagedEndpointRecord
+from assetguard.modules.assets.models import AssetRecord
+from assetguard.modules.notifications.service import enqueue_notification
 
 
 def create_incidents_for_events(session: Session, events: list[ChangeEventRecord]) -> list[IncidentRecord]:
@@ -25,6 +27,19 @@ def create_incidents_for_events(session: Session, events: list[ChangeEventRecord
         session.flush()
         endpoint = session.get(ManagedEndpointRecord, incident.managed_endpoint_id)
         if endpoint:
+            asset = session.get(AssetRecord, endpoint.asset_id) if endpoint.asset_id else None
+            components = {"RAM": "Оперативная память", "STORAGE": "Накопитель", "ENDPOINT": "Идентификаторы компьютера"}
+            changes = {"COMPONENT_CHANGED": "изменились характеристики", "COMPONENT_REPLACED": "изменился состав компонента",
+                       "COMPONENT_REMOVED": "компонент не обнаружен", "COMPONENT_ADDED": "обнаружен новый компонент",
+                       "HOSTNAME_CHANGED": "изменилось имя компьютера", "DEVICE_IDENTITY_CHANGED": "изменились идентификаторы"}
+            enqueue_notification(
+                session, event_key=f"technical:{incident.id}:opened",
+                organization_id=endpoint.organization_id or (asset.organization_id if asset else None),
+                room_id=asset.room_id if asset else None,
+                title="Новое техническое расхождение", subject=endpoint.hostname or str(endpoint.id),
+                context=f"{components.get(event.component_type, event.component_type)}: {changes.get(event.event_type, event.event_type)}. Сравнение «Было → Стало» доступно в карточке; проверьте evidence и примите решение.",
+                route=f"#incident={incident.id}", severity=incident.severity, occurred_at=incident.created_at,
+            )
             append_history(
                 session, endpoint=endpoint, event_type="INCIDENT_CREATED",
                 related_entity_type="Incident", related_entity_id=incident.id,

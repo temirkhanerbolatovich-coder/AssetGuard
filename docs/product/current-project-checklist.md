@@ -1,11 +1,13 @@
 # AssetGuard — актуальный полный чек-лист проекта
 
-Дата актуализации: **4 октября 2026 года**
+Дата актуализации: **5 октября 2026 года**
 
 Ветка учёта: **`main`**
 
 Production: **https://assetguard-temirkhan.duckdns.org**  
-Версия схемы репозитория: **`0025_agent_reenrolment`**
+Версия схемы репозитория: **`0026_telegram_notifications`**
+
+Новый этап 2026-10-05: реализована транзакционная очередь уведомлений о новых технических и физических инцидентах; локально проверены retry, acceptance, дедупликация и organization/location scope. Production acceptance новой версии фиксируется отдельным протоколом после выкладки. [Функция и настройка](../features/telegram-notifications.md). Подготовлено отдельное [ТЗ UI/UX](ui-ux-modernization-spec.md): следующий этап интерфейса — каркас, вход и состояния; затем реестр/центр инцидентов, кабинеты/импорт, Agent/admin и приёмка. Fleet acceptance остаётся самостоятельной задачей.
 
 Последняя проверенная production/R2 restore revision: **`0025_agent_reenrolment`**, 2026-10-04, **216 assets / 11 endpoints**.
 

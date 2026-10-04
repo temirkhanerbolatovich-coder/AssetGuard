@@ -1,5 +1,7 @@
 # Наблюдаемость и аудит
 
+С версии схемы `0026` новые инциденты отправляются отдельным worker через [durable Telegram queue](../features/telegram-notifications.md). `/admin/operations/status` показывает scoped `notifications.pending/retrying`. Monitor также проверяет failed notification job и ожидающие повтор сообщения; сообщения на русском, со временем UTC+5 и ссылкой. Сводная дедупликация не заменяет индивидуальные события Agent. Приёмка 2026-10-04 ниже относится к предыдущей версии; новая проверка записывается отдельно.
+
 ## Логируемые факты
 
 - received/rejected inventory без секретов;

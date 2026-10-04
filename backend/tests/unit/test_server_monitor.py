@@ -74,7 +74,7 @@ esac
     response.write_text('{"ok":true,"result":{"message_id":123}}', encoding="ascii")
     first = run()
     assert first.returncode == 0, first.stderr
-    assert "Offline or stale agents: 1" in sends.read_text(encoding="utf-8")
+    assert "Agent без свежих данных или offline: 1" in sends.read_text(encoding="utf-8")
     assert "suppressed" in run().stdout
     assert sends.read_text(encoding="utf-8").count("-X POST") == 1
     set_metrics(0)
@@ -98,4 +98,10 @@ esac
     assert run().returncode == 0
     metrics.write_text("invalid json", encoding="ascii")
     assert run().returncode == 0
-    assert "Operations API returned invalid metrics" in sends.read_text(encoding="utf-8")
+    assert "Операционные данные API некорректны" in sends.read_text(encoding="utf-8")
+    set_metrics(0)
+    assert run().returncode == 0
+    metrics.write_text(json.dumps({"agents": {}, "ingest": {}, "notifications": {"retrying": 2}}), encoding="ascii")
+    assert run().returncode == 0
+    assert "Уведомления об инцидентах ожидают повтора: 2" in sends.read_text(encoding="utf-8")
+    assert "suppressed" in run().stdout

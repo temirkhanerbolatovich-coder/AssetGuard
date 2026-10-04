@@ -22,6 +22,8 @@ from assetguard.modules.incidents.models import (
     AssetHistoryEntryRecord, PhysicalIncidentDecisionRecord, PhysicalIncidentRecord,
 )
 from assetguard.modules.snapshots.models import ManagedEndpointRecord
+from assetguard.modules.notifications.models import TelegramNotificationRecord
+from assetguard.modules.notifications.service import enqueue_notification
 from assetguard.modules.vision.models import VisionBaselineRecord, VisionRoomRecord, VisionScanRecord
 
 
@@ -57,6 +59,13 @@ async def _exercise_location_scope() -> None:
 
         visible_room = add_room("Scope корпус A", "101")
         hidden_room = add_room("Scope корпус B", "201")
+        for queued_room in (visible_room, hidden_room):
+            enqueue_notification(session, event_key=f"scope:{queued_room.id}", organization_id=organization.id,
+                room_id=queued_room.id, title="Scope test", subject="Asset", context="Check",
+                route=f"#room={queued_room.id}", severity="LOW", occurred_at=now)
+        enqueue_notification(session, event_key="scope:unassigned-room", organization_id=organization.id,
+            room_id=None, title="Scope test", subject="Asset", context="Check",
+            route="#overview", severity="LOW", occurred_at=now)
         visible_asset = AssetRecord(
                 organization_id=organization.id, room_id=visible_room.id, inventory_number="SCOPE-VISIBLE",
                 name="Visible school device", asset_type="Desktop", category="IT", tracking_mode="INDIVIDUAL",
@@ -170,6 +179,7 @@ async def _exercise_location_scope() -> None:
         operations = await client.get("/admin/operations/status", headers=headers)
         assert operations.status_code == 200
         assert operations.json()["agents"]["total"] == 0
+        assert operations.json()["notifications"] == {"pending": 1, "retrying": 0}
 
         hidden_report = await client.get(f"/admin/locations/rooms/{hidden_location_room_id}/report", headers=headers)
         hidden_inspections = await client.get(f"/admin/locations/rooms/{hidden_location_room_id}/inspections", headers=headers)
@@ -250,6 +260,7 @@ async def _exercise_location_scope() -> None:
         session.execute(delete(VisionRoomRecord).where(VisionRoomRecord.organization_id == organization.id))
         session.execute(delete(ManagedEndpointRecord).where(ManagedEndpointRecord.id == hidden_endpoint_id))
         session.execute(delete(AssetRecord).where(AssetRecord.inventory_number.in_(["SCOPE-VISIBLE", "SCOPE-HIDDEN"])))
+        session.execute(delete(TelegramNotificationRecord).where(TelegramNotificationRecord.organization_id == organization.id))
         session.execute(delete(RoomRecord).where(RoomRecord.id.in_(room_ids)))
         session.execute(delete(FloorRecord).where(FloorRecord.id.in_(floor_ids)))
         session.execute(delete(BuildingRecord).where(BuildingRecord.id.in_(building_ids)))

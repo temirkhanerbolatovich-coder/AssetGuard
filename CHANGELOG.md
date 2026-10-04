@@ -6,6 +6,10 @@
 
 ### Added
 
+- Уведомления о новых технических/физических инцидентах: PostgreSQL outbox, organization-scoped Telegram worker, retry/429 и подтверждение назначения; migration `0026`.
+- Operations counters pending/retrying, мониторинг failed notification job, русские сообщения и ссылки в Telegram.
+- Отдельное ТЗ UI/UX с исследованными примерами, критериями доступности и пятью этапами модернизации.
+
 - Отображение версии installer и upstream Agent в Dashboard.
 - Предупреждение о неподдерживаемой версии Agent.
 - Локальный `%ProgramData%\AssetGuard\agent-lifecycle.jsonl` без секретов.

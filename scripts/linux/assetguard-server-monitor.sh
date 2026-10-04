@@ -44,63 +44,65 @@ backup_status_file="${backup_status_file:-/var/lib/assetguard/backup-status.env}
 
 problems=()
 if [[ "$test_alert" == true ]]; then
-  problems+=("TEST ONLY: Telegram alert delivery check; production remains online")
+  problems+=("ТЕСТ: проверка Telegram; сервер продолжает работать")
 fi
 
 if ! curl --fail --silent --show-error --max-time 20 "https://${public_host}/health/ready" >/dev/null; then
-  problems+=("API readiness endpoint is unavailable")
+  problems+=("Сервер: проверка готовности API недоступна")
 fi
 
 expected_services=(postgres api caddy)
 running_services="$(docker compose --env-file "$project_env" -f "$compose_dir/docker-compose.production.yml" -f "$compose_dir/docker-compose.oracle-free.yml" ps --status running --services 2>/dev/null || true)"
 for service in "${expected_services[@]}"; do
   if ! grep -qx "$service" <<<"$running_services"; then
-    problems+=("Compose service is not running: $service")
+    problems+=("Сервер: служба не работает — $service")
   fi
 done
 
-for service in assetguard-backup.service assetguard-restore-rehearsal.service; do
+for service in assetguard-backup.service assetguard-restore-rehearsal.service assetguard-notifications.service; do
   if systemctl is-failed --quiet "$service"; then
-    problems+=("Systemd job failed: $service")
+    problems+=("Ошибка фоновой задачи: $service")
   fi
 done
 
 free_percent="$(df -P / | awk 'NR == 2 { print 100 - $5 }')"
 if [[ "$free_percent" -lt "$minimum_free_percent" ]]; then
-  problems+=("Low server disk space: ${free_percent}% free")
+  problems+=("Мало места на сервере: свободно ${free_percent}%")
 fi
 
 if [[ ! -r "$backup_status_file" ]]; then
-  problems+=("No server-side backup status file")
+  problems+=("Нет данных о серверном резервном копировании")
 else
   backup_success_unix="$(read_env_value ASSETGUARD_BACKUP_SUCCESS_UNIX "$backup_status_file")"
   if [[ ! "$backup_success_unix" =~ ^[0-9]+$ ]]; then
-    problems+=("Server-side backup status is invalid")
+    problems+=("Некорректные данные о резервном копировании")
   else
     backup_age_hours=$(( ($(date +%s) - backup_success_unix) / 3600 ))
     if [[ "$backup_age_hours" -gt "$maximum_backup_age_hours" ]]; then
-      problems+=("Latest server backup is ${backup_age_hours}h old")
+      problems+=("Последней резервной копии ${backup_age_hours} ч")
     fi
   fi
 fi
 
 operations="$(curl --fail --silent --show-error --max-time 20 -H "X-AssetGuard-Admin-Token: $admin_token" "https://${public_host}/admin/operations/status" 2>/dev/null || true)"
 if [[ -z "$operations" ]]; then
-  problems+=("Operations API is unavailable")
+  problems+=("Операционные данные API недоступны")
 else
   if metrics="$(printf '%s' "$operations" | python3 -c '
 import json, sys
 data = json.load(sys.stdin)
 agents = data.get("agents", {})
 ingest = data.get("ingest", {})
-print(int(agents.get("offline", 0)) + int(agents.get("stale", 0)), int(ingest.get("failed", 0)), int(agents.get("identity_conflicts", 0)))
+notifications = data.get("notifications", {})
+print(int(agents.get("offline", 0)) + int(agents.get("stale", 0)), int(ingest.get("failed", 0)), int(agents.get("identity_conflicts", 0)), int(notifications.get("retrying", 0)))
 ' 2>/dev/null)"; then
-    read -r offline_agents failed_ingest identity_conflicts <<<"$metrics"
-    [[ "$offline_agents" -eq 0 ]] || problems+=("Offline or stale agents: $offline_agents")
-    [[ "$failed_ingest" -eq 0 ]] || problems+=("Failed inventory ingests: $failed_ingest")
-    [[ "$identity_conflicts" -eq 0 ]] || problems+=("Endpoint identity conflicts: $identity_conflicts")
+    read -r offline_agents failed_ingest identity_conflicts retrying_notifications <<<"$metrics"
+    [[ "$offline_agents" -eq 0 ]] || problems+=("Agent без свежих данных или offline: $offline_agents")
+    [[ "$failed_ingest" -eq 0 ]] || problems+=("Ошибки приёма инвентаризации: $failed_ingest")
+    [[ "$identity_conflicts" -eq 0 ]] || problems+=("Конфликты идентификации ПК: $identity_conflicts")
+    [[ "$retrying_notifications" -eq 0 ]] || problems+=("Уведомления об инцидентах ожидают повтора: $retrying_notifications")
   else
-    problems+=("Operations API returned invalid metrics")
+    problems+=("Операционные данные API некорректны")
   fi
 fi
 
@@ -124,9 +126,12 @@ if [[ "$fingerprint" == "$last_fingerprint" && "$last_sent" =~ ^[0-9]+$ && $((no
   exit 0
 fi
 
-message=$'⚠️ AssetGuard production requires attention\n'
+message=$'⚠️ AssetGuard · требуется внимание\n'
 message+="$(printf '%s\n' "${problems[@]}")"
-message+="Checked: $(date --iso-8601=minutes)"
+message+=$'\nПроверено: '
+message+="$(TZ=Asia/Qyzylorda date '+%d.%m.%Y %H:%M %Z')"
+message+=$'\nОткрыть AssetGuard: '
+message+="https://${public_host}/#overview"
 telegram_response="$(curl --fail --silent --show-error --max-time 20 \
   -X POST "https://api.telegram.org/bot${telegram_token}/sendMessage" \
   --data-urlencode "chat_id=${telegram_chat_id}" \

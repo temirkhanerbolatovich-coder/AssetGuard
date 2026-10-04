@@ -13,7 +13,7 @@ AssetGuard — система учёта и контролируемой инв�
 
 Подтверждено кодом, тестами или выполненной эксплуатационной проверкой:
 
-- FastAPI, PostgreSQL 17, SQLAlchemy и Alembic migrations до `0025_agent_reenrolment`;
+- FastAPI, PostgreSQL 17, SQLAlchemy и Alembic migrations до `0026_telegram_notifications`;
 - browser dashboard, реестр имущества, структура `организация → корпус → этаж → кабинет`;
 - native GLPI XML transport и JSON bridge;
 - raw inventory, snapshots, explicit baseline, changes, incidents и append-only history;
@@ -31,6 +31,8 @@ AssetGuard — система учёта и контролируемой инв�
 Стабилизация 2026-10-04 опубликована и развёрнута на production из application commit `93ff8ed`: 80 backend tests, 2 browser E2E и ручной GitHub real-model smoke (23 detections) прошли. Закрыты scope ошибки native Agent и Excel/PDF import, age-based stale counters, monitor recovery/retry и структурированный количественный импорт с сохранением остатков после актов. Серверные UI/API/schema согласованы на `0025`; backup, migration/recovery rehearsal и Telegram acceptance/dedup проверены. Подробности: [протокол выкладки](outputs/assetguard-release-2026-10-04.md). Следующий этап — fleet test на 3–5 реальных ПК; installer `0.1.7` пока не опубликован.
 
 ## Архитектура
+
+Новые технические и физические инциденты помещаются в транзакционную Telegram-очередь; отдельный worker отправляет их в явно назначенный чат организации с retry и проверкой acceptance. Проблемы Agent и сервера отслеживает существующий monitor. [Настройка и гарантии доставки](docs/features/telegram-notifications.md), [план UI/UX](docs/product/ui-ux-modernization-spec.md).
 
 ```text
 GLPI Agent / JSON bridge

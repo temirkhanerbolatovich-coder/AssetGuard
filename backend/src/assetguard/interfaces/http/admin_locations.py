@@ -35,6 +35,7 @@ from assetguard.modules.identity.auth import AuthPrincipal
 from assetguard.modules.identity.location_access import permitted_room_ids, require_room_access
 from assetguard.modules.identity.models import LocationAccessRecord, UserRecord
 from assetguard.modules.snapshots.models import ManagedEndpointRecord
+from assetguard.modules.notifications.service import enqueue_notification
 from assetguard.modules.vision.models import VisionBaselineRecord, VisionRoomRecord, VisionScanRecord
 
 router = APIRouter(prefix="/admin/locations", tags=["locations"])
@@ -376,6 +377,13 @@ def create_room_inspection(room_id: UUID, body: RoomInspectionCreate, session: A
             created_at=now, resolved_at=None,
         )
         session.add(incident); session.flush()
+        enqueue_notification(
+            session, event_key=f"physical:{incident.id}:opened", organization_id=asset.organization_id,
+            room_id=room.id, title="Расхождение физического обхода",
+            subject=f"{asset.name} · {asset.inventory_number}",
+            context=f"Кабинет {room.name}: {labels[item.result]}, {item.affected_quantity} {asset.unit}. Откройте вкладку «Инциденты» кабинета и проверьте результат обхода.",
+            route=f"#room={room.id}", severity=incident.severity, occurred_at=incident.created_at,
+        )
         append_asset_history(
             session, asset_id=asset.id, event_type="PHYSICAL_INCIDENT_CREATED",
             related_entity_type="PHYSICAL_INCIDENT", related_entity_id=incident.id,

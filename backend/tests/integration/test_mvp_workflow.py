@@ -11,6 +11,9 @@ import httpx
 from openpyxl import Workbook
 from assetguard.app import app
 from assetguard.infrastructure.config import get_settings
+from assetguard.infrastructure.database import get_session_factory
+from assetguard.modules.notifications.models import TelegramNotificationRecord
+from sqlalchemy import select
 
 FIXTURES = Path(__file__).parents[1] / "fixtures"
 
@@ -168,6 +171,10 @@ async def _complete_mvp_workflow() -> None:
         assert workspace.json()["latest_inspection"]["items"][0]["result"] == "DAMAGED"
         assert len(workspace.json()["physical_incidents"]) == 1
         physical_incident = workspace.json()["physical_incidents"][0]
+        with get_session_factory()() as session:
+            queued = session.scalar(select(TelegramNotificationRecord).where(TelegramNotificationRecord.event_key == f"physical:{physical_incident['id']}:opened"))
+            assert queued is not None and queued.status == "PENDING"
+            assert queued.payload["route"] == f"#room={room['id']}"
         assert physical_incident["asset_id"] == asset_id
         assert physical_incident["issue_type"] == "DAMAGED"
         assert physical_incident["status"] == "OPEN"
@@ -270,6 +277,9 @@ async def _complete_mvp_workflow() -> None:
         incidents = (await client.get(f"/admin/incidents?endpoint_id={endpoint_id}", headers=admin_headers())).json()
         removal_incidents = [item for item in incidents if item["change_event_id"] == removals[0]["id"]]
         assert len(removal_incidents) == 1
+        with get_session_factory()() as session:
+            queued = list(session.scalars(select(TelegramNotificationRecord).where(TelegramNotificationRecord.event_key == f"technical:{removal_incidents[0]['id']}:opened")))
+            assert len(queued) == 1 and queued[0].status == "PENDING"
 
         identical_response = await client.post("/internal/inventories", headers=ingest_headers(uuid4().hex), json=removed)
         assert identical_response.status_code == 202

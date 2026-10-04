@@ -19,6 +19,7 @@ from assetguard.modules.identity.auth import AuthPrincipal
 from assetguard.modules.identity.location_access import permitted_room_ids
 from assetguard.modules.inventory.models import RawInventoryRecord
 from assetguard.modules.snapshots.models import ManagedEndpointRecord
+from assetguard.modules.notifications.models import TelegramNotificationRecord
 
 
 router = APIRouter(tags=["operations"])
@@ -71,10 +72,15 @@ def operations_status(
         func.count(RawInventoryRecord.id), func.max(RawInventoryRecord.received_at),
     ).where(RawInventoryRecord.processing_status == "FAILED")
     latest_inventory_query = select(func.max(RawInventoryRecord.received_at))
+    notification_query = select(
+        func.count(case((TelegramNotificationRecord.status == "PENDING", 1))),
+        func.count(case(((TelegramNotificationRecord.status == "PENDING") & (TelegramNotificationRecord.attempts > 0), 1))),
+    )
     if principal.organization_id:
         endpoint_query = endpoint_query.where(ManagedEndpointRecord.organization_id == principal.organization_id)
         failed_query = failed_query.join(ManagedEndpointRecord, ManagedEndpointRecord.id == RawInventoryRecord.managed_endpoint_id).where(ManagedEndpointRecord.organization_id == principal.organization_id)
         latest_inventory_query = latest_inventory_query.join(ManagedEndpointRecord, ManagedEndpointRecord.id == RawInventoryRecord.managed_endpoint_id).where(ManagedEndpointRecord.organization_id == principal.organization_id)
+        notification_query = notification_query.where(TelegramNotificationRecord.organization_id == principal.organization_id)
     allowed_rooms = permitted_room_ids(session, principal)
     if allowed_rooms is not None:
         endpoint_ids = select(ManagedEndpointRecord.id).join(
@@ -83,10 +89,12 @@ def operations_status(
         endpoint_query = endpoint_query.where(ManagedEndpointRecord.id.in_(endpoint_ids))
         failed_query = failed_query.where(RawInventoryRecord.managed_endpoint_id.in_(endpoint_ids))
         latest_inventory_query = latest_inventory_query.where(RawInventoryRecord.managed_endpoint_id.in_(endpoint_ids))
+        notification_query = notification_query.where(TelegramNotificationRecord.room_id.in_(allowed_rooms))
 
     endpoint_counts = {status: count for status, count in session.execute(endpoint_query)}
     failed_count, last_failed_at = session.execute(failed_query).one()
     latest_inventory_at = session.scalar(latest_inventory_query)
+    pending_notifications, retrying_notifications = session.execute(notification_query).one()
 
     database_bytes = None
     try:
@@ -109,4 +117,5 @@ def operations_status(
             "last_inventory_at": latest_inventory_at,
         },
         "ingest": {"failed": failed_count, "last_failed_at": last_failed_at},
+        "notifications": {"pending": pending_notifications, "retrying": retrying_notifications},
     }
