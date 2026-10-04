@@ -30,9 +30,9 @@
 
 ### Deployment note
 
-Код находится в `main`, но installer `0.1.7` ещё не подписан, не опубликован как GitHub Release и не принят на третьем pilot-PC. Repository schema `0025` также не отмечена production runbook как развёрнутая.
+Application commit `93ff8ed` опубликован в `main` и развёрнут 2026-10-04: production schema `0025`, публичный UI, защищённые re-enrolment routes и monitor проверены. Push/manual GitHub CI прошли, включая 80 backend tests, 2 browser E2E и реальную модель. Перед выкладкой выполнены encrypted R2 restore и изолированный upgrade/downgrade/re-upgrade с запуском прежнего API; Telegram подтвердил test alert, повтор подавлен. Подробности и ограничения отката — в [протоколе выкладки](outputs/assetguard-release-2026-10-04.md).
 
-Исправления стабилизации от 2026-10-04 проверяются локально; публикация GitHub и deployment выполняются отдельным следующим шагом. Новые миграции не требуются.
+Installer `0.1.7` остаётся неподписанным и неопубликованным pilot candidate, ещё не принятым на третьем ПК. Исправления стабилизации не добавляют миграций: выкладка применяет уже существующую `0025_agent_reenrolment`.
 
 ## [v0.1.6] — 2026-09-27
 

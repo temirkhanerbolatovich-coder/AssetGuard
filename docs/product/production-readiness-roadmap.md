@@ -20,7 +20,9 @@
 - [x] Постоянные Linux timers запускают daily backup, weekly restore rehearsal и monitor каждые 5 минут. Ручная server-приёмка 2026-09-27: backup upload и isolated restore `PASS` (`0024`, `assets=211`, `endpoints=1`).
 - [x] Server monitor проверяет readiness, Compose services, disk, backup age/job failures, Agent last-seen, failed ingest и identity conflicts.
 - [x] Telegram server alerting принят 2026-09-27: test alert принят API, второй одинаковый запуск подавлен, normal run healthy; неизменившаяся проблема повторяется через 4 часа.
-- [ ] Staging environment и rollback runbook.
+- [x] Application `93ff8ed` опубликован и развёрнут 2026-10-04: CI, schema/UI/API, encrypted R2 restore на `0025` и controlled Telegram acceptance/dedup прошли; [протокол](../../outputs/assetguard-release-2026-10-04.md).
+- [x] Recovery runbook и upgrade/downgrade/re-upgrade на свежей pre-release копии, с запуском старого и нового API. Поздний downgrade требует решения по новым re-enrolment данным.
+- [ ] Staging environment, настоящий failover и безопасная rollback automation.
 
 ## Этап 3: secure software supply chain
 

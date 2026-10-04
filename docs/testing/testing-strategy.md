@@ -79,7 +79,7 @@ Linux monitor contract использует Bash и локальные command d
 
 Grounding DINO real-model smoke выполняется отдельно по расписанию и вручную, потому что требует тяжёлых dependencies и model download.
 
-Smoke job задаёт обязательные `ASSETGUARD_DATABASE_URL`, `ASSETGUARD_INVENTORY_SHARED_SECRET` и `ASSETGUARD_ADMIN_SHARED_SECRET`: detector читает общие settings даже без подключения к БД. Локальная проверка 2026-10-04 прошла на текущем коде в готовом CPU image (`torch 2.14.0+cpu`, `transformers 5.17.0`), offline/read-only cache: 23 detections. Она подтверждает inference/post-processing, но не скачивание модели и не выполнение новых GitHub Actions jobs.
+Smoke job задаёт обязательные `ASSETGUARD_DATABASE_URL`, `ASSETGUARD_INVENTORY_SHARED_SECRET` и `ASSETGUARD_ADMIN_SHARED_SECRET`: detector читает общие settings даже без подключения к БД. Локальная проверка 2026-10-04 прошла на текущем коде в готовом CPU image (`torch 2.14.0+cpu`, `transformers 5.17.0`), offline/read-only cache: 23 detections. Дополнительно [manual GitHub run 37223446315](https://github.com/temirkhanerbolatovich-coder/AssetGuard/actions/runs/37223446315) на application commit `93ff8ed` завершился success, подтвердив настоящий model download/inference и 23 detections; 80 backend tests и 2 browser E2E также прошли. Это runtime smoke, а не accuracy benchmark.
 
 ## Требования к изменениям
 
@@ -99,6 +99,7 @@ Smoke job задаёт обязательные `ASSETGUARD_DATABASE_URL`, `ASSE
 - Import tests проверяют Excel и настоящий generic PDF, tenant preview/create/update, mixed-tenant rejection, целые/дробные количества, official statement, OCR unknown count, повторный импорт/экспорт и остатки после настоящих MOVE/WRITE_OFF.
 - Freshness проверяется на старых ONLINE/REQUIRES_VERIFICATION с сохранением tenant filters и отсутствием изменений БД; monitor contract — stale/acceptance/dedup/recovery/recurrence/refusal/retry/malformed metrics.
 - Real-model smoke проверяет работоспособность pipeline, но не точность модели на репрезентативном датасете.
-- Реальный fleet GLPI Agent и production failover остаются ручными проверками.
+- Upgrade/recovery `0024 → 0025 → 0024 → 0025` прошёл 2026-10-04 на свежей копии production из R2: все прежние таблицы сохранили counts/fingerprints после upgrade, прежний API запустился после downgrade, новый API — после re-upgrade. Production readiness/UI hashes/schema/auth и настоящий Telegram acceptance/dedup прошли; [протокол](../../outputs/assetguard-release-2026-10-04.md).
+- Реальный fleet GLPI Agent и production failover остаются ручными проверками. Репетиция downgrade на pre-release копии не доказывает сохранность новых re-enrolment requests при позднем откате.
 
 Эти пробелы учтены в [technical debt](../technical-debt.md).

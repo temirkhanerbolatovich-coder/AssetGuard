@@ -34,7 +34,7 @@
 | GitHub | Готово | Public repository: `temirkhanerbolatovich-coder/AssetGuard`. |
 | Automated tests | Готово | Disposable PostgreSQL, JSON/native inventory, Vision workflow, auth lifecycle, identity conflict и Playwright browser E2E; GitHub Actions workflow. |
 | Бесплатный demo deployment | Готово | Docker Compose + Cloudflare Quick Tunnel, временный публичный HTTPS URL без домена. |
-| Encrypted backup | Готово на Windows и server | AES-256-GCM backup, Cloudflare R2 upload/download и isolated restore. Windows tasks завершились с кодом `0`; server backup и restore rehearsal дали `PASS` на `0024` 2026-09-27. |
+| Encrypted backup | Готово на Windows и server | AES-256-GCM backup, Cloudflare R2 upload/download и isolated restore. Windows tasks: код `0` 2026-09-27; свежие server backup/restore `PASS` на `0025`, assets=216/endpoints=11, 2026-10-04. |
 | Excel/PDF импорт и экспорт | Готово для поддерживаемых ведомостей | PDF разбирается постранично; сканы — через локальный Tesseract OCR. Перед записью можно проверить все строки, искать, листать по 25 позиций, видеть create/update и исключать строки. Пустые формы и неподтверждённые сводные данные не превращаются в фиктивный реестр. |
 
 ## Оставшаяся работа

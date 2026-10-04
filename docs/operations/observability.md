@@ -18,7 +18,9 @@
 
 Monitor суммирует offline/stale, подавляет одинаковые проблемы на 4 часа и очищает fingerprint после здорового запуска. Если та же проблема возвращается после восстановления, alert отправляется сразу. Fingerprint сохраняется только после ответа Telegram `ok=true` с `message_id`; отказ не подавляет следующую попытку. Некорректные JSON metrics создают отдельную проблему. `--state-dir` позволяет использовать отдельное состояние в тестовом окружении; production default — `/var/lib/assetguard-monitor`.
 
-Локальный тест `test_server_monitor.py` выполняет настоящий Bash script с подставными health/metrics/delivery и отдельными файлами состояния: stale → acceptance → dedup → recovery → recurrence → отказ → retry, а также malformed metrics. Это проверка логики; новая версия ещё не развёрнута и фактическая доставка пользователю на production в этом прогоне не проверялась.
+Локальный тест `test_server_monitor.py` выполняет настоящий Bash script с подставными health/metrics/delivery и отдельными файлами состояния: stale → acceptance → dedup → recovery → recurrence → отказ → retry, а также malformed metrics. Версия из application commit `93ff8ed` установлена на production 2026-10-04; byte comparison с repository source прошёл. С разрешения пользователя отправлен один настоящий test alert: Telegram подтвердил `ok=true` с `message_id`, немедленный повтор подавлен. Проверка использовала отдельный `--state-dir`, сохранив текущее состояние обычных уведомлений. Production timer активен; recovery/refusal/retry проверены автоматическим тестом, реальный сбой API намеренно не создавался.
+
+Read-only production acceptance 2026-10-04 показала: 11 endpoints, 1 online, 10 stale, 0 offline, 0 identity conflicts и 0 failed ingests. Stale отражает отсутствие свежей телеметрии тестовых ПК; успешная выкладка API не означает, что эти ПК прошли fleet acceptance. Точные результаты — в [release record](../../outputs/assetguard-release-2026-10-04.md).
 
 ## Операционные документы
 

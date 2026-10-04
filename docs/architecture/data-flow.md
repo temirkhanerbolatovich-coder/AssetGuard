@@ -98,6 +98,8 @@ UUID используется для сопоставления, но не сч�
 
 Windows- и Linux-скрипты формируют PostgreSQL dump, шифруют его контейнером AGBK1 (AES-256-GCM) и отправляют в Cloudflare R2. Restore rehearsal скачивает последнюю off-site копию, расшифровывает её и проверяет восстановление в отдельной базе. R2 upload/download/restore cycle успешно проверен 2026-09-27 через Windows Task Scheduler и постоянный Linux server; server rehearsal вернул `0024`, `assets=211`, `endpoints=1`. Vision image volume в этот backup не входит и требует отдельного решения до production-сбора фотографий.
 
+После выкладки application `93ff8ed` 2026-10-04 свежая server R2-копия восстановлена отдельно на `0025`, assets=216/endpoints=11, PASS. Перед выкладкой изолированная копия `0024` прошла upgrade/downgrade/re-upgrade с проверкой row fingerprints всех прежних таблиц и запуском старого/нового API. Downgrade удаляет re-enrolment requests и отвязывает revoked credential history; поздний откат требует отдельного решения по новым данным. [Протокол](../../outputs/assetguard-release-2026-10-04.md).
+
 ## Инварианты
 
 - Raw evidence не изменяется после приёма.

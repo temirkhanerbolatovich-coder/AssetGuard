@@ -138,7 +138,7 @@ in the device card. No database migration was required. Post-deployment readines
 Alembic head, public `app.js` hash and server monitoring passed; the previous API
 image remains tagged as `assetguard-api:rollback-8434dfb`.
 
-## Repository changes awaiting deployment
+## Historical pre-rollout note: repository changes awaiting deployment
 
 Repository commit `3216a11` advances Alembic head to `0025_agent_reenrolment` and adds installer `0.1.7` source with lifecycle version reporting and administrator-approved re-enrolment. Local backend, browser E2E and installer compilation passed, but this revision is not recorded as deployed by this runbook. Before rollout:
 
@@ -149,3 +149,30 @@ Repository commit `3216a11` advances Alembic head to `0025_agent_reenrolment` an
 5. test `0.1.7` on the third pilot PC before publishing its GitHub release.
 
 Do not rewrite the earlier deployment record: it is evidence of the exact state that was verified on 2026-09-27.
+
+## Deployment record: 2026-10-04
+
+Application commit `93ff8ed704635c26571d7866766e010eb42e29c6` was pushed to `main` and accepted on production at **18:28:53 UTC**. Both [push CI](https://github.com/temirkhanerbolatovich-coder/AssetGuard/actions/runs/37223402190) and [manual CI](https://github.com/temirkhanerbolatovich-coder/AssetGuard/actions/runs/37223446315) succeeded: 80 backend tests, 2 browser E2E, dependency audit, secret scan and manual real-model download/inference (23 detections). A transient GitHub API rate limit in the manual secret-scan first attempt resolved on retry without bypassing the check.
+
+Before deployment, a fresh R2 object `assetguard-production-20261004-181323.sql.agbackup` restored into isolated PostgreSQL 17 at `0024`, with 216 assets and 11 endpoints. A second isolated rehearsal applied `0025` and compared every pre-existing application table's count and row fingerprint; all were unchanged. It then downgraded to `0024`, started the previous API image normally and checked readiness, re-upgraded to `0025`, and started the candidate with authenticated assets/operations/re-enrolment reads. Production was never connected to this rehearsal.
+
+The server checkout advanced from `1e82e75` to the exact application commit. The Oracle Free image excludes optional ML dependencies as before. The previous image remains tagged `assetguard-api:rollback-pre93ff8ed-20261004`; the accepted candidate remains `assetguard-api:candidate-93ff8ed`. Only the API was recreated:
+
+```bash
+docker compose --env-file .env \
+  -f infra/containers/docker-compose.production.yml \
+  -f infra/containers/docker-compose.oracle-free.yml \
+  up -d --no-deps --no-build api
+```
+
+PostgreSQL and Caddy container IDs stayed unchanged. `/health` and `/health/ready`, all public frontend hashes, actual Alembic `0025`, 60 public OpenAPI admin operations and authenticated/unauthenticated access checks passed. The monitor was updated with a byte comparison; its previous script and private configuration were preserved. One authorized real Telegram test alert was accepted, and the repeat was suppressed using a separate state directory. The five-minute timer resumed active; systemd reported no failed units. Operations showed 1 online and 10 stale endpoints with zero failed ingest/conflicts; real PC acceptance remains pending.
+
+A fresh post-deployment R2 object `assetguard-production-20261004-182927.sql.agbackup` was restored separately at **18:30:15 UTC**: `0025_agent_reenrolment`, assets=216, endpoints=11, PASS. Both backup/restore services returned `Result=success` and `ExecMainStatus=0`. Daily/weekly automatic server jobs earlier on 2026-10-04 also passed. PostgreSQL backups still exclude the Vision image volume. Exact hashes, counts and limits are recorded in [release acceptance](../../outputs/assetguard-release-2026-10-04.md).
+
+### Recovery for the 0025 release
+
+The previous image runs `alembic upgrade head` before Uvicorn. Its migrations do not know `0025`, so changing the image tag alone is insufficient. The tested sequence was candidate migration downgrade on an isolated pre-release copy, followed by the ordinary previous-image startup; it was **not** a production rollback or full failover test.
+
+Downgrade `0025` deletes the re-enrolment table and detaches revoked credential bindings before restoring the previous uniqueness constraint. The rehearsed copy had no re-enrolment requests and no bound revoked credentials. Before any later rollback, stop writes, take a fresh backup, inspect requests and credential history added since deployment, and choose between retaining the current schema with a compatible application or a reviewed downgrade/restore plan that accounts for those writes. Do not blindly run downgrade or restore against a live database. Retain the rollback image and pre/post-deployment R2 objects until the recovery window has closed.
+
+Final documentation can advance Git checkout HEAD after acceptance without rebuilding the image. The verified runtime application code is `93ff8ed`; installer `0.1.7` remains unsigned, unpublished and pending real-PC acceptance. Historical deployment notes above remain evidence of their original dates.

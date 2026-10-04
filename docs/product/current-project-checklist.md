@@ -7,15 +7,15 @@
 Production: **https://assetguard-temirkhan.duckdns.org**  
 Версия схемы репозитория: **`0025_agent_reenrolment`**
 
-Последняя зафиксированная production/R2 restore revision: **`0024_physical_asset_operations`**
+Последняя проверенная production/R2 restore revision: **`0025_agent_reenrolment`**, 2026-10-04, **216 assets / 11 endpoints**.
 
-Рабочая точка: **локальная стабилизация первого этапа после аудита 2026-10-04**. Исправления ещё не опубликованы и не развёрнуты. Публичные UI/health/readiness доступны; проверенный серверный OpenAPI содержит 57 admin operations и не содержит Agent re-enrolment routes, а UI совпадает с историческим commit `7a3f7f2`. Actual production migration revision через SSH в этом прогоне не читалась.
+Рабочая точка: **стабилизация опубликована и принята на production 2026-10-04**. Application commit `93ff8ed` в `main`: push/manual CI success, включая реальную модель; production UI/API/schema согласованы на `0025`. HTTPS health/readiness, hashes всех трёх frontend files, 60 admin operations и защищённые Agent re-enrolment routes проверены. Backup/R2 restore, upgrade/recovery rehearsal и Telegram acceptance/dedup прошли. Подробности: [release acceptance](../../outputs/assetguard-release-2026-10-04.md). Следующий рабочий этап — fleet acceptance; Windows installer `0.1.7` пока не опубликован.
 
 Этот документ — единая точка правды о текущем состоянии AssetGuard. Статус «реализовано» означает, что функция присутствует в коде и покрыта автоматической либо выполненной ручной проверкой. Статус «частично» означает, что рабочий сценарий есть, но ещё не закрыты эксплуатационные, масштабные или продуктовые требования.
 
 ## Краткий итог
 
-AssetGuard является работающим pilot MVP: школьный реестр, структура помещений, Windows Agent, техническая инвентаризация, baseline и инциденты, физические обходы, перемещение/списание, Excel/PDF, QR, пользователи и доступы, локальный Vision и постоянный HTTPS-сервер реализованы. Состояние рабочего дерева и развёрнутого сервера различается; свежий зелёный GitHub CI для исправлений ещё требуется.
+AssetGuard является работающим pilot MVP: школьный реестр, структура помещений, Windows Agent, техническая инвентаризация, baseline и инциденты, физические обходы, перемещение/списание, Excel/PDF, QR, пользователи и доступы, локальный Vision и постоянный HTTPS-сервер реализованы. Исправления стабилизации опубликованы и развёрнуты из проверенного application commit; CI и серверная приёмка прошли. Изменения документов после выкладки не меняют этот application image.
 
 Для полноценного многопользовательского production-продукта в нескольких школах ещё нужны прежде всего испытание парка реальных ПК, политика хранения данных и безопасное обновление подписанного Agent.
 
@@ -29,7 +29,7 @@ AssetGuard является работающим pilot MVP: школьный р�
 
 | Область | Статус | Что работает сейчас | Проверка |
 | --- | --- | --- | --- |
-| Backend и БД | ✅ | FastAPI, PostgreSQL 17, SQLAlchemy, Alembic; миграции до `0025` | Disposable PostgreSQL upgrade до `head`; production/R2 rehearsal подтверждён на `0024` |
+| Backend и БД | ✅ | FastAPI, PostgreSQL 17, SQLAlchemy, Alembic; production migrations до `0025` | CI; isolated upgrade/downgrade/re-upgrade; actual production revision и R2 restore `0025` |
 | Raw inventory | ✅ | Неизменяемый исходный payload, hash, idempotency, processing status | Integration tests и DB triggers |
 | GLPI Agent transport | ✅ | Native GLPI Agent 1.19/1.20 `PROLOG → INVENTORY` и JSON bridge | Два реальных Windows-PC и fixtures |
 | Аппаратная инвентаризация | ✅ | CPU, RAM, накопители, GPU, motherboard, сеть, мониторы, BIOS/идентификаторы | Unit/integration tests |
@@ -48,7 +48,7 @@ AssetGuard является работающим pilot MVP: школьный р�
 | Перемещение имущества | ✅ | Выбор целевого кабинета, целое или частичное перемещение групповой позиции, новый инвентарный номер, история | Integration test |
 | Списание имущества | ✅ | Частичное уменьшение группового остатка либо полное `WRITTEN_OFF` | Integration test |
 | PDF-акты операций | ✅ | Акт перемещения/списания с номером, количеством, маршрутом, основанием и исполнителем | Генерация и `%PDF` проверены |
-| Excel import/export | ✅ локально | Tenant-safe preview/create/update; quantity/unit/tracking_mode, сохранение учёта после актов и старых файлов без новых колонок | PostgreSQL integration и browser E2E |
+| Excel import/export | ✅ для поддерживаемых форм | Tenant-safe preview/create/update; quantity/unit/tracking_mode, сохранение учёта после актов и старых файлов без новых колонок; код развёрнут | PostgreSQL integration и browser E2E в CI; реальные записи production для теста не изменялись |
 | PDF import/export | ✅ для поддерживаемых форм | Текстовые PDF и локальный OCR сканов; обязательный предпросмотр перед записью | Unit/integration tests на образцах |
 | QR карточки | ✅ | QR открывает карточку конкретного актива по публичному URL | API test |
 | Vision demo | ✅ локально | JPEG/PNG → Grounding DINO → bounding boxes/counts → baseline → повторный scan → `WARNING` | API workflow, demo images, отдельный real-model CI smoke |
@@ -56,14 +56,16 @@ AssetGuard является работающим pilot MVP: школьный р�
 | Сетевые метрики Agent | ✅ базово | Опциональные ICMP availability, packet loss и average latency | Inventory fixture |
 | Безопасность API | ✅ foundation | HTTPS, security headers, payload limits, app rate limiting, секреты вне Git, immutable evidence/history | CI и production config |
 | Dependency scanning | ✅ | `pip check`, строгий `pip-audit`, Dependabot | GitHub Actions |
-| Backup/restore tooling | ✅ Windows + server | AES-256-GCM backup, R2 upload/retention и isolated restore rehearsal; Windows/Linux AGBK1 совместимость | Windows tasks завершились с кодом `0`; server backup и restore rehearsal завершились `PASS` 2026-09-27 |
-| Telegram monitoring | ✅ базовый production-контур | Каждые 5 минут: readiness, Compose services, disk, backup age/job failures, offline Agent, failed ingest и identity conflicts; дедупликация и повтор через 4 часа | Telegram принял test alert, второй запуск был подавлен, normal run прошёл 2026-09-27 |
+| Backup/restore tooling | ✅ Windows + server | AES-256-GCM backup, R2 upload/retention и isolated restore rehearsal; Windows/Linux AGBK1 совместимость | Windows tasks: код `0` 2026-09-27; server daily/weekly cycle и свежие pre/post-deployment restore `PASS` 2026-10-04, последний на `0025` |
+| Telegram monitoring | ✅ базовый production-контур | Каждые 5 минут: readiness, Compose services, disk, backup age/job failures, offline/stale Agent, failed ingest и identity conflicts; dedup/recovery/retry | Новая версия установлена; Telegram подтвердил test alert, повтор подавлен 2026-10-04; recovery/refusal/retry покрыты automated test |
 | Постоянный deployment | ✅ | Oracle Cloud Always Free, Docker Compose, Caddy, DuckDNS, TLS, restart policy | Public health/readiness |
-| CI | ⚠ требуется новый GitHub run | PostgreSQL tests, browser E2E, dependency audit, JS/PowerShell checks, Compose validation; исправлена обязательная env-конфигурация scheduled/manual smoke | Локальные проверки; свежего GitHub run исправлений нет |
+| CI | ✅ | PostgreSQL tests, browser E2E, dependency audit, JS/PowerShell/Linux checks, Compose validation и real-model smoke | Push `37223402190` и manual `37223446315` success на `93ff8ed` |
 
-Локальная проверка стабилизации 2026-10-04: **80 unit/integration и 2 browser E2E**. Disposable PostgreSQL 17 применяет все 25 migrations до `0025`, очищается перед каждым тестом; rate limiter также сбрасывается. Реальная Grounding DINO прошла smoke на текущем исходном коде в существующем CPU Docker image с read-only model cache и без сети: **23 detections**. Это runtime smoke, а не quality benchmark или новый model download. Последний проверенный GitHub application run `36374203808` на commit `2b441fb` завершился failure из-за отсутствующих shared settings в smoke job; тестовый и secret-scan jobs были успешны. Локальное исправление env не является подтверждением нового зелёного GitHub run.
+Проверка стабилизации 2026-10-04 локально и в GitHub CI: **80 unit/integration и 2 browser E2E**. Disposable PostgreSQL 17 применяет все 25 migrations до `0025`, очищается перед каждым тестом; rate limiter также сбрасывается. Реальная Grounding DINO прошла offline smoke и manual GitHub model download/inference: **23 detections**. Это runtime smoke, а не quality benchmark. [Push CI](https://github.com/temirkhanerbolatovich-coder/AssetGuard/actions/runs/37223402190) и [manual CI](https://github.com/temirkhanerbolatovich-coder/AssetGuard/actions/runs/37223446315) на `93ff8ed` завершились success; transient secret-scan API rate-limit устранён успешным повтором без bypass.
 
-Закрыто локально в первом этапе:
+Production read-only counts: **216 assets, 11 endpoints, 51 raw inventories, 51 snapshots, 17 credentials, 0 re-enrolment requests**. Operations: 1 online, 10 stale, 0 offline/conflicts/failed ingests. Отсутствие свежей телеметрии 10 ПК остаётся предметом fleet acceptance; для прохождения приёмки эти данные не исправлялись вручную.
+
+Закрыто в стабилизации и выкладке:
 
 - [x] обычный Windows venv startup и disposable PostgreSQL test environment;
 - [x] Agent endpoint/tenant checks до доменных изменений, включая duplicates, смешанные identifiers, unowned endpoint и уже занятый credential;
@@ -71,8 +73,9 @@ AssetGuard является работающим pilot MVP: школьный р�
 - [x] age-based stale counters и monitor dedup/recovery/retry с подставной доставкой;
 - [x] structured import/export количества, единицы и режима, сохранение остатков после актов;
 - [x] обязательные env settings smoke job и локальный real-model smoke без изменения Vision logic;
-- [ ] публикация проверенных изменений и свежий GitHub CI, включая scheduled/manual smoke;
-- [ ] rollout на сервер и controlled production alert/fleet acceptance.
+- [x] публикация проверенных изменений и свежий GitHub CI, включая manual real-model smoke;
+- [x] свежие pre/post-deployment R2 backup/restore, upgrade/recovery rehearsal, rollout API/UI/schema и controlled production alert/dedup;
+- [ ] fleet acceptance на 3–5 реальных ПК, включая installer `0.1.7`.
 
 ## Реализовано частично
 
@@ -80,7 +83,7 @@ AssetGuard является работающим pilot MVP: школьный р�
 | --- | --- | --- |
 | Multi-tenant | Organization scope и scoped ADMIN; матрица 60 admin operations; negative tests для native Agent ingestion и Excel/PDF import | Явные platform/onboarding полномочия, отказ от legacy global fallback и приёмка двух реальных школ |
 | Мониторинг | Постоянный systemd monitor проверяет API, Compose services, диск, возраст/ошибки backup, ingest и Agent last-seen; доставка, дедупликация и четырёхчасовой repeat Telegram-alert приняты | Dashboard наблюдаемости и формальная on-call escalation |
-| Backup | Зашифрованные копии, Cloudflare R2, 14 дней локально / 30 дней off-site; Windows и постоянные Linux timers работают; server restore rehearsal `PASS` 2026-09-27 | Наблюдать следующий автоматический daily/weekly цикл; backup пока охватывает PostgreSQL, но не Vision volume |
+| Backup | Зашифрованные копии, Cloudflare R2, 14 дней локально / 30 дней off-site; Windows и Linux timers; server automatic cycle и свежий restore `0025` прошли 2026-10-04 | Backup пока охватывает PostgreSQL, но не Vision volume; длительное наблюдение за регулярными циклами |
 | Vision production | Полный локальный photo workflow и настоящий model smoke в CI | Oracle Free VM не тянет ML runtime; нужны отдельный inference host/GPU либо более мощный сервер, object storage и accuracy evaluation |
 | Хранение данных | Raw evidence и audit защищены от изменения; Vision лежит в persistent volume | Утверждённые сроки хранения, автоматическая очистка/архив Vision, экспорт и процедура удаления по политике |
 | Installer lifecycle | Установка службы и первичное подключение работают; `0.1.7` передаёт installer version, пишет защищённый lifecycle log, панель предупреждает о неподдерживаемом Agent | Code signing, SmartScreen reputation, versioned update/rollback и массовое развёртывание |
@@ -91,7 +94,7 @@ AssetGuard является работающим pilot MVP: школьный р�
 | QR-инвентаризация | QR актива открывает карточку | QR кабинета, мобильный режим обхода, offline/PWA и сканирование камерой телефона |
 | Security hardening | Dependency audit, автоматический secret scan всей Git-истории, pre-commit hook, rate limit приложения, TLS, роли, append-only | Proxy-level rate limiting, SAST, container scan, SBOM, MFA/SSO и внешний pentest |
 | Admin audit | Инциденты, baseline, активы и операции оставляют history | Единый журнал всех административных действий: пользователи, grants, credential revoke, imports и настройки |
-| Operations | Production Compose и restart policy работают | Staging, blue/green или rollback automation, release tags, SLA/runbook инцидентов |
+| Operations | Production Compose/restart policy; документирован и испытан recovery на pre-release копии; старый image сохранён | Staging, production failover, rollback automation с учётом новых re-enrolment data, release tags и SLA |
 | UX | Основные сценарии и адаптивность реализованы | Модерируемый тест с сотрудниками школы, accessibility audit и устранение найденных проблем |
 
 ## Пока не реализовано
@@ -121,10 +124,11 @@ AssetGuard является работающим pilot MVP: школьный р�
 
 ### P0 — обязательны до пилота с реальной школой
 
-1. **Проверенный release и сервер:** опубликовать стабилизацию, получить свежий CI, проверить backup/isolated restore, upgrade/recovery `0024 → 0025`, выровнять exact code/UI/schema и принять controlled production alert.
-2. **Fleet test:** установить Agent минимум на 3–5 разных ПК и проверить перезагрузку, отсутствие сети, повторную доставку, смену железа, revoke и восстановление службы.
-3. **Data governance:** утвердить состав/доступ/хранение/удаление данных, включая Vision-фотографии.
-4. **Release безопасности Agent:** подписать installer, зафиксировать SHA-256 и испытать обновление/откат.
+Publication/CI/server/backup/migration/controlled alert для application `93ff8ed` закрыты 2026-10-04; это не закрывает испытания реального парка и границы многопользовательского production.
+
+1. **Fleet test:** установить Agent минимум на 3–5 разных ПК и проверить перезагрузку, отсутствие сети, повторную доставку, смену железа, revoke, re-enrolment и восстановление службы; проверить 10 stale endpoints.
+2. **Data governance:** утвердить состав/доступ/хранение/удаление данных, включая Vision-фотографии.
+3. **Release безопасности Agent:** подписать installer, зафиксировать SHA-256 и испытать обновление/откат.
 
 ### P1 — следующий продуктовый релиз
 
@@ -158,7 +162,9 @@ AssetGuard является работающим pilot MVP: школьный р�
 - [x] выполнить server backup в R2 и isolated restore: `0024`, `assets=211`, `endpoints=1`, `PASS` 2026-09-27;
 - [x] добавить alert по возрасту копии и failed backup/restore jobs;
 - [x] подтвердить test alert: Telegram accepted, повторный запуск deduplicated, normal run healthy; неизменившаяся проблема повторяется через 4 часа;
-- оформить rollback и аварийный runbook.
+- [x] оформить recovery runbook с ограничениями downgrade `0025` и проверить прежний/новый API на изолированной копии;
+- [x] повторить backup/restore и Telegram acceptance/dedup после выкладки 2026-10-04; actual schema `0025`, assets=216, endpoints=11;
+- [ ] испытать настоящий failover/сбой API в staging; тестовое сообщение не является испытанием аварии production.
 
 Критерий готовности: тестово удалить disposable окружение, восстановить его только из внешней копии и получить автоматическое уведомление при намеренно остановленном API.
 
