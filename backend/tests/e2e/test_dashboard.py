@@ -478,6 +478,18 @@ def test_incident_detail_supports_direct_link_and_managed_decision(live_server):
         browser.close()
 
 
+def assert_no_page_overflow(page, width):
+    layout = page.locator("body").evaluate("""element => ({
+        viewport: element.clientWidth,
+        width: element.scrollWidth,
+        overflow: [...document.querySelectorAll('body *')].filter(node => {
+            const rect = node.getBoundingClientRect();
+            return rect.width > 0 && rect.right > element.clientWidth + 1;
+        }).slice(0, 12).map(node => ({tag: node.tagName, id: node.id, className: node.className, right: node.getBoundingClientRect().right}))
+    })""")
+    assert layout["width"] <= layout["viewport"], {"viewport_width": width, "layout": layout}
+
+
 def test_sign_in_screen_named_account_keyboard_and_mobile(live_server):
     playwright = pytest.importorskip("playwright.sync_api")
     settings = get_settings()
@@ -508,7 +520,7 @@ def test_sign_in_screen_named_account_keyboard_and_mobile(live_server):
         capture("login-desktop.png")
         for width in (320, 360, 390, 768, 1024, 1366, 1920):
             page.set_viewport_size({"width": width, "height": 900})
-            assert page.locator("body").evaluate("element => element.scrollWidth <= element.clientWidth")
+            assert_no_page_overflow(page, width)
         page.set_viewport_size({"width": 390, "height": 844})
         capture("login-mobile.png")
         page.locator("#login").click()
@@ -545,7 +557,7 @@ def test_sign_in_screen_named_account_keyboard_and_mobile(live_server):
         page.locator("#toast").wait_for(state="hidden")
         for width in (320, 360, 390, 768, 1024, 1366, 1920):
             page.set_viewport_size({"width": width, "height": 900})
-            assert page.locator("body").evaluate("element => element.scrollWidth <= element.clientWidth")
+            assert_no_page_overflow(page, width)
         page.set_viewport_size({"width": 390, "height": 844})
         capture("workspace-mobile.png")
         page.set_viewport_size({"width": 1366, "height": 900})
