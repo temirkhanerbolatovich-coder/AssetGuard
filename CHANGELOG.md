@@ -2,11 +2,15 @@
 
 Здесь фиксируются пользовательские, security и эксплуатационные изменения AssetGuard. Незначительные внутренние рефакторинги перечисляются в Git history, но не дублируются в этом файле.
 
+## 2026-10-05 — первый этап UI/UX на production
+
+- Отдельный вход, профиль/контекст, адаптивное меню, loading/error/retry и защита от поздних ответов; очищается сессия, именованный выход запрашивает серверный revoke.
+- Исправлен перенос onboarding-ссылки на узком экране. Secret scan использует штатный GitHub token с прежними read-only permissions для устранения anonymous API rate-limit.
+- Application `d8f6a63`: 96 backend + 6 browser E2E, CI success, публичная browser/API проверка и backup/restore. [Протокол](outputs/assetguard-ui-stage1-2026-10-05.md).
+
 ## Unreleased — installer 0.1.7 candidate
 
 ### Added
-
-- Первый этап UI/UX: отдельный экран входа, явный bootstrap-вариант, профиль пользователя/область работы, загрузка/error/retry и адаптивный каркас.
 
 - Уведомления о новых технических/физических инцидентах: PostgreSQL outbox, organization-scoped Telegram worker, retry/429 и подтверждение назначения; migration `0026`.
 - Operations counters pending/retrying, мониторинг failed notification job, русские сообщения и ссылки в Telegram.

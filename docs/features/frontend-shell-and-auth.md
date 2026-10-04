@@ -36,3 +36,5 @@ $env:ASSETGUARD_RUN_BROWSER_E2E='1'
 Для обновления preview только на синтетических локальных данных добавьте `ASSETGUARD_CAPTURE_UI_PREVIEWS=1`. Обычный запуск не перезаписывает PNG. [Desktop login](../../outputs/ui-stage1-preview-2026-10-05/login-desktop.png), [mobile login](../../outputs/ui-stage1-preview-2026-10-05/login-mobile.png), [desktop workspace](../../outputs/ui-stage1-preview-2026-10-05/workspace-desktop.png), [mobile workspace](../../outputs/ui-stage1-preview-2026-10-05/workspace-mobile.png).
 
 Миграции и зависимости не менялись. Решение сохраняет текущий frontend и authentication contract; отдельный ADR не требуется.
+
+Production acceptance: `d8f6a63`, 2026-10-05 по времени клиента. [Протокол, CI, backup и известные границы](../../outputs/assetguard-ui-stage1-2026-10-05.md).
