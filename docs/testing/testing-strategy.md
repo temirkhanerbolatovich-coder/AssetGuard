@@ -15,7 +15,7 @@
 | Static/config checks | JavaScript, PowerShell, shell, Python scripts и Compose config | `.github/workflows/ci.yml` |
 | Security checks | Gitleaks, `pip check`, `pip-audit` | `.github/workflows/ci.yml` |
 
-В текущем наборе 50 unit/integration и 2 browser E2E tests. Число является снимком состояния репозитория и должно обновляться вместе с изменением набора.
+В текущем наборе 80 unit/integration и 2 browser E2E tests. Число является снимком состояния репозитория на 2026-10-04 и должно обновляться вместе с изменением набора.
 
 ## Тестовое окружение
 
@@ -61,6 +61,10 @@ Remove-Item Env:ASSETGUARD_RUN_BROWSER_E2E
 
 Backup crypto test использует PowerShell 7 (`pwsh`) для проверки совместимости Windows- и Python-реализаций.
 
+Linux monitor contract использует Bash и локальные command doubles с отдельным `--state-dir`, без реальных network/Telegram/systemd/Compose действий. На Windows используется Git Bash; отсутствие Bash явно пропускает этот тест.
+
+Если Python 3.12 завершает startup с `UnicodeDecodeError` в `site.addpackage`/`cp1251`, проверьте editable `.pth`: UTF-8 путь с кириллицей может не читаться Windows locale decoder. Для текущего checkout подтверждён ASCII junction `C:\AssetGuardWorkspace → backend`; editable `.pth` внешнего venv указывает на `C:\AssetGuardWorkspace\src`. Исходный `.pth` сохранён рядом как `.pre-stage1`. После этой локальной коррекции штатные команды выше выполняются без `-S`. Для нового checkout предпочтителен ASCII путь и собственный venv; не переносите абсолютный junction на другой проект.
+
 ## CI
 
 На push в `main` и `codex/**`, а также на pull request CI:
@@ -74,6 +78,8 @@ Backup crypto test использует PowerShell 7 (`pwsh`) для прове�
 7. валидирует production и free-demo Compose.
 
 Grounding DINO real-model smoke выполняется отдельно по расписанию и вручную, потому что требует тяжёлых dependencies и model download.
+
+Smoke job задаёт обязательные `ASSETGUARD_DATABASE_URL`, `ASSETGUARD_INVENTORY_SHARED_SECRET` и `ASSETGUARD_ADMIN_SHARED_SECRET`: detector читает общие settings даже без подключения к БД. Локальная проверка 2026-10-04 прошла на текущем коде в готовом CPU image (`torch 2.14.0+cpu`, `transformers 5.17.0`), offline/read-only cache: 23 detections. Она подтверждает inference/post-processing, но не скачивание модели и не выполнение новых GitHub Actions jobs.
 
 ## Требования к изменениям
 
@@ -89,6 +95,9 @@ Grounding DINO real-model smoke выполняется отдельно по р�
 - Нет нагрузочных и длительных soak tests.
 - R2 restore rehearsal реализован как эксплуатационный скрипт: Windows Task Scheduler и постоянный Linux server прошли 2026-09-27. Server rehearsal вернул revision `0024_physical_asset_operations`, `assets=211`, `endpoints=1`. Monitor test mode подтвердил Telegram acceptance и дедупликацию без остановки production.
 - Agent re-enrolment integration tests применяют миграцию `0025`, проверяют отсутствие plaintext claim token, tenant isolation, expiry, approve/reject, отзыв прежнего credential и сохранение endpoint.
+- Native Agent regression tests проверяют bound mismatch, foreign/unowned organization, mixed identifiers, duplicate, existing active credential и повторную доставку FAILED raw правильным Agent с одним change/incident.
+- Import tests проверяют Excel и настоящий generic PDF, tenant preview/create/update, mixed-tenant rejection, целые/дробные количества, official statement, OCR unknown count, повторный импорт/экспорт и остатки после настоящих MOVE/WRITE_OFF.
+- Freshness проверяется на старых ONLINE/REQUIRES_VERIFICATION с сохранением tenant filters и отсутствием изменений БД; monitor contract — stale/acceptance/dedup/recovery/recurrence/refusal/retry/malformed metrics.
 - Real-model smoke проверяет работоспособность pipeline, но не точность модели на репрезентативном датасете.
 - Реальный fleet GLPI Agent и production failover остаются ручными проверками.
 

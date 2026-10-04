@@ -183,9 +183,9 @@ def test_admin_can_open_dashboard_and_create_asset(live_server):
 
         import_workbook = Workbook()
         import_sheet = import_workbook.active
-        import_sheet.append(["inventory_number", "name", "asset_type"])
+        import_sheet.append(["inventory_number", "name", "asset_type", "quantity", "unit", "tracking_mode"])
         for index in range(30):
-            import_sheet.append([f"PREVIEW-{index:03d}", f"Preview asset {index:03d}", "Desktop"])
+            import_sheet.append([f"PREVIEW-{index:03d}", f"Preview asset {index:03d}", "Furniture", 12, "шт.", "GROUPED"])
         import_stream = BytesIO()
         import_workbook.save(import_stream)
         page.locator("#import-assets-file").set_input_files({
@@ -198,6 +198,9 @@ def test_admin_can_open_dashboard_and_create_asset(live_server):
         assert "КБ" in page.locator("#import-preview-file").inner_text()
         assert page.locator("#import-assets").is_disabled()
         assert page.locator("#import-preview-samples tbody tr").count() == 25
+        first_import_row = page.locator("#import-preview-samples tbody tr").first
+        assert "12 шт." in first_import_row.inner_text()
+        assert "Групповой" in first_import_row.inner_text()
         assert page.locator("#import-preview-page-info").inner_text().startswith("Позиции 1–25 из 30")
         page.locator("#import-preview-next").click()
         assert page.locator("#import-preview-samples tbody tr").count() == 5

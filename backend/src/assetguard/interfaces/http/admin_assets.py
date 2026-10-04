@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from decimal import Decimal
 from html import escape
 from io import BytesIO
 from datetime import UTC, datetime
@@ -20,7 +21,7 @@ from reportlab.lib.units import mm
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 import segno
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from assetguard.infrastructure.config import get_settings
@@ -33,7 +34,9 @@ from assetguard.modules.baselines.models import BaselineRecord
 from assetguard.modules.changes.models import ChangeEventRecord
 from assetguard.modules.history.service import append_asset_history
 from assetguard.modules.endpoints.service import evaluate_last_seen
-from assetguard.modules.incidents.models import AssetHistoryEntryRecord, IncidentRecord
+from assetguard.modules.incidents.models import (
+    AssetHistoryEntryRecord, IncidentRecord, PhysicalIncidentDecisionRecord, PhysicalIncidentRecord,
+)
 from assetguard.modules.inventory.models import RawInventoryRecord
 from assetguard.modules.identity.auth import AuthPrincipal
 from assetguard.modules.identity.location_access import permitted_room_ids, require_room_access
@@ -48,6 +51,7 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 AssetType = Literal["Desktop", "Laptop", "Printer", "Projector", "Network", "Furniture", "Sports", "Educational", "Other"]
 AssetCategory = Literal["IT", "FURNITURE", "SPORTS", "EDUCATIONAL", "OTHER"]
 TrackingMode = Literal["INDIVIDUAL", "GROUPED"]
+ImportRow = dict[str, str | int | bool | None]
 SUPPORTED_AGENT_VERSIONS = frozenset({"1.19", "1.20"})
 ASSETGUARD_INSTALLER_TAG_PREFIX = "assetguard-installer-"
 
@@ -250,7 +254,7 @@ def export_assets_xlsx(session: Annotated[Session, Depends(get_session)], princi
     workbook = Workbook()
     sheet = workbook.active
     sheet.title = "Assets"
-    headers = ["inventory_number", "name", "asset_type", "category", "status", "organization", "building", "floor", "room", "notes"]
+    headers = ["inventory_number", "name", "asset_type", "category", "status", "organization", "building", "floor", "room", "notes", "quantity", "unit", "tracking_mode"]
     sheet.append(headers)
     statement = select(AssetRecord).order_by(AssetRecord.inventory_number)
     if principal.organization_id:
@@ -263,7 +267,7 @@ def export_assets_xlsx(session: Annotated[Session, Depends(get_session)], princi
         sheet.append([
             asset.inventory_number, asset.name, asset.asset_type, asset.category, asset.status,
             organization.name if organization else "", asset.building or "", asset.floor or "",
-            asset.room or "", asset.notes or "",
+            asset.room or "", asset.notes or "", asset.quantity, asset.unit, asset.tracking_mode,
         ])
     sheet.freeze_panes = "A2"
     for column in sheet.columns:
@@ -340,6 +344,9 @@ def export_assets_pdf(session: Annotated[Session, Depends(get_session)], princip
 
 
 IMPORT_COLUMN_ALIASES = {
+    "quantity": {"quantity", "количество", "кол-во"},
+    "unit": {"unit", "единица", "единица измерения", "ед. изм.", "ед. изм"},
+    "tracking_mode": {"tracking_mode", "tracking mode", "режим учета", "режим учёта"},
     "inventory_number": {"inventory_number", "inventory number", "инвентарный номер", "инв. номер", "инв номер", "инв. №", "инв №", "инвентарный№"},
     "name": {"name", "название", "наименование", "оборудование", "устройство"},
     "asset_type": {"asset_type", "asset type", "тип", "тип оборудования", "вид оборудования"},
@@ -357,7 +364,7 @@ def _normalize_import_header(value: object) -> str:
     return " ".join(str(value).strip().lower().replace("ё", "е").split())
 
 
-def _canonical_import_columns(header: tuple[object, ...]) -> dict[str, int]:
+def _canonical_import_columns(header: tuple[object, ...]) -> dict[str, int | None]:
     raw = {_normalize_import_header(value): index for index, value in enumerate(header) if value is not None}
     return {
         field: next((raw[alias] for alias in aliases if alias in raw), None)
@@ -405,10 +412,10 @@ def _asset_category_from_import(value: str | None, asset_type: str | None) -> st
     }.get(asset_type or "", "OTHER")
 
 
-def _import_row_values(row: dict[str, object], row_number: int) -> dict[str, str | None]:
+def _import_row_values(row: dict[str, object], row_number: int) -> ImportRow:
     required = ("inventory_number", "name", "asset_type")
     result = {key: (str(row.get(key)).strip() if row.get(key) is not None else None) for key in (
-        "inventory_number", "name", "asset_type", "category", "status", "organization", "building", "floor", "room", "notes",
+        "inventory_number", "name", "asset_type", "category", "status", "organization", "building", "floor", "room", "notes", "quantity", "unit", "tracking_mode",
     )}
     if any(not result[key] for key in required):
         raise ValueError(f"Row {row_number}: inventory_number, name and asset_type are required.")
@@ -420,15 +427,35 @@ def _import_row_values(row: dict[str, object], row_number: int) -> dict[str, str
     result["category"] = _asset_category_from_import(result["category"], result["asset_type"])
     if len(result["inventory_number"] or "") > 128 or len(result["name"] or "") > 255:
         raise ValueError(f"Row {row_number}: inventory_number or name is too long.")
+    quantity = result["quantity"]
+    if quantity:
+        quantity = re.sub(r"\s+", "", quantity)
+        if not re.fullmatch(r"\d+(?:[.,]\d+)?", quantity):
+            raise ValueError(f"Row {row_number}: quantity must be a whole number from 1 to 1000000.")
+        number = Decimal(quantity.replace(",", "."))
+        if number != number.to_integral_value() or not 1 <= number <= 1_000_000:
+            raise ValueError(f"Row {row_number}: quantity must be a whole number from 1 to 1000000; fractional accounting is unsupported.")
+        result["quantity"] = int(number)
+    else:
+        result["quantity"] = None
+    mode = (result["tracking_mode"] or "").upper()
+    if mode and mode not in {"INDIVIDUAL", "GROUPED"}:
+        raise ValueError(f"Row {row_number}: tracking_mode must be INDIVIDUAL or GROUPED.")
+    if mode == "INDIVIDUAL" and result["quantity"] not in (None, 1):
+        raise ValueError(f"Row {row_number}: INDIVIDUAL assets must have quantity 1.")
+    result["tracking_mode"] = mode or None
+    if len(result["unit"] or "") > 32:
+        raise ValueError(f"Row {row_number}: unit is too long.")
+    result["unit"] = result["unit"] or None
     return result
 
 
-def _parse_import_rows(header: tuple[object, ...] | list[object], rows: object, first_row_number: int = 2) -> list[dict[str, str | None]]:
+def _parse_import_rows(header: tuple[object, ...] | list[object], rows: object, first_row_number: int = 2) -> list[ImportRow]:
     columns = _canonical_import_columns(tuple(header))
     required_columns = {"inventory_number", "name", "asset_type"}
     if any(columns[column] is None for column in required_columns):
         raise HTTPException(422, "Required columns: inventory_number, name, asset_type (or Russian equivalents).")
-    parsed: list[dict[str, str | None]] = []
+    parsed: list[ImportRow] = []
     try:
         for row_number, values in enumerate(rows, start=first_row_number):
             values = tuple(values or ())
@@ -441,7 +468,7 @@ def _parse_import_rows(header: tuple[object, ...] | list[object], rows: object, 
 
 
 def _import_assets(
-    parsed: list[dict[str, str | int | None]],
+    parsed: list[ImportRow],
     session: Session,
     principal: AuthPrincipal,
     apply: bool,
@@ -456,11 +483,58 @@ def _import_assets(
     if apply and not selected:
         raise HTTPException(422, "Выберите хотя бы одну строку для импорта.")
     scoped_organization = session.get(OrganizationRecord, principal.organization_id) if principal.organization_id else None
-    if scoped_organization and any((item.get("organization") or scoped_organization.name) != scoped_organization.name for _, item in selected):
+    if principal.organization_id and not scoped_organization:
+        raise HTTPException(403, "The authenticated organization is unavailable.")
+    if scoped_organization and any(item.get("organization") not in (None, "", scoped_organization.name) for item in parsed):
         raise HTTPException(403, "A tenant user may import assets only for their organization.")
-    existing = {(organization.name, asset.inventory_number): asset for asset in session.scalars(select(AssetRecord).join(OrganizationRecord)) for organization in [session.get(OrganizationRecord, asset.organization_id)] if organization}
+    try:
+        parsed = [{**item, **_import_row_values(item, index + 1), "organization": item.get("organization") or (scoped_organization.name if scoped_organization else "Default Organization")} for index, item in enumerate(parsed)]
+    except ValueError as error:
+        raise HTTPException(422, str(error)) from error
+    selected = [(index, item) for index, item in enumerate(parsed) if index not in excluded_rows]
+    selected_keys = [(item["organization"], item["inventory_number"]) for _, item in selected]
+    if len(selected_keys) != len(set(selected_keys)):
+        raise HTTPException(422, "Duplicate inventory numbers for the same organization in the import.")
+    existing_query = select(AssetRecord, OrganizationRecord.name).join(OrganizationRecord)
+    existing_query = existing_query.where(
+        AssetRecord.inventory_number.in_({item["inventory_number"] for item in parsed}),
+        OrganizationRecord.name.in_({item["organization"] for item in parsed}),
+    )
+    if scoped_organization:
+        existing_query = existing_query.where(AssetRecord.organization_id == scoped_organization.id)
+    if apply:
+        existing_query = existing_query.with_for_update(of=AssetRecord).execution_options(populate_existing=True)
+    existing = {(organization_name, asset.inventory_number): asset for asset, organization_name in session.execute(existing_query)}
+    # Accounting acts are authoritative: an old source file must not restore stock,
+    # written-off status or the previous room after a move/write-off.
+    existing_ids = {asset.id for asset in existing.values()}
+    operations = session.execute(select(PhysicalIncidentRecord.asset_id, PhysicalIncidentDecisionRecord.destination_asset_id).join(
+        PhysicalIncidentDecisionRecord, PhysicalIncidentDecisionRecord.incident_id == PhysicalIncidentRecord.id,
+    ).where(
+        PhysicalIncidentDecisionRecord.action.in_({"MOVE", "WRITE_OFF"}),
+        or_(PhysicalIncidentRecord.asset_id.in_(existing_ids), PhysicalIncidentDecisionRecord.destination_asset_id.in_(existing_ids)),
+    )) if existing_ids else []
+    protected_ids = {asset_id for pair in operations for asset_id in pair if asset_id in existing_ids}
+    for item in parsed:
+        asset = existing.get((item["organization"], item["inventory_number"]))
+        item["source_quantity"] = item["quantity"]
+        item["accounting_preserved"] = bool(asset and asset.id in protected_ids)
+        if item["accounting_preserved"]:
+            for key in ("quantity", "unit", "tracking_mode", "status", "building", "floor", "room"):
+                item[key] = getattr(asset, key)
+        else:
+            item["quantity"] = item["quantity"] if item["quantity"] is not None else (asset.quantity if asset else 1)
+            item["unit"] = item["unit"] or (asset.unit if asset else "шт.")
+            item["tracking_mode"] = item["tracking_mode"] or ("GROUPED" if item["quantity"] > 1 else (asset.tracking_mode if asset else "INDIVIDUAL"))
+        if item["tracking_mode"] == "INDIVIDUAL" and item["quantity"] != 1:
+            raise HTTPException(422, "INDIVIDUAL assets must have quantity 1.")
+        item["quantity_unverified"] = bool(item.get("_quantity_unverified"))
+        if item["quantity_unverified"] and asset is None:
+            item["quantity"] = None
+    if apply and any(item["quantity"] is None for _, item in selected):
+        raise HTTPException(422, "Количество в ведомости не распознано. Уточните его в Excel перед импортом новых позиций.")
     actions = [
-        "update" if ((item.get("organization") or "Default Organization"), item["inventory_number"]) in existing else "create"
+        "update" if (item["organization"], item["inventory_number"]) in existing else "create"
         for _, item in selected
     ]
     creates = sum(action == "create" for action in actions)
@@ -469,28 +543,28 @@ def _import_assets(
         return {
             "rows": len(selected), "total_rows": len(parsed), "creates": creates, "updates": updates, "applied": False,
             "source": source,
-                "samples": [{key: item.get(key) for key in ("inventory_number", "name", "asset_type", "building", "floor", "room")} for item in parsed[:10]],
+            "samples": [{key: item.get(key) for key in ("inventory_number", "name", "asset_type", "organization", "quantity", "unit", "tracking_mode", "building", "floor", "room")} for item in parsed[:10]],
             "items": [
                 {
                     "row": index + 1,
-                    "action": "update" if ((item.get("organization") or "Default Organization"), item["inventory_number"]) in existing else "create",
+                    "action": "update" if (item["organization"], item["inventory_number"]) in existing else "create",
                     "confidence": item.get("_ocr_confidence"),
-                    **{key: item.get(key) for key in ("inventory_number", "name", "asset_type", "building", "floor", "room")},
+                    **{key: item.get(key) for key in ("inventory_number", "name", "asset_type", "organization", "quantity", "unit", "tracking_mode", "source_quantity", "accounting_preserved", "quantity_unverified", "building", "floor", "room")},
                 }
                 for index, item in enumerate(parsed)
             ],
         }
     now = datetime.now(UTC)
     for _, item in selected:
-        organization = _organization_for_name(session, item["organization"] or "Default Organization")
+        organization = scoped_organization or _organization_for_name(session, item["organization"])
         asset = existing.get((organization.name, item["inventory_number"]))
         imported_category = item.get("category") or _asset_category_from_import(None, item.get("asset_type"))
         if asset is None:
-            asset = AssetRecord(organization_id=organization.id, inventory_number=item["inventory_number"] or "", name=item["name"] or "", asset_type=item["asset_type"] or "Other", category=imported_category, status=item["status"] or "ACTIVE", building=item["building"], floor=item["floor"], room=item["room"], notes=item["notes"], created_at=now, updated_at=now)
+            asset = AssetRecord(organization_id=organization.id, inventory_number=item["inventory_number"] or "", name=item["name"] or "", asset_type=item["asset_type"] or "Other", category=imported_category, quantity=item["quantity"], unit=item["unit"], tracking_mode=item["tracking_mode"], status=item["status"] or "ACTIVE", building=item["building"], floor=item["floor"], room=item["room"], notes=item["notes"], created_at=now, updated_at=now)
             session.add(asset); session.flush()
             append_asset_history(session, asset_id=asset.id, event_type="ASSET_CREATED", related_entity_type="Asset", related_entity_id=asset.id, message=f"Asset imported from {source}.", metadata={"inventory_number": asset.inventory_number, "source": source})
         else:
-            for key in ("name", "asset_type", "building", "floor", "room", "notes"):
+            for key in ("name", "asset_type", "building", "floor", "room", "notes", "quantity", "unit", "tracking_mode"):
                 setattr(asset, key, item[key])
             asset.category = imported_category
             if item["status"]:
@@ -501,14 +575,14 @@ def _import_assets(
     return {"rows": len(selected), "creates": creates, "updates": updates, "applied": True}
 
 
-def _government_inventory_rows(table: list[list[str | None]], filename: str | None, page_number: int | None = None) -> list[dict[str, str | None]]:
+def _government_inventory_rows(table: list[list[str | None]], filename: str | None, page_number: int | None = None) -> list[ImportRow]:
     """Map the standard Kazakhstan accounting inventory statement to AssetGuard rows.
 
     A statement row can describe several identical items. It becomes one grouped AssetGuard
     record, while the original quantity, price and accounting number remain in its notes.
     """
     safe_stem = re.sub(r"[^A-Za-z0-9_-]+", "-", Path(filename or "inventory").stem).strip("-") or "inventory"
-    parsed: list[dict[str, str | None]] = []
+    parsed: list[ImportRow] = []
     for row in table:
         values = [str(value or "").strip() for value in row]
         if len(values) < 9 or not re.fullmatch(r"\d+", values[0]):
@@ -535,13 +609,15 @@ def _government_inventory_rows(table: list[list[str | None]], filename: str | No
             "name": name,
             "asset_type": _asset_type_from_import(name),
             "status": "ACTIVE",
+            "quantity": quantity or None, "unit": unit or None, "tracking_mode": "GROUPED",
+            "_quantity_unverified": not bool(quantity),
             "organization": None, "building": None, "floor": None, "room": None,
             "notes": " ".join(notes),
         })
     return parsed
 
 
-def _ocr_government_inventory_pdf(content: bytes, filename: str | None) -> list[dict[str, str | None]]:
+def _ocr_government_inventory_pdf(content: bytes, filename: str | None) -> list[ImportRow]:
     """OCR only strict itemized rows: a repeated row number must bracket a readable name."""
     try:
         import pypdfium2 as pdfium
@@ -555,7 +631,7 @@ def _ocr_government_inventory_pdf(content: bytes, filename: str | None) -> list[
     if tesseract_cmd:
         pytesseract.pytesseract.tesseract_cmd = tesseract_cmd
     units = {"шт", "шт.", "штук", "компл", "компл.", "комплект", "кг", "м", "м2", "л", "упак", "пара"}
-    parsed: list[dict[str, str | None]] = []
+    parsed: list[ImportRow] = []
     try:
         document = pdfium.PdfDocument(content)
         if len(document) > 30:
@@ -600,12 +676,22 @@ def _ocr_government_inventory_pdf(content: bytes, filename: str | None) -> list[
                 if len(re.findall(r"[A-Za-zА-Яа-яӘәҒғҚқҢңӨөҰұҮүҺһІі]", name)) < 3:
                     continue
                 inventory_number = f"PDF-{safe_stem}-P{page_index + 1}-{tokens[0]}"
+                unit_index = next((i for i, token in enumerate(middle) if token.lower().strip(".,") in units), None)
+                numeric_tail = middle[unit_index + 1:] if unit_index is not None else []
+                # Accept only the complete standard price/count/total tail. OCR loses
+                # column boundaries; guessing a missing count would corrupt stock.
+                recognized_quantity = numeric_tail[-2] if len(numeric_tail) in {3, 5} and all(
+                    re.fullmatch(r"\d+(?:[.,]\d+)?", token) for token in numeric_tail
+                ) else None
                 parsed.append({
                     "inventory_number": inventory_number, "name": name,
                     "asset_type": _asset_type_from_import(name), "status": "ACTIVE",
                     "organization": None, "building": None, "floor": None, "room": None,
                     "notes": f"Распознано OCR из скана ({round(confidence)}%); сверьте с оригиналом перед использованием.",
                     "_ocr_confidence": round(confidence),
+                    "quantity": recognized_quantity,
+                    "unit": middle[unit_index] if unit_index is not None else None,
+                    "tracking_mode": "GROUPED", "_quantity_unverified": recognized_quantity is None,
                 })
     except ValueError:
         raise
@@ -661,8 +747,8 @@ def import_assets_pdf(
             pages = [(page_number, [table for table in page.extract_tables() if table]) for page_number, page in enumerate(document.pages, start=1)]
     except Exception as error:
         raise HTTPException(422, "The uploaded file is not a valid readable PDF.") from error
-    generic_rows: list[dict[str, str | None]] = []
-    government_rows: list[dict[str, str | None]] = []
+    generic_rows: list[ImportRow] = []
+    government_rows: list[ImportRow] = []
     for page_number, tables in pages:
         for table in tables:
             header, *rows = table

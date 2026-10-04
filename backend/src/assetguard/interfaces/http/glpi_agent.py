@@ -24,7 +24,7 @@ from assetguard.modules.inventory.service import ingest_raw_inventory
 from assetguard.modules.snapshots.models import ManagedEndpointRecord
 from assetguard.modules.identity.auth import verify_password
 from assetguard.modules.identity.models import AgentCredentialRecord
-from assetguard.modules.snapshots.normalizer import normalize_raw_inventory
+from assetguard.modules.snapshots.normalizer import InventoryScopeError, normalize_raw_inventory
 
 router = APIRouter(prefix="/glpi-agent", tags=["inventory"])
 REPLY = b"<?xml version='1.0' encoding='UTF-8'?><REPLY><RESPONSE>SEND</RESPONSE><PROLOG_FREQ>24</PROLOG_FREQ></REPLY>\n"
@@ -80,27 +80,25 @@ async def receive_glpi_agent(
     )
     result = DirectGlpiAgentAdapter().to_ingest_command(observed.payload or {}, metadata)
     ingested = ingest_raw_inventory(session, result)
-    if ingested.duplicate:
-        if ingested.raw_inventory.managed_endpoint_id:
-            endpoint = session.get(ManagedEndpointRecord, ingested.raw_inventory.managed_endpoint_id)
-            if endpoint:
-                endpoint.last_seen_at = datetime.now(UTC)
-                endpoint.status = "ONLINE"
-                endpoint.updated_at = datetime.now(UTC)
-                session.commit()
-    else:
-        try:
-            snapshot = normalize_raw_inventory(session, ingested.raw_inventory)
-            if credential and credential.managed_endpoint_id is None:
-                credential.managed_endpoint_id = snapshot.managed_endpoint_id
-                endpoint = session.get(ManagedEndpointRecord, snapshot.managed_endpoint_id)
-                if endpoint and credential.organization_id:
-                    endpoint.organization_id = credential.organization_id
-                session.commit()
-            elif credential and credential.managed_endpoint_id != snapshot.managed_endpoint_id:
-                raise HTTPException(status.HTTP_409_CONFLICT, "Agent credential is bound to another endpoint.")
+    was_processed = ingested.raw_inventory.processing_status == "PROCESSED"
+    try:
+        snapshot = normalize_raw_inventory(session, ingested.raw_inventory, agent_credential=credential)
+        if ingested.duplicate and credential is None:
+            endpoint = session.get(ManagedEndpointRecord, snapshot.managed_endpoint_id)
+            endpoint.last_seen_at = datetime.now(UTC)
+            endpoint.status = "ONLINE"
+            endpoint.updated_at = endpoint.last_seen_at
+            session.commit()
+        if not was_processed:
             events = detect_changes(session, snapshot)
             create_incidents_for_events(session, events)
-        except ValueError as error:
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(error)) from error
+    except InventoryScopeError as error:
+        # Keep rejected raw evidence, without changing an already processed duplicate.
+        if not ingested.duplicate:
+            ingested.raw_inventory.processing_status = "FAILED"
+            ingested.raw_inventory.processing_error = str(error)
+            session.commit()
+        raise HTTPException(status.HTTP_409_CONFLICT, str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(error)) from error
     return Response(REPLY, media_type="application/xml")

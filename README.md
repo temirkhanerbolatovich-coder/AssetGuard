@@ -28,6 +28,8 @@ AssetGuard — система учёта и контролируемой инв�
 
 Актуальная точка правды: [полный чек-лист проекта](docs/product/current-project-checklist.md). Последний опубликованный pilot installer — [`v0.1.6`](https://github.com/temirkhanerbolatovich-coder/AssetGuard/releases/tag/v0.1.6); `0.1.7` с version reporting и re-enrolment пока собран только для контролируемой проверки и не подписан.
 
+Стабилизация 2026-10-04 проверена локально: 80 backend tests, 2 browser E2E и offline real-model smoke (23 detections). Закрыты scope ошибки native Agent и Excel/PDF import, age-based stale counters, monitor recovery/retry и структурированный количественный импорт с сохранением остатков после актов. Эти изменения ещё не опубликованы/развёрнуты; серверный UI/API отстаёт от репозитория, новый GitHub CI и согласование server code/schema — следующий этап.
+
 ## Архитектура
 
 ```text

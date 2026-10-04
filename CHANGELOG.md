@@ -12,16 +12,27 @@
 - Secret-free fleet readiness report для reboot, offline/retry, service recovery, re-enrolment и hardware change.
 - Подтверждаемое re-enrolment после переустановки Windows с 30-минутным claim token.
 - Admin UI и tenant-scoped API для approve/reject запросов восстановления.
+- Структурированные quantity/unit/tracking_mode в Excel/PDF/OCR import preview/apply и Excel export; сохранение остатков и локаций после учётных актов при повторном импорте.
 
 ### Security
 
 - Claim token не хранится на сервере в plaintext.
 - Подтверждение re-enrolment отзывает прежний активный credential endpoint.
 - Исполняемая authorization matrix расширена до 60 защищённых admin operations.
+- Проверка endpoint/organization Agent до доменных изменений, включая duplicate; первая привязка и snapshot сохраняются одной транзакцией.
+- Исправлен tenant fallback при Excel/PDF import без колонки организации; preview/create/update используют только разрешённый scope.
+
+### Fixed
+
+- Operations freshness считается по last_seen даже до maintenance; просроченные ONLINE/REQUIRES_VERIFICATION попадают в stale.
+- Monitor очищает fingerprint после recovery, проверяет Telegram acceptance и повторяет попытку после отказа; malformed metrics становятся alert condition.
+- Scheduled/manual Grounding DINO smoke job получает обязательные shared settings без изменения detector/model.
 
 ### Deployment note
 
 Код находится в `main`, но installer `0.1.7` ещё не подписан, не опубликован как GitHub Release и не принят на третьем pilot-PC. Repository schema `0025` также не отмечена production runbook как развёрнутая.
+
+Исправления стабилизации от 2026-10-04 проверяются локально; публикация GitHub и deployment выполняются отдельным следующим шагом. Новые миграции не требуются.
 
 ## [v0.1.6] — 2026-09-27
 

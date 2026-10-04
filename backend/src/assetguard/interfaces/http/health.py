@@ -1,12 +1,13 @@
 """Non-sensitive operational health endpoints."""
 
 import shutil
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
-from sqlalchemy import func, select, text
+from sqlalchemy import case, func, select, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -58,7 +59,14 @@ def operations_status(
     principal: Annotated[AuthPrincipal, Depends(require_viewer)],
 ):
     """Provide a compact, tenant-safe operational snapshot for the dashboard."""
-    endpoint_query = select(ManagedEndpointRecord.status, func.count(ManagedEndpointRecord.id)).group_by(ManagedEndpointRecord.status)
+    threshold = datetime.now(UTC) - timedelta(hours=get_settings().endpoint_stale_after_hours)
+    effective_status = case(
+        (ManagedEndpointRecord.status == "IDENTITY_CONFLICT", "IDENTITY_CONFLICT"),
+        (ManagedEndpointRecord.status == "OFFLINE", "OFFLINE"),
+        (ManagedEndpointRecord.last_seen_at < threshold, "STALE"),
+        else_=ManagedEndpointRecord.status,
+    )
+    endpoint_query = select(effective_status, func.count(ManagedEndpointRecord.id)).group_by(effective_status)
     failed_query = select(
         func.count(RawInventoryRecord.id), func.max(RawInventoryRecord.received_at),
     ).where(RawInventoryRecord.processing_status == "FAILED")

@@ -11,6 +11,7 @@ ADR фиксируют решения, которые влияют на архи
 | [ADR-003](ADR-003-glpi-source-boundary.md) | GLPI Agent как внешняя граница сбора | Accepted |
 | [ADR-004](ADR-004-backend-stack.md) | FastAPI, SQLAlchemy, Alembic и PostgreSQL | Accepted |
 | [ADR-005](ADR-005-agent-reenrolment.md) | Подтверждаемое восстановление Agent по SMBIOS UUID | Accepted |
+| [ADR-006](ADR-006-import-accounting-precedence.md) | Учётные акты имеют приоритет над повторным импортом | Accepted |
 
 ## Когда нужен ADR
 

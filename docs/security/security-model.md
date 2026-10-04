@@ -42,6 +42,10 @@ MFA и SSO в коде отсутствуют. Re-enrolment восстанавл
 
 Смысл ролей подтверждается route dependencies, исполняемой allow/deny-матрицей всех 60 защищённых operations и tenant/location integration tests. Актуальная матрица находится в [admin-route-access-matrix.md](admin-route-access-matrix.md).
 
+Native per-Agent ingestion дополнительно проверяет bound endpoint и organization до любых доменных изменений, включая duplicate и смешанные identifiers. Scoped credential не переносит существующее устройство между организациями и не присваивает endpoint без organization. Первая привязка и snapshot сохраняются атомарно с row lock credential; существующий активный ключ требует approved re-enrolment. Scope rejection оставляет только новое raw evidence со статусом `FAILED` и отвечает `409`.
+
+Excel/PDF import без колонки организации использует организацию named principal и ищет существующие активы только в этом scope. Чужая организация отклоняется до preview/apply, а смешанный файл не применяется частично. Bootstrap и JSON bridge со shared secret сохраняют глобальную доверенную границу; переход с legacy credentials остаётся обязательным перед расширением пилота.
+
 ## Защита входных данных
 
 - Inventory envelope валидируется по типам и обязательным полям.

@@ -20,7 +20,7 @@ flowchart LR
 1. `POST /glpi-agent` принимает нативный XML GLPI Agent по HTTP Basic. `POST /internal/inventories` принимает JSON bridge по shared secret.
 2. Adapter приводит оба транспорта к внутреннему envelope. Ограничение JSON inventory по умолчанию — 2 MiB.
 3. `ingest_raw_inventory` сохраняет payload, hash и transport metadata. Idempotency не допускает повторной обработки одного свидетельства.
-4. Normalizer сопоставляет или создаёт managed endpoint, фиксирует identifiers и создаёт hardware snapshot с component observations.
+4. Normalizer сопоставляет identifiers и проверяет bound endpoint/organization per-Agent credential до изменения доменных данных, также для duplicate. Scope rejection возвращает `409`; новый raw помечается `FAILED`. Затем сопоставляет или создаёт managed endpoint, фиксирует identifiers и создаёт hardware snapshot с component observations; первая credential binding входит в тот же commit. Scoped new endpoint получает organization до сохранения.
 5. Для полной инвентаризации сравнивается полный набор поддерживаемых компонентов. Частичный payload не создаёт ложные события удаления.
 6. При наличии активного baseline change detector создаёт дедуплицированные events; incident workflow связывает их с разбором человеком.
 7. Принятие нового baseline выполняется отдельным действием и записывается в историю.
@@ -41,6 +41,8 @@ flowchart LR
 ```
 
 Помещения принадлежат иерархии организации. Проверка фиксирует ожидаемые и фактические состояния активов. Для расхождений создаются физические инциденты; операции перемещения и списания обновляют актив и сохраняют историю. Для поддерживаемых операций формируется PDF-акт.
+
+Import preview/apply определяют организацию из principal при отсутствии колонки и переносят quantity/unit/tracking_mode. Старые файлы без этих полей сохраняют текущий учёт существующей позиции. После `MOVE`/`WRITE_OFF` оба затронутых актива сохраняют текущие остатки, статус и location при повторном импорте; [ADR-006](../decisions/ADR-006-import-accounting-precedence.md) объясняет приоритет актов.
 
 ## AssetGuard Vision
 

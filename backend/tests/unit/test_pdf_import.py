@@ -1,5 +1,7 @@
 from io import BytesIO
 from types import ModuleType, SimpleNamespace
+import pytest
+from fastapi import HTTPException
 from starlette.datastructures import UploadFile
 from sqlalchemy import select
 
@@ -23,11 +25,29 @@ def test_maps_kazakhstan_accounting_inventory_statement_to_grouped_assets() -> N
     assert rows[0]["inventory_number"] == "PDF-3333-24"
     assert rows[1]["asset_type"] == "Desktop"
     assert "Номенклатурный номер: 236006000025." in (rows[1]["notes"] or "")
+    normalized = admin_assets._import_row_values(rows[1], 25)
+    assert (normalized["quantity"], normalized["unit"], normalized["tracking_mode"]) == (1, "шт", "GROUPED")
+
+
+@pytest.mark.parametrize("quantity", ["12", "12,000", "12.000", "1 200"])
+def test_import_parses_whole_accounting_quantities(quantity) -> None:
+    row = admin_assets._import_row_values({"inventory_number": "COUNT", "name": "Desks", "asset_type": "Furniture", "quantity": quantity, "unit": "шт"}, 2)
+    assert row["quantity"] == (1200 if quantity == "1 200" else 12)
+
+
+@pytest.mark.parametrize("values", [
+    {"quantity": "1,500"}, {"quantity": "-1"}, {"quantity": "1000001"},
+    {"quantity": "NaN"}, {"quantity": True}, {"tracking_mode": "INVALID"},
+    {"quantity": "12", "tracking_mode": "INDIVIDUAL"}, {"unit": "x" * 33},
+])
+def test_import_rejects_invalid_accounting_values(values) -> None:
+    with pytest.raises(ValueError):
+        admin_assets._import_row_values({"inventory_number": "INVALID", "name": "Desk", "asset_type": "Furniture", **values}, 2)
 
 
 def test_government_rows_keep_repeated_sequence_numbers_unique_between_pages() -> None:
     table = [["№ строки", "Наименование", "Номенклатурный номер", "Единица", "Цена", "Количество", "Сумма", "Количество", "Сумма", "Примечание", "№ строки"],
-             ["1", "Парта ученическая", "123456", "шт", "1", "", "", "1", "1", "", "1"]]
+             ["1", "Парта ученическая", "123456", "шт", "1", "", "", "12,000", "12", "", "1"]]
 
     first_page = _government_inventory_rows(table, "school.pdf", page_number=1)
     second_page = _government_inventory_rows(table, "school.pdf", page_number=2)
@@ -38,7 +58,7 @@ def test_government_rows_keep_repeated_sequence_numbers_unique_between_pages() -
 
 def test_pdf_import_combines_government_statement_rows_across_all_pages(monkeypatch) -> None:
     table = [["№ строки", "Наименование долгосрочных активов", "Номенклатурный номер", "Единица", "Цена", "Количество", "Сумма", "Количество", "Сумма, тенге", "Примечание", "№ строки"],
-             ["1", "Парта ученическая", "123456", "шт", "1", "", "", "1", "1", "", "1"]]
+             ["1", "Парта ученическая", "123456", "шт", "1", "", "", "12,000", "12", "", "1"]]
 
     class Page:
         def extract_tables(self):
@@ -58,6 +78,17 @@ def test_pdf_import_combines_government_statement_rows_across_all_pages(monkeypa
             AuthPrincipal(user_id=None, username="bootstrap-admin", role="ADMIN", session_id=None, organization_id=None),
             apply=False,
         )
+        assert [item["quantity"] for item in result["items"]] == [12, 12]
+        for _ in range(2):
+            applied = admin_assets.import_assets_pdf(
+                UploadFile(filename="school.pdf", file=BytesIO(b"test")), session,
+                AuthPrincipal(user_id=None, username="bootstrap-admin", role="ADMIN", session_id=None, organization_id=None),
+                apply=True,
+            )
+            assert applied["rows"] == 2
+        assets = list(session.scalars(select(AssetRecord)))
+        assert len(assets) == 2
+        assert all((asset.quantity, asset.unit, asset.tracking_mode) == (12, "шт", "GROUPED") for asset in assets)
 
     assert result["rows"] == 2
     assert [item["inventory_number"] for item in result["samples"]] == [
@@ -107,6 +138,22 @@ def test_scanned_pdf_ocr_accepts_only_bracketed_item_rows(monkeypatch) -> None:
     assert "OCR" in (parsed[0]["notes"] or "")
     assert parsed[0]["_ocr_confidence"] == 96
     assert "--tessdata-dir C:\\AssetGuardOCR\\tessdata" in calls[0]["config"]
+    assert parsed[0]["_quantity_unverified"] is True
+    principal = AuthPrincipal(user_id=None, username="bootstrap-admin", role="ADMIN", session_id=None, organization_id=None)
+    with get_session_factory()() as session:
+        preview = admin_assets._import_assets(parsed, session, principal, apply=False, source="OCR PDF")
+        assert preview["items"][0]["quantity"] is None
+        with pytest.raises(HTTPException) as error:
+            admin_assets._import_assets(parsed, session, principal, apply=True, source="OCR PDF")
+        assert error.value.status_code == 422
+        assert list(session.scalars(select(AssetRecord))) == []
+    counted_words = ["1", "Парта", "ученическая", "1234567", "шт", "100,00", "12,000", "1200,00", "1"]
+    counted_data = {key: (["96"] * len(counted_words) if key == "conf" else [index * 20 for index in range(len(counted_words))] if key == "left" else [1] * len(counted_words)) for key in data}
+    counted_data["text"] = counted_words
+    pytesseract.image_to_data = lambda *_, **__: counted_data
+    counted = admin_assets._ocr_government_inventory_pdf(b"pdf", "counted.pdf")
+    assert counted[0]["quantity"] == "12,000"
+    assert counted[0]["_quantity_unverified"] is False
 
     pytesseract.image_to_data = lambda *_, **__: {**data, "text": ["Пустой", "бланк"], "conf": ["96", "96"], "page_num": [1, 1], "block_num": [1, 1], "par_num": [1, 1], "line_num": [1, 1], "left": [0, 20]}
     assert admin_assets._ocr_government_inventory_pdf(b"pdf", "blank.pdf") == []

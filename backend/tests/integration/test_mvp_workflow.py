@@ -386,6 +386,28 @@ async def _complete_mvp_workflow() -> None:
         writeoff_act = await client.get(f"/admin/locations/physical-incidents/{writeoff_incident['id']}/act.pdf", headers=admin_headers())
         assert writeoff_act.status_code == 200 and writeoff_act.content.startswith(b"%PDF")
 
+        # Re-importing the original statement must preserve both sides of the move
+        # and the balance after write-off, rather than silently restoring old stock.
+        reimport_workbook = Workbook()
+        reimport_workbook.active.append(["inventory_number", "name", "asset_type", "quantity", "unit", "tracking_mode", "room"])
+        reimport_workbook.active.append(["CHAIRS-GROUP-001", "Стулья", "Furniture", 5, "компл", "GROUPED", "Old room"])
+        reimport_workbook.active.append(["CHAIRS-GROUP-001-M1", "Стулья на складе", "Furniture", 5, "компл", "GROUPED", "Old room"])
+        reimport_stream = BytesIO()
+        reimport_workbook.save(reimport_stream)
+        reimport_file = {"file": ("old-statement.xlsx", reimport_stream.getvalue())}
+        preview = await client.post("/admin/assets/import.xlsx", headers=admin_headers(), files=reimport_file)
+        assert preview.status_code == 200, preview.text
+        assert [item["quantity"] for item in preview.json()["items"]] == [2, 2]
+        assert all(item["accounting_preserved"] for item in preview.json()["items"])
+        applied = await client.post("/admin/assets/import.xlsx?apply=true", headers=admin_headers(), files=reimport_file)
+        assert applied.status_code == 200, applied.text
+        source_reimported = (await client.get(f"/admin/assets/{grouped_id}", headers=admin_headers())).json()
+        destination_reimported = (await client.get(f"/admin/assets/{moved_asset['id']}", headers=admin_headers())).json()
+        assert source_reimported["quantity"] == destination_reimported["quantity"] == 2
+        assert source_reimported["unit"] == destination_reimported["unit"] == "шт."
+        assert source_reimported["room_id"] == room["id"]
+        assert destination_reimported["room_id"] == destination_room_id
+
         user_response = await client.post("/admin/users", headers=admin_headers(), json={
             "username": "e2e-viewer", "password": "fixture-password-123", "role": "VIEWER",
         })

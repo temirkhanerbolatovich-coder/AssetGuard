@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from typing import Any
+from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -11,6 +12,7 @@ from sqlalchemy.orm import Session
 from assetguard.modules.inventory.models import RawInventoryRecord
 from assetguard.modules.inventory.schema import validate_inventory_envelope
 from assetguard.modules.history.service import append_history
+from assetguard.modules.identity.models import AgentCredentialRecord
 from assetguard.modules.snapshots.models import (
     ComponentIdentityRecord,
     ComponentObservationRecord,
@@ -81,9 +83,50 @@ def _identifier_candidates(payload: dict[str, Any], content: dict[str, Any]) -> 
     return result
 
 
-def normalize_raw_inventory(session: Session, raw: RawInventoryRecord) -> HardwareSnapshotRecord:
+class InventoryScopeError(ValueError):
+    """Authenticated inventory cannot modify the resolved endpoint."""
+
+
+def _validate_agent_scope(
+    session: Session, credential: AgentCredentialRecord, endpoint_ids: set[UUID],
+) -> list[ManagedEndpointRecord]:
+    if credential.managed_endpoint_id and endpoint_ids != {credential.managed_endpoint_id}:
+        raise InventoryScopeError("Agent credential is bound to another endpoint.")
+    endpoints = list(session.scalars(select(ManagedEndpointRecord).where(
+        ManagedEndpointRecord.id.in_(endpoint_ids),
+    ).order_by(ManagedEndpointRecord.id).with_for_update())) if endpoint_ids else []
+    if credential.organization_id and any(endpoint.organization_id != credential.organization_id for endpoint in endpoints):
+        raise InventoryScopeError("Inventory endpoint does not belong to this Agent organization.")
+    if credential.managed_endpoint_id is None and endpoint_ids:
+        active = session.scalar(select(AgentCredentialRecord.id).where(
+            AgentCredentialRecord.managed_endpoint_id.in_(endpoint_ids),
+            AgentCredentialRecord.status == "ACTIVE",
+            AgentCredentialRecord.id != credential.id,
+        ))
+        if active:
+            raise InventoryScopeError("Endpoint already has an active Agent credential; approved re-enrolment is required.")
+    return endpoints
+
+
+def normalize_raw_inventory(
+    session: Session, raw: RawInventoryRecord, *, agent_credential: AgentCredentialRecord | None = None,
+) -> HardwareSnapshotRecord:
+    if agent_credential is not None:
+        # Serialize first binding and re-read revocation before any endpoint writes.
+        agent_credential = session.scalar(select(AgentCredentialRecord).where(
+            AgentCredentialRecord.id == agent_credential.id,
+        ).with_for_update().execution_options(populate_existing=True))
+        if agent_credential is None or agent_credential.status != "ACTIVE":
+            raise InventoryScopeError("Agent credential is no longer active.")
     existing = session.scalar(select(HardwareSnapshotRecord).where(HardwareSnapshotRecord.raw_inventory_id == raw.id))
     if existing:
+        if agent_credential is not None:
+            endpoint = _validate_agent_scope(session, agent_credential, {existing.managed_endpoint_id})[0]
+            agent_credential.managed_endpoint_id = endpoint.id
+            endpoint.last_seen_at = datetime.now(UTC)
+            endpoint.status = "ONLINE"
+            endpoint.updated_at = endpoint.last_seen_at
+            session.commit()
         return existing
     try:
         envelope = validate_inventory_envelope(raw.payload, raw.source)
@@ -98,14 +141,16 @@ def normalize_raw_inventory(session: Session, raw: RawInventoryRecord) -> Hardwa
     hardware = content.get("hardware") if isinstance(content.get("hardware"), dict) else {}
     candidates = _identifier_candidates(raw.payload, content)
     endpoint: ManagedEndpointRecord | None = None
-    matched_endpoint_ids: set = set()
+    matched_endpoint_ids: set[UUID] = set()
     for kind, _, normalized, _ in candidates:
-        identifier = session.scalar(select(EndpointIdentifierRecord).where(
+        identifiers = session.scalars(select(EndpointIdentifierRecord).where(
             EndpointIdentifierRecord.identifier_type == kind,
             EndpointIdentifierRecord.normalized_value == normalized,
         ))
-        if identifier:
+        for identifier in identifiers:
             matched_endpoint_ids.add(identifier.managed_endpoint_id)
+    if agent_credential is not None:
+        _validate_agent_scope(session, agent_credential, matched_endpoint_ids)
     if len(matched_endpoint_ids) > 1:
         for endpoint_id in matched_endpoint_ids:
             conflicted = session.get(ManagedEndpointRecord, endpoint_id)
@@ -124,6 +169,7 @@ def normalize_raw_inventory(session: Session, raw: RawInventoryRecord) -> Hardwa
     previous_hostname: str | None = None
     if endpoint is None:
         endpoint = ManagedEndpointRecord(
+            organization_id=agent_credential.organization_id if agent_credential else None,
             source=raw.source,
             source_agent_id=text(raw.payload.get("deviceid")),
             hostname=current_hostname,
@@ -141,6 +187,9 @@ def normalize_raw_inventory(session: Session, raw: RawInventoryRecord) -> Hardwa
         endpoint.last_seen_at = raw.received_at
         endpoint.status = "ONLINE"
         endpoint.updated_at = now
+
+    if agent_credential is not None:
+        agent_credential.managed_endpoint_id = endpoint.id
 
     identity_changes: list[dict[str, str]] = []
     strong_identity_types = {"SMBIOS_UUID", "BIOS_SERIAL", "CHASSIS_SERIAL", "MOTHERBOARD_SERIAL"}

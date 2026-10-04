@@ -8,11 +8,13 @@ repeat_after_seconds=14400
 minimum_free_percent=10
 maximum_backup_age_hours=26
 test_alert=false
+state_dir="/var/lib/assetguard-monitor"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --project-dir) project_dir="$2"; shift 2 ;;
     --config) config_file="$2"; shift 2 ;;
+    --state-dir) state_dir="$2"; shift 2 ;;
     --test-alert) test_alert=true; shift ;;
     *) echo "Unknown argument: $1" >&2; exit 2 ;;
   esac
@@ -25,7 +27,6 @@ read_env_value() {
 
 project_env="$project_dir/.env"
 compose_dir="$project_dir/infra/containers"
-state_dir="/var/lib/assetguard-monitor"
 state_file="$state_dir/state"
 
 [[ -r "$project_env" ]] || { echo "Missing production environment file: $project_env" >&2; exit 1; }
@@ -87,20 +88,25 @@ operations="$(curl --fail --silent --show-error --max-time 20 -H "X-AssetGuard-A
 if [[ -z "$operations" ]]; then
   problems+=("Operations API is unavailable")
 else
-  metrics="$(printf '%s' "$operations" | python3 -c '
+  if metrics="$(printf '%s' "$operations" | python3 -c '
 import json, sys
 data = json.load(sys.stdin)
 agents = data.get("agents", {})
 ingest = data.get("ingest", {})
 print(int(agents.get("offline", 0)) + int(agents.get("stale", 0)), int(ingest.get("failed", 0)), int(agents.get("identity_conflicts", 0)))
-')"
-  read -r offline_agents failed_ingest identity_conflicts <<<"$metrics"
-  [[ "$offline_agents" -eq 0 ]] || problems+=("Offline or stale agents: $offline_agents")
-  [[ "$failed_ingest" -eq 0 ]] || problems+=("Failed inventory ingests: $failed_ingest")
-  [[ "$identity_conflicts" -eq 0 ]] || problems+=("Endpoint identity conflicts: $identity_conflicts")
+' 2>/dev/null)"; then
+    read -r offline_agents failed_ingest identity_conflicts <<<"$metrics"
+    [[ "$offline_agents" -eq 0 ]] || problems+=("Offline or stale agents: $offline_agents")
+    [[ "$failed_ingest" -eq 0 ]] || problems+=("Failed inventory ingests: $failed_ingest")
+    [[ "$identity_conflicts" -eq 0 ]] || problems+=("Endpoint identity conflicts: $identity_conflicts")
+  else
+    problems+=("Operations API returned invalid metrics")
+  fi
 fi
 
 if [[ ${#problems[@]} -eq 0 ]]; then
+  # A recurrence after recovery must alert immediately, even inside the repeat window.
+  rm -f "$state_file"
   echo "AssetGuard production checks passed."
   exit 0
 fi
@@ -121,10 +127,16 @@ fi
 message=$'⚠️ AssetGuard production requires attention\n'
 message+="$(printf '%s\n' "${problems[@]}")"
 message+="Checked: $(date --iso-8601=minutes)"
-curl --fail --silent --show-error --max-time 20 \
+telegram_response="$(curl --fail --silent --show-error --max-time 20 \
   -X POST "https://api.telegram.org/bot${telegram_token}/sendMessage" \
   --data-urlencode "chat_id=${telegram_chat_id}" \
-  --data-urlencode "text=${message}" >/dev/null
+  --data-urlencode "text=${message}")"
+printf '%s' "$telegram_response" | python3 -c '
+import json, sys
+data = json.load(sys.stdin)
+if data.get("ok") is not True or not data.get("result", {}).get("message_id"):
+    raise SystemExit("Telegram did not confirm alert acceptance.")
+'
 
 install -d -m 700 "$state_dir"
 umask 077

@@ -113,6 +113,10 @@ jobs:
     timeout-minutes: 20
     env:
       HF_HOME: ${{ github.workspace }}/.cache/huggingface
+      # Shared settings are mandatory even though this smoke does not connect to a DB.
+      ASSETGUARD_DATABASE_URL: postgresql+psycopg://assetguard:assetguard-ci-password@127.0.0.1:5432/assetguard
+      ASSETGUARD_INVENTORY_SHARED_SECRET: ci-inventory-secret
+      ASSETGUARD_ADMIN_SHARED_SECRET: ci-admin-secret
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
