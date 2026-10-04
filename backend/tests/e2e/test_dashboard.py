@@ -485,7 +485,7 @@ def assert_no_page_overflow(page, width):
         overflow: [...document.querySelectorAll('body *')].filter(node => {
             const rect = node.getBoundingClientRect();
             return rect.width > 0 && rect.right > element.clientWidth + 1;
-        }).slice(0, 12).map(node => ({tag: node.tagName, id: node.id, className: node.className, right: node.getBoundingClientRect().right}))
+        }).slice(0, 12).map(node => ({tag: node.tagName, id: node.id, className: node.className, text: node.textContent.slice(0, 90), right: node.getBoundingClientRect().right}))
     })""")
     assert layout["width"] <= layout["viewport"], {"viewport_width": width, "layout": layout}
 

@@ -20,6 +20,10 @@ jobs:
         with:
           fetch-depth: 0
       - uses: gitleaks/gitleaks-action@v3
+        env:
+          # Avoid anonymous API rate limits during personal-account license checks.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_COMMENTS: "false"
 
   test:
     runs-on: ubuntu-latest

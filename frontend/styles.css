@@ -316,3 +316,5 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 #app-header a:focus-visible, #app-header button:focus-visible { outline-color: #8ee2d8; }
 #detail[data-load-state="loading"] > :not(.device-hero):not(#detail-back), #detail[data-load-state="error"] > :not(.device-hero):not(#detail-back):not(#detail-error) { display: none; }
 #incident-detail[data-load-state="loading"] > :not(.incident-detail-hero):not(#incident-detail-back), #incident-detail[data-load-state="error"] > :not(.incident-detail-hero):not(#incident-detail-back):not(#incident-detail-error) { display: none; }
+
+@media (max-width: 760px) { .spotlight-empty a { max-width: 100%; white-space: normal; overflow-wrap: anywhere; } }
