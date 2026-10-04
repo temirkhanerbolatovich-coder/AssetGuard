@@ -34,6 +34,8 @@
 
 ### Deployment note
 
+`0b90607` развёрнут 2026-10-05 по времени клиента: schema `0026`, 96 backend tests и 2 browser E2E, GitHub CI, isolated upgrade/downgrade и pre/post R2 restore прошли. Telegram подтвердил тест из новой очереди, пользователь получил его, повтор подавлен. [Протокол Telegram](outputs/assetguard-telegram-2026-10-05.md). Эта версия не меняет Vision и frontend runtime.
+
 Application commit `93ff8ed` опубликован в `main` и развёрнут 2026-10-04: production schema `0025`, публичный UI, защищённые re-enrolment routes и monitor проверены. Push/manual GitHub CI прошли, включая 80 backend tests, 2 browser E2E и реальную модель. Перед выкладкой выполнены encrypted R2 restore и изолированный upgrade/downgrade/re-upgrade с запуском прежнего API; Telegram подтвердил test alert, повтор подавлен. Подробности и ограничения отката — в [протоколе выкладки](outputs/assetguard-release-2026-10-04.md).
 
 Installer `0.1.7` остаётся неподписанным и неопубликованным pilot candidate, ещё не принятым на третьем ПК. Исправления стабилизации не добавляют миграций: выкладка применяет уже существующую `0025_agent_reenrolment`.

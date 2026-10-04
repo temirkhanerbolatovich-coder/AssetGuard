@@ -7,11 +7,11 @@
 Production: **https://assetguard-temirkhan.duckdns.org**  
 Версия схемы репозитория: **`0026_telegram_notifications`**
 
-Новый этап 2026-10-05: реализована транзакционная очередь уведомлений о новых технических и физических инцидентах; локально проверены retry, acceptance, дедупликация и organization/location scope. Production acceptance новой версии фиксируется отдельным протоколом после выкладки. [Функция и настройка](../features/telegram-notifications.md). Подготовлено отдельное [ТЗ UI/UX](ui-ux-modernization-spec.md): следующий этап интерфейса — каркас, вход и состояния; затем реестр/центр инцидентов, кабинеты/импорт, Agent/admin и приёмка. Fleet acceptance остаётся самостоятельной задачей.
+Рабочая точка 2026-10-05: **Telegram реализован, опубликован и принят на production**, application commit `0b90607`. 96 backend tests, 2 browser E2E и GitHub CI прошли; schema `0026`, isolated upgrade/recovery и свежий R2 restore проверены. Новые технические/физические инциденты идут через organization-scoped очередь. Пользователь подтвердил получение теста; повторный и автоматический запуск не отправили дубль. [Приёмка](../../outputs/assetguard-telegram-2026-10-05.md), [функция и настройка](../features/telegram-notifications.md). Подготовлено отдельное [ТЗ UI/UX](ui-ux-modernization-spec.md): следующий этап — каркас, вход и состояния; затем реестр/центр инцидентов, кабинеты/импорт, Agent/admin и приёмка. Fleet acceptance остаётся самостоятельной задачей.
 
-Последняя проверенная production/R2 restore revision: **`0025_agent_reenrolment`**, 2026-10-04, **216 assets / 11 endpoints**.
+Последняя проверенная production/R2 restore revision: **`0026_telegram_notifications`**, 2026-10-05 по времени клиента, **216 assets / 11 endpoints**.
 
-Рабочая точка: **стабилизация опубликована и принята на production 2026-10-04**. Application commit `93ff8ed` в `main`: push/manual CI success, включая реальную модель; production UI/API/schema согласованы на `0025`. HTTPS health/readiness, hashes всех трёх frontend files, 60 admin operations и защищённые Agent re-enrolment routes проверены. Backup/R2 restore, upgrade/recovery rehearsal и Telegram acceptance/dedup прошли. Подробности: [release acceptance](../../outputs/assetguard-release-2026-10-04.md). Следующий рабочий этап — fleet acceptance; Windows installer `0.1.7` пока не опубликован.
+Предыдущий этап: **стабилизация принята на production 2026-10-04**, application commit `93ff8ed`, schema `0025`. Push/manual CI прошли, включая реальную модель; backup/restore и recovery проверены. [Исторический протокол](../../outputs/assetguard-release-2026-10-04.md). Windows installer `0.1.7` пока не опубликован.
 
 Этот документ — единая точка правды о текущем состоянии AssetGuard. Статус «реализовано» означает, что функция присутствует в коде и покрыта автоматической либо выполненной ручной проверкой. Статус «частично» означает, что рабочий сценарий есть, но ещё не закрыты эксплуатационные, масштабные или продуктовые требования.
 
@@ -59,7 +59,7 @@ AssetGuard является работающим pilot MVP: школьный р�
 | Безопасность API | ✅ foundation | HTTPS, security headers, payload limits, app rate limiting, секреты вне Git, immutable evidence/history | CI и production config |
 | Dependency scanning | ✅ | `pip check`, строгий `pip-audit`, Dependabot | GitHub Actions |
 | Backup/restore tooling | ✅ Windows + server | AES-256-GCM backup, R2 upload/retention и isolated restore rehearsal; Windows/Linux AGBK1 совместимость | Windows tasks: код `0` 2026-09-27; server daily/weekly cycle и свежие pre/post-deployment restore `PASS` 2026-10-04, последний на `0025` |
-| Telegram monitoring | ✅ базовый production-контур | Каждые 5 минут: readiness, Compose services, disk, backup age/job failures, offline/stale Agent, failed ingest и identity conflicts; dedup/recovery/retry | Новая версия установлена; Telegram подтвердил test alert, повтор подавлен 2026-10-04; recovery/refusal/retry покрыты automated test |
+| Telegram | ✅ production pilot | Новые технические/физические инциденты через durable queue раз в минуту; проблемы Agent/сервера раз в 5 минут; retry/429 и штатная дедупликация | 2026-10-05: Telegram acceptance, подтверждение пользователя, повторный и автоматический запуск без дубля; tenant/location/retry tests |
 | Постоянный deployment | ✅ | Oracle Cloud Always Free, Docker Compose, Caddy, DuckDNS, TLS, restart policy | Public health/readiness |
 | CI | ✅ | PostgreSQL tests, browser E2E, dependency audit, JS/PowerShell/Linux checks, Compose validation и real-model smoke | Push `37223402190` и manual `37223446315` success на `93ff8ed` |
 
@@ -85,7 +85,7 @@ Production read-only counts: **216 assets, 11 endpoints, 51 raw inventories, 51 
 | --- | --- | --- |
 | Multi-tenant | Organization scope и scoped ADMIN; матрица 60 admin operations; negative tests для native Agent ingestion и Excel/PDF import | Явные platform/onboarding полномочия, отказ от legacy global fallback и приёмка двух реальных школ |
 | Мониторинг | Постоянный systemd monitor проверяет API, Compose services, диск, возраст/ошибки backup, ingest и Agent last-seen; доставка, дедупликация и четырёхчасовой repeat Telegram-alert приняты | Dashboard наблюдаемости и формальная on-call escalation |
-| Backup | Зашифрованные копии, Cloudflare R2, 14 дней локально / 30 дней off-site; Windows и Linux timers; server automatic cycle и свежий restore `0025` прошли 2026-10-04 | Backup пока охватывает PostgreSQL, но не Vision volume; длительное наблюдение за регулярными циклами |
+| Backup | Зашифрованные копии, Cloudflare R2, 14 дней локально / 30 дней off-site; Windows и Linux timers; свежий restore `0026` прошёл 2026-10-05 по времени клиента | Backup пока охватывает PostgreSQL, но не Vision volume; длительное наблюдение за регулярными циклами |
 | Vision production | Полный локальный photo workflow и настоящий model smoke в CI | Oracle Free VM не тянет ML runtime; нужны отдельный inference host/GPU либо более мощный сервер, object storage и accuracy evaluation |
 | Хранение данных | Raw evidence и audit защищены от изменения; Vision лежит в persistent volume | Утверждённые сроки хранения, автоматическая очистка/архив Vision, экспорт и процедура удаления по политике |
 | Installer lifecycle | Установка службы и первичное подключение работают; `0.1.7` передаёт installer version, пишет защищённый lifecycle log, панель предупреждает о неподдерживаемом Agent | Code signing, SmartScreen reputation, versioned update/rollback и массовое развёртывание |

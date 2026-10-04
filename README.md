@@ -32,6 +32,8 @@ AssetGuard — система учёта и контролируемой инв�
 
 ## Архитектура
 
+Telegram принят на production 2026-10-05: application commit `0b90607`, schema `0026`, 96 backend tests и 2 browser E2E, GitHub CI, pre/post R2 restore и изолированный rollback прошли. Пользователь получил тест; повторный и минутный запуск не создали дубль. [Протокол](outputs/assetguard-telegram-2026-10-05.md). Предложенный порядок работы по интерфейсу изложен в [отдельном ТЗ UI/UX](docs/product/ui-ux-modernization-spec.md); сам редизайн ещё не внедрён.
+
 Новые технические и физические инциденты помещаются в транзакционную Telegram-очередь; отдельный worker отправляет их в явно назначенный чат организации с retry и проверкой acceptance. Проблемы Agent и сервера отслеживает существующий monitor. [Настройка и гарантии доставки](docs/features/telegram-notifications.md), [план UI/UX](docs/product/ui-ux-modernization-spec.md).
 
 ```text

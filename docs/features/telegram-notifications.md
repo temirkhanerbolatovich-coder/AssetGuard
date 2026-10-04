@@ -60,3 +60,5 @@ sudo /usr/local/lib/assetguard-server-notifications.sh
 Migration downgrade до `0025` удаляет таблицу очереди, включая недоставленные записи. До отката сохраните encrypted backup и осознанно выберите восстановление/перенос очереди. Изменений старых таблиц migration не делает.
 
 Решение: [ADR-007](../decisions/ADR-007-telegram-outbox.md). Протокол внешнего сервиса: [Telegram Bot API](https://core.telegram.org/bots/api#sendmessage).
+
+Production acceptance 2026-10-05: тест принят Telegram и получен пользователем; немедленный и автоматический запуск без повторной отправки. Schema `0026`, GitHub CI, migration/recovery и R2 restore прошли. [Проверенные результаты и ограничения](../../outputs/assetguard-telegram-2026-10-05.md).
