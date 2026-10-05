@@ -1,0 +1,149 @@
+{
+  "lcp": 84,
+  "cls": 0,
+  "events": [
+    {
+      "name": "pointerdown",
+      "duration": 16,
+      "interactionId": 6555
+    },
+    {
+      "name": "pointerup",
+      "duration": 16,
+      "interactionId": 6555
+    },
+    {
+      "name": "click",
+      "duration": 16,
+      "interactionId": 6555
+    },
+    {
+      "name": "pointerdown",
+      "duration": 16,
+      "interactionId": 6562
+    },
+    {
+      "name": "pointerup",
+      "duration": 16,
+      "interactionId": 6562
+    },
+    {
+      "name": "click",
+      "duration": 16,
+      "interactionId": 6562
+    },
+    {
+      "name": "pointerdown",
+      "duration": 32,
+      "interactionId": 6569
+    },
+    {
+      "name": "pointerup",
+      "duration": 32,
+      "interactionId": 6569
+    },
+    {
+      "name": "click",
+      "duration": 32,
+      "interactionId": 6569
+    },
+    {
+      "name": "pointerdown",
+      "duration": 16,
+      "interactionId": 6576
+    },
+    {
+      "name": "pointerup",
+      "duration": 16,
+      "interactionId": 6576
+    },
+    {
+      "name": "click",
+      "duration": 16,
+      "interactionId": 6576
+    },
+    {
+      "name": "pointerdown",
+      "duration": 16,
+      "interactionId": 6583
+    },
+    {
+      "name": "pointerup",
+      "duration": 16,
+      "interactionId": 6583
+    },
+    {
+      "name": "click",
+      "duration": 16,
+      "interactionId": 6583
+    },
+    {
+      "name": "keydown",
+      "duration": 16,
+      "interactionId": 6590
+    },
+    {
+      "name": "click",
+      "duration": 16,
+      "interactionId": 6590
+    },
+    {
+      "name": "keyup",
+      "duration": 16,
+      "interactionId": 6590
+    },
+    {
+      "name": "keydown",
+      "duration": 16,
+      "interactionId": 6597
+    },
+    {
+      "name": "keypress",
+      "duration": 16,
+      "interactionId": 6597
+    },
+    {
+      "name": "click",
+      "duration": 16,
+      "interactionId": 6597
+    },
+    {
+      "name": "keyup",
+      "duration": 16,
+      "interactionId": 6597
+    },
+    {
+      "name": "keyup",
+      "duration": 16,
+      "interactionId": 6604
+    },
+    {
+      "name": "pointerdown",
+      "duration": 16,
+      "interactionId": 6611
+    },
+    {
+      "name": "pointerup",
+      "duration": 16,
+      "interactionId": 6611
+    },
+    {
+      "name": "click",
+      "duration": 16,
+      "interactionId": 6611
+    }
+  ],
+  "longTasks": [],
+  "assets": 1000,
+  "cold_workspace_ms": 266.7000000476837,
+  "warm_workspace_ms": 242.60000002384186,
+  "rendered_rows": 20,
+  "browser": "153.0.8010.12",
+  "viewport": {
+    "width": 1366,
+    "height": 900
+  },
+  "network": "localhost, no throttling",
+  "cpu_throttling": false,
+  "lcp_scope": "document/login; not authenticated workspace"
+}

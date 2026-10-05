@@ -29,10 +29,29 @@ Cold/warm значения — время до готового реестра, 
 
 ## Валидация и документы
 
-Локально: **118 passed** (102 unit/integration + 16 browser E2E); JavaScript syntax и git diff --check прошли. Обновлены testing strategy, design system, architecture overview (outbox/schema/backup boundary), UX workflow, UI spec, README/checklist и changelog. Новые [методика/ограничения и протокол usability](../docs/testing/ui-acceptance.md) описывают, что ещё необходимо проверить.
+Локально: **119 passed** (103 unit/integration + 16 browser E2E); JavaScript syntax и git diff --check прошли. Обновлены testing strategy, design system, architecture overview (outbox/schema/backup boundary), UX workflow, UI spec, README/checklist и changelog. Новые [методика/ограничения и протокол usability](../docs/testing/ui-acceptance.md) описывают, что ещё необходимо проверить.
 
 Новая архитектура, dependency и migration не нужны: сохранены native controls, existing pagination и текущий stack. Browser zoom 200%/400%, NVDA/реальные мобильные устройства, representative LCP/INP/CLS и ≥90% usability success остаются открытыми. Fleet 3–5 PCs, десять stale endpoints, подпись/публикация installer 0.1.7 и Vision production — самостоятельные задачи.
 
 ## Публикация и production
 
-Ожидается после локальной приёмки. Runtime commit/image, GitHub CI, pre/post encrypted R2 restore, read-only live API/UI и timers будут записаны по факту; production writes для UI acceptance не нужны.
+Frontend application `166e65f` опубликован и принят на production: [CI 37253034042](https://github.com/temirkhanerbolatovich-coder/AssetGuard/actions/runs/37253034042) success, 102 backend + 16 browser E2E, Secret scan/dependency audit. Runtime image `sha256:9545516cd1309009def74729729124782d126e8ab23f11aa1703cd1590a2f223`, public hashes совпали с Git blobs. Schema `0026`, 63 operations; authenticated reads 200, anonymous 401, missing physical incident 404. Рабочих физических инцидентов нет; сценарий проверен в isolated E2E.
+
+Pre backup `assetguard-production-20261005-015018.sql.agbackup`, restore PASS 01:51:01 UTC. Post frontend backup `assetguard-production-20261005-020644.sql.agbackup`, restore PASS 02:07:53 UTC: `0026`, assets=216, endpoints=11. PostgreSQL/Caddy не пересозданы; четыре timers active. Штатный worker сохранил единственный прежний Telegram тест SENT/attempts=1/message_id=8 — новый тест не отправлен.
+
+Public anonymous и authenticated production browser checks прошли: семь разделов без contrast failure, девять viewport, registry/card/back, Tab/Shift+Tab/Space/Escape, именованный диалог и отмена с возвратом фокуса. Zero admin mutations, приватных screenshots нет. [Public login](ui-stage5-preview-2026-10-05/public-login-desktop.png).
+
+## Найденная задержка и устранение N+1
+
+Первый production workspace load после выкладки занял 11112 ms. Повторные cold/warm samples: 3476/2919 и 3467/5001 ms. Самый долгий `/admin/assets`: 1578…3369 ms; это наблюдения browser resource timings, не чистое время SQL. [Исходная выборка](ui-stage5-measurements-2026-10-05/production-before-performance.json), [первая browser приёмка](ui-stage5-measurements-2026-10-05/production-before-summary.json).
+
+Код делал отдельный endpoint lookup для каждого asset. Asset, endpoint и имя организации теперь выбираются одним LEFT JOIN, сохраняются сортировка и tenant/location filters. Уникальность связи обеспечена существующим index `uq_managed_endpoints_one_per_asset` из migration `0007`; формат ответа не меняется. Regression test проверяет 216 assets, две связи и ≤10 SELECT. Hardware summaries по привязанным ПК пока читаются отдельно; server pagination assets/endpoints остаётся открытой.
+
+Локально после изменения: 119 passed (103 backend + 16 browser E2E); повторный server rollout/замеры этой оптимизации пока ожидаются.
+
+| Synthetic assets | Cold workspace после, ms | Warm после, ms | DOM rows |
+| --- | --- | --- | --- |
+| 216 | 245.9 | 231.4 | 20 |
+| 1000 | 266.7 | 242.6 | 20 |
+
+[216 assets](ui-stage5-optimized-2026-10-05/capacity-216.json), [1000 assets](ui-stage5-optimized-2026-10-05/capacity-1000.json). Это те же local hardware/network параметры; одиночные lab samples не являются performance гарантией.

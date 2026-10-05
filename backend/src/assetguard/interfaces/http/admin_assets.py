@@ -234,16 +234,19 @@ def _endpoint_summary(session: Session, endpoint: ManagedEndpointRecord) -> dict
 @router.get("/assets")
 def list_assets(session: Annotated[Session, Depends(get_session)], principal: Annotated[AuthPrincipal, Depends(require_viewer)]):
     result = []
-    statement = select(AssetRecord).order_by(AssetRecord.inventory_number)
+    statement = (
+        select(AssetRecord, ManagedEndpointRecord, OrganizationRecord.name)
+        .outerjoin(ManagedEndpointRecord, ManagedEndpointRecord.asset_id == AssetRecord.id)
+        .outerjoin(OrganizationRecord, OrganizationRecord.id == AssetRecord.organization_id)
+        .order_by(AssetRecord.inventory_number)
+    )
     if principal.organization_id:
         statement = statement.where(AssetRecord.organization_id == principal.organization_id)
     allowed_rooms = permitted_room_ids(session, principal)
     if allowed_rooms is not None:
         statement = statement.where(AssetRecord.room_id.in_(allowed_rooms))
-    for asset in session.scalars(statement):
-        endpoint = session.scalar(select(ManagedEndpointRecord).where(ManagedEndpointRecord.asset_id == asset.id))
-        organization = session.get(OrganizationRecord, asset.organization_id)
-        view = _asset_view(asset, endpoint.id if endpoint else None, organization.name if organization else None)
+    for asset, endpoint, organization_name in session.execute(statement):
+        view = _asset_view(asset, endpoint.id if endpoint else None, organization_name)
         view["endpoint"] = _endpoint_summary(session, endpoint) if endpoint else None
         result.append(view)
     return result

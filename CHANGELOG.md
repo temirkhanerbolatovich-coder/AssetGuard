@@ -4,9 +4,11 @@
 
 ## 2026-10-05 — техническая приёмка UI/UX, этап 5
 
+- После live-профилирования устранены отдельные SQL endpoint lookups для каждой позиции реестра: LEFT JOIN сохраняет ответ и права, query-budget regression защищает от возврата N+1.
+
 - Усилен измеренный контраст подписей и границ полей; сплошная клавиатурная обводка больше не теряется при фокусе поля. Диалоги получили доступные имена и ограниченную viewport высоту.
 - На коротком экране header/toast находятся в потоке, вкладки сохраняют удобную высоту. Семь новых browser tests проверяют reflow/keyboard/contrast, четыре роли и два tenant, реестр с 216/1000 synthetic assets.
-- Локально 102 backend + 16 browser E2E прошли; production/CI приёмка фиксируется отдельно в [протоколе](outputs/assetguard-ui-stage5-2026-10-05.md). [Ручной browser zoom, screen reader, representative performance и usability](docs/testing/ui-acceptance.md) пока не проведены. Без новых dependencies, migrations и изменений Vision.
+- Локально 103 backend + 16 browser E2E прошли; production/CI приёмка фиксируется отдельно в [протоколе](outputs/assetguard-ui-stage5-2026-10-05.md). [Ручной browser zoom, screen reader, representative performance и usability](docs/testing/ui-acceptance.md) пока не проведены. Без новых dependencies, migrations и изменений Vision.
 
 ## 2026-10-05 — четвёртый этап UI/UX на production
 

@@ -40,7 +40,9 @@ MFA и SSO в коде отсутствуют. Re-enrolment восстанавл
 
 В коде используются роли `ADMIN`, `VIEWER`, `LOCATION_MANAGER` и `INVENTORY_CLERK`. Named principal содержит `organization_id`; tenant-scoped ресурсы фильтруются по нему. Для помещений предусмотрены grants `VIEWER` и `EDITOR`.
 
-Смысл ролей подтверждается route dependencies, исполняемой allow/deny-матрицей всех 62 защищённых operations и tenant/location integration tests. Актуальная матрица находится в [admin-route-access-matrix.md](admin-route-access-matrix.md).
+Смысл ролей подтверждается route dependencies, исполняемой allow/deny-матрицей всех 63 защищённых operations и tenant/location integration tests. Актуальная матрица находится в [admin-route-access-matrix.md](admin-route-access-matrix.md).
+
+`GET /admin/notifications` доступен только ADMIN в scope его организации. UI/API возвращают метаданные доставки без payload, event key, chat ID и bot token. Worker отправляет сообщение только в явно настроенный чат этой организации; приватная конфигурация не передаётся браузеру. [Контракт Telegram](../features/telegram-notifications.md).
 
 Native per-Agent ingestion дополнительно проверяет bound endpoint и organization до любых доменных изменений, включая duplicate и смешанные identifiers. Scoped credential не переносит существующее устройство между организациями и не присваивает endpoint без organization. Первая привязка и snapshot сохраняются атомарно с row lock credential; существующий активный ключ требует approved re-enrolment. Scope rejection оставляет только новое raw evidence со статусом `FAILED` и отвечает `409`.
 

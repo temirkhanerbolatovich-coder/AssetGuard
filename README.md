@@ -92,7 +92,7 @@ node --check frontend/app.js
 git diff --check
 ```
 
-Текущий подтверждённый набор: **102 unit/integration tests и 16 browser E2E**. Каждый backend-запуск создаёт отдельную PostgreSQL database, применяет migrations до `head`, очищает состояние между тестами и удаляет базу после завершения.
+Текущий подтверждённый набор: **103 unit/integration tests и 16 browser E2E**. Каждый backend-запуск создаёт отдельную PostgreSQL database, применяет migrations до `head`, очищает состояние между тестами и удаляет базу после завершения.
 
 ## Windows Agent
 
