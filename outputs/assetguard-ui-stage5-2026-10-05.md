@@ -1,6 +1,6 @@
 # AssetGuard — UI/UX этап 5: техническая приёмка
 
-Дата: 2026-10-05. Статус: локальные проверки пройдены; публикация/CI/production ожидаются. Полная приёмка этапа 5 не заявлена: ручной zoom/screen reader, representative performance и usability с сотрудниками ещё не проведены.
+Дата: 2026-10-05. Статус: автоматическая browser/API приёмка пройдена на production, application `18d6238`. Полная приёмка этапа 5 не заявлена: ручной zoom/screen reader, representative performance и usability с сотрудниками ещё не проведены.
 
 ## Точка продолжения
 
@@ -47,7 +47,7 @@ Public anonymous и authenticated production browser checks прошли: сем
 
 Код делал отдельный endpoint lookup для каждого asset. Asset, endpoint и имя организации теперь выбираются одним LEFT JOIN, сохраняются сортировка и tenant/location filters. Уникальность связи обеспечена существующим index `uq_managed_endpoints_one_per_asset` из migration `0007`; формат ответа не меняется. Regression test проверяет 216 assets, две связи и ≤10 SELECT. Hardware summaries по привязанным ПК пока читаются отдельно; server pagination assets/endpoints остаётся открытой.
 
-Локально после изменения: 119 passed (103 backend + 16 browser E2E); повторный server rollout/замеры этой оптимизации пока ожидаются.
+После изменения: локально **119 passed** (103 backend + 16 browser E2E); [CI 37254642307](https://github.com/temirkhanerbolatovich-coder/AssetGuard/actions/runs/37254642307) success, 103 backend/16 browser, dependency check/audit и Secret scan. Application `18d6238e9e9ea496cef8bcc6199b38f76b81100f` развёрнут; runtime `sha256:080f1b2606645b40917589fa2279852651c2e6109c9148c6baa58bc10499ec9f`. Public frontend hashes остались равны Git blobs, protected contract/schema не изменились. Предыдущий runtime `166e65f` сохранён как `assetguard-api:rollback-pre18d6238-20261005`.
 
 | Synthetic assets | Cold workspace после, ms | Warm после, ms | DOM rows |
 | --- | --- | --- | --- |
@@ -55,3 +55,16 @@ Public anonymous и authenticated production browser checks прошли: сем
 | 1000 | 266.7 | 242.6 | 20 |
 
 [216 assets](ui-stage5-optimized-2026-10-05/capacity-216.json), [1000 assets](ui-stage5-optimized-2026-10-05/capacity-1000.json). Это те же local hardware/network параметры; одиночные lab samples не являются performance гарантией.
+
+
+## Итоговая production приёмка оптимизации
+
+Прямой вызов deployed `list_assets` в транзакции READ ONLY: 216 assets, 7 привязанных ПК, 65 SELECT, 786.4 ms. [Query budget](ui-stage5-measurements-2026-10-05/server-query-budget.json). Измерение исключает HTTP/auth/network. Устранены lookup на каждую позицию; остальные SELECT связаны преимущественно с аппаратными summary привязанных ПК. Их пакетное чтение — следующий performance шаг, общий целевой бюджет пока не принят.
+
+Повторные browser samples после изменения (два свежих context, по cold/warm): cold workspace **3451.3…3947.9 ms**, warm **1876.5…2908.5 ms**; `/admin/assets` **1129.0…2811.0 ms**. До изменения запрос assets занимал 1578…3369 ms. [Полные resource timings после](ui-stage5-measurements-2026-10-05/production-performance.json). Server/network load меняется, выборка мала; это не p75 и не принятие LCP/INP бюджета. [Read-only browser summary](ui-stage5-measurements-2026-10-05/production-summary.json): контраст семи заполненных разделов, девять viewport, keyboard/card/back, modal Escape/return и zero admin mutations прошли вновь.
+
+После оптимизации fresh encrypted R2 backup `assetguard-production-20261005-022901.sql.agbackup` восстановлен в isolated DB: `0026`, assets=216, endpoints=11, PASS **2026-10-05 02:30:20 UTC**. API/public health готовы, PostgreSQL/Caddy не пересозданы, четыре timers active. Существующий Telegram тест по-прежнему SENT/attempts=1/message_id=8, новых тестовых отправок нет.
+
+Во время получения коммита обнаружены пять старых root-owned prefix directories в `.git/objects`, мешавших Ubuntu fetch. Ownership восстановлен только в Git objects; fetch/fast-forward выполнены пользователем ubuntu. Secret configuration и рабочие данные не менялись.
+
+Следующий шаг — ручная UI приёмка по подготовленному протоколу, затем fleet checks и installer release. Полный WCAG audit, реальный zoom/NVDA, representative performance и usability пока открыты. Документальные commits после application `18d6238` не требуют пересборки API при неизменных frontend/backend исходниках.

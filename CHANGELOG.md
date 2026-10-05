@@ -8,7 +8,7 @@
 
 - Усилен измеренный контраст подписей и границ полей; сплошная клавиатурная обводка больше не теряется при фокусе поля. Диалоги получили доступные имена и ограниченную viewport высоту.
 - На коротком экране header/toast находятся в потоке, вкладки сохраняют удобную высоту. Семь новых browser tests проверяют reflow/keyboard/contrast, четыре роли и два tenant, реестр с 216/1000 synthetic assets.
-- Локально 103 backend + 16 browser E2E прошли; production/CI приёмка фиксируется отдельно в [протоколе](outputs/assetguard-ui-stage5-2026-10-05.md). [Ручной browser zoom, screen reader, representative performance и usability](docs/testing/ui-acceptance.md) пока не проведены. Без новых dependencies, migrations и изменений Vision.
+- Application `18d6238`: 103 backend + 16 browser E2E, CI, production API/browser и fresh R2 restore прошли; детали в [протоколе](outputs/assetguard-ui-stage5-2026-10-05.md). [Ручной browser zoom, screen reader, representative performance и usability](docs/testing/ui-acceptance.md) пока не проведены. Без новых dependencies, migrations и изменений Vision.
 
 ## 2026-10-05 — четвёртый этап UI/UX на production
 

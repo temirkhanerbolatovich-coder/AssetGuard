@@ -1,0 +1,370 @@
+{
+  "browser": "153.0.8010.12",
+  "network": "public HTTPS from Windows client; no throttling",
+  "samples": [
+    {
+      "iteration": 1,
+      "phase": "cold",
+      "workspace_ms": 3947.9,
+      "requests": [
+        {
+          "path": "/auth/me",
+          "duration_ms": 256,
+          "wait_ms": 254,
+          "bytes": 400
+        },
+        {
+          "path": "/admin/assets",
+          "duration_ms": 2811,
+          "wait_ms": 2799,
+          "bytes": 11771
+        },
+        {
+          "path": "/admin/endpoints",
+          "duration_ms": 2644,
+          "wait_ms": 2609,
+          "bytes": 2605
+        },
+        {
+          "path": "/admin/changes",
+          "duration_ms": 995,
+          "wait_ms": 990,
+          "bytes": 899
+        },
+        {
+          "path": "/admin/incidents",
+          "duration_ms": 995,
+          "wait_ms": 991,
+          "bytes": 631
+        },
+        {
+          "path": "/admin/vision/rooms",
+          "duration_ms": 993,
+          "wait_ms": 989,
+          "bytes": 302
+        },
+        {
+          "path": "/admin/operations/status",
+          "duration_ms": 1562,
+          "wait_ms": 1558,
+          "bytes": 655
+        },
+        {
+          "path": "/admin/locations/tree",
+          "duration_ms": 1893,
+          "wait_ms": 1889,
+          "bytes": 1107
+        },
+        {
+          "path": "/admin/locations/physical-incidents",
+          "duration_ms": 1555,
+          "wait_ms": 1551,
+          "bytes": 302
+        },
+        {
+          "path": "/admin/users",
+          "duration_ms": 466,
+          "wait_ms": 464,
+          "bytes": 477
+        },
+        {
+          "path": "/admin/locations/access",
+          "duration_ms": 291,
+          "wait_ms": 288,
+          "bytes": 302
+        },
+        {
+          "path": "/admin/locations/organizations",
+          "duration_ms": 379,
+          "wait_ms": 375,
+          "bytes": 377
+        },
+        {
+          "path": "/admin/agent-credentials",
+          "duration_ms": 379,
+          "wait_ms": 375,
+          "bytes": 1456
+        },
+        {
+          "path": "/admin/agent-re-enrolments",
+          "duration_ms": 380,
+          "wait_ms": 378,
+          "bytes": 302
+        }
+      ]
+    },
+    {
+      "iteration": 1,
+      "phase": "warm",
+      "workspace_ms": 1876.5,
+      "requests": [
+        {
+          "path": "/auth/me",
+          "duration_ms": 254,
+          "wait_ms": 252,
+          "bytes": 400
+        },
+        {
+          "path": "/admin/assets",
+          "duration_ms": 1129,
+          "wait_ms": 1118,
+          "bytes": 11771
+        },
+        {
+          "path": "/admin/endpoints",
+          "duration_ms": 1187,
+          "wait_ms": 1160,
+          "bytes": 2605
+        },
+        {
+          "path": "/admin/changes",
+          "duration_ms": 581,
+          "wait_ms": 571,
+          "bytes": 899
+        },
+        {
+          "path": "/admin/incidents",
+          "duration_ms": 422,
+          "wait_ms": 418,
+          "bytes": 631
+        },
+        {
+          "path": "/admin/vision/rooms",
+          "duration_ms": 582,
+          "wait_ms": 578,
+          "bytes": 302
+        },
+        {
+          "path": "/admin/operations/status",
+          "duration_ms": 488,
+          "wait_ms": 476,
+          "bytes": 655
+        },
+        {
+          "path": "/admin/locations/tree",
+          "duration_ms": 586,
+          "wait_ms": 582,
+          "bytes": 1107
+        },
+        {
+          "path": "/admin/locations/physical-incidents",
+          "duration_ms": 347,
+          "wait_ms": 342,
+          "bytes": 302
+        },
+        {
+          "path": "/admin/users",
+          "duration_ms": 287,
+          "wait_ms": 283,
+          "bytes": 477
+        },
+        {
+          "path": "/admin/locations/access",
+          "duration_ms": 280,
+          "wait_ms": 277,
+          "bytes": 302
+        },
+        {
+          "path": "/admin/locations/organizations",
+          "duration_ms": 379,
+          "wait_ms": 378,
+          "bytes": 377
+        },
+        {
+          "path": "/admin/agent-credentials",
+          "duration_ms": 376,
+          "wait_ms": 374,
+          "bytes": 1456
+        },
+        {
+          "path": "/admin/agent-re-enrolments",
+          "duration_ms": 369,
+          "wait_ms": 365,
+          "bytes": 302
+        }
+      ]
+    },
+    {
+      "iteration": 2,
+      "phase": "cold",
+      "workspace_ms": 3451.3,
+      "requests": [
+        {
+          "path": "/auth/me",
+          "duration_ms": 307,
+          "wait_ms": 305,
+          "bytes": 400
+        },
+        {
+          "path": "/admin/assets",
+          "duration_ms": 2181,
+          "wait_ms": 2173,
+          "bytes": 11771
+        },
+        {
+          "path": "/admin/endpoints",
+          "duration_ms": 2397,
+          "wait_ms": 2390,
+          "bytes": 2605
+        },
+        {
+          "path": "/admin/changes",
+          "duration_ms": 1029,
+          "wait_ms": 980,
+          "bytes": 899
+        },
+        {
+          "path": "/admin/incidents",
+          "duration_ms": 399,
+          "wait_ms": 386,
+          "bytes": 631
+        },
+        {
+          "path": "/admin/vision/rooms",
+          "duration_ms": 597,
+          "wait_ms": 592,
+          "bytes": 302
+        },
+        {
+          "path": "/admin/operations/status",
+          "duration_ms": 832,
+          "wait_ms": 816,
+          "bytes": 655
+        },
+        {
+          "path": "/admin/locations/tree",
+          "duration_ms": 1078,
+          "wait_ms": 1074,
+          "bytes": 1107
+        },
+        {
+          "path": "/admin/locations/physical-incidents",
+          "duration_ms": 1169,
+          "wait_ms": 1165,
+          "bytes": 302
+        },
+        {
+          "path": "/admin/users",
+          "duration_ms": 283,
+          "wait_ms": 276,
+          "bytes": 477
+        },
+        {
+          "path": "/admin/locations/organizations",
+          "duration_ms": 364,
+          "wait_ms": 363,
+          "bytes": 377
+        },
+        {
+          "path": "/admin/locations/access",
+          "duration_ms": 368,
+          "wait_ms": 366,
+          "bytes": 302
+        },
+        {
+          "path": "/admin/agent-credentials",
+          "duration_ms": 351,
+          "wait_ms": 350,
+          "bytes": 1456
+        },
+        {
+          "path": "/admin/agent-re-enrolments",
+          "duration_ms": 355,
+          "wait_ms": 354,
+          "bytes": 302
+        }
+      ]
+    },
+    {
+      "iteration": 2,
+      "phase": "warm",
+      "workspace_ms": 2908.5,
+      "requests": [
+        {
+          "path": "/auth/me",
+          "duration_ms": 240,
+          "wait_ms": 239,
+          "bytes": 400
+        },
+        {
+          "path": "/admin/assets",
+          "duration_ms": 1910,
+          "wait_ms": 1623,
+          "bytes": 11771
+        },
+        {
+          "path": "/admin/changes",
+          "duration_ms": 249,
+          "wait_ms": 246,
+          "bytes": 899
+        },
+        {
+          "path": "/admin/endpoints",
+          "duration_ms": 1614,
+          "wait_ms": 1610,
+          "bytes": 2605
+        },
+        {
+          "path": "/admin/incidents",
+          "duration_ms": 510,
+          "wait_ms": 507,
+          "bytes": 631
+        },
+        {
+          "path": "/admin/vision/rooms",
+          "duration_ms": 501,
+          "wait_ms": 496,
+          "bytes": 302
+        },
+        {
+          "path": "/admin/operations/status",
+          "duration_ms": 616,
+          "wait_ms": 611,
+          "bytes": 655
+        },
+        {
+          "path": "/admin/locations/tree",
+          "duration_ms": 971,
+          "wait_ms": 967,
+          "bytes": 1107
+        },
+        {
+          "path": "/admin/locations/physical-incidents",
+          "duration_ms": 970,
+          "wait_ms": 964,
+          "bytes": 302
+        },
+        {
+          "path": "/admin/users",
+          "duration_ms": 310,
+          "wait_ms": 308,
+          "bytes": 477
+        },
+        {
+          "path": "/admin/locations/access",
+          "duration_ms": 403,
+          "wait_ms": 401,
+          "bytes": 302
+        },
+        {
+          "path": "/admin/locations/organizations",
+          "duration_ms": 405,
+          "wait_ms": 404,
+          "bytes": 377
+        },
+        {
+          "path": "/admin/agent-credentials",
+          "duration_ms": 392,
+          "wait_ms": 389,
+          "bytes": 1456
+        },
+        {
+          "path": "/admin/agent-re-enrolments",
+          "duration_ms": 398,
+          "wait_ms": 396,
+          "bytes": 302
+        }
+      ]
+    }
+  ]
+}

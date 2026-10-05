@@ -1,0 +1,8 @@
+{
+  "assets": 216,
+  "linked_assets": 7,
+  "selects": 65,
+  "server_function_ms": 786.4,
+  "transaction": "READ ONLY",
+  "scope": "deployed list_assets function; excludes HTTP, authentication and network"
+}
