@@ -180,6 +180,9 @@ def test_complete_workspace_reflow_fonts_onboarding_and_comparison(live_server, 
         assert 'Не указан' in comparison and 'Нет данных' not in comparison
         assert '<td>Слот</td><td>0</td><td>0</td>' in comparison
         assert 'не подтверждает замену' in comparison
+        assert page.evaluate("incidentLabel({component_type:'RAM',evidence:{previous:{capacity:8192},current:{capacity:0}}})") == 'Изменились сведения о модуле памяти'
+        assert page.evaluate("incidentLabel({component_type:'RAM',evidence:{previous:{capacity:8192},current:{capacity:8589934592}}})") == 'Изменились сведения о модуле памяти'
+        assert page.evaluate("incidentLabel({component_type:'RAM',evidence:{previous:{capacity:8192},current:{capacity:16384}}})") == 'Изменился объём оперативной памяти'
         missing = page.evaluate("renderFieldComparison('RAM',{previous:{capacity:8192,serial:'OLD'},current:null})")
         assert 'Нет данных' in missing and 'Компонент не представлен' in missing
         assert 'Отсутствует' not in missing

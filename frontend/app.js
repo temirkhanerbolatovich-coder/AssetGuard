@@ -479,7 +479,9 @@ function incidentLabel(incident, change = null) {
   const evidence = change?.evidence || incident?.evidence;
   const type = change?.component_type || incident?.component_type;
   if (type === 'RAM' && evidence?.previous && evidence?.current) {
-    if (evidence.previous.capacity !== evidence.current.capacity) return 'Изменился объём оперативной памяти';
+    const previousCapacity = memoryCapacityBytes(evidence.previous.capacity);
+    const currentCapacity = memoryCapacityBytes(evidence.current.capacity);
+    if (previousCapacity > 0 && currentCapacity > 0 && previousCapacity !== currentCapacity) return 'Изменился объём оперативной памяти';
     return 'Изменились сведения о модуле памяти';
   }
   if (type === 'CPU') return 'Изменились сведения о процессоре';
