@@ -9,9 +9,11 @@ Production: **https://assetguard-temirkhan.duckdns.org**
 
 Рабочая точка 2026-10-05: **этапы UI/UX 1–4 и автоматическая часть этапа 5 приняты на production**, application commit `0f67995`. **109 backend + 16 browser E2E**, CI, Secret scan и dependency audit прошли. Контраст/фокус/dialogs/reflow, реестр 216/1000 assets и scoped hardware summaries проверены. На production SQL assets/endpoints **65/105 → 4/4**, ответы совпали; cold workspace в двух samples около 2.4 → 1.9 s, warm результат нестабилен. Schema `0026`, **63 защищённые операции**; read-only UI/API и свежий R2 restore прошли. [Оптимизация](../../outputs/assetguard-registry-performance-2026-10-05.md), [UI этап 5](../../outputs/assetguard-ui-stage5-2026-10-05.md), [открытая ручная приёмка](../testing/ui-acceptance.md). Полная WCAG/usability и полевые performance budgets пока не приняты.
 
+Текущая работа Agent 0.1.8: устранён суточный PROLOG (новый default 360 s), независимый аппаратный сбор примерно каждые 5–6 минут плюс scheduler delay, offline очередь и ограниченная отправка с jitter. **122 backend + 16 browser E2E** локально прошли. [Контракт](../features/agent-continuous-inventory.md), [протокол](../../outputs/assetguard-agent-reliability-2026-10-05.md). Серверная выкладка и установка на этом PC фиксируются в протоколе отдельно; массовое обновление не выполнено.
+
 Предыдущие UI/UX этапы: [1 — вход и каркас](../../outputs/assetguard-ui-stage1-2026-10-05.md) (`d8f6a63`), [2 — реестр и инциденты](../../outputs/assetguard-ui-stage2-2026-10-05.md) (`c254125`), [3 — кабинеты, обход и импорт](../../outputs/assetguard-ui-stage3-2026-10-05.md) (`2ae4b01`), [4 — Agent и администрирование](../../outputs/assetguard-ui-stage4-2026-10-05.md) (`45d739b`). Следующий UI/UX шаг: настоящий zoom 200%/400%, screen reader/mobile, representative performance и usability с 3–5 сотрудниками. Assets/endpoints пока загружаются целиком; hardware summaries читаются пакетно по доступным ПК, история ограничена 50 snapshots на ПК. API exactly-once записи не заявляется: при потере ответа сначала проверяется состояние/история.
 
-Telegram ранее принят на `0b90607`, schema `0026`; после UI-релиза очередь и штатное подавление повтора проверены вновь, таймеры активны. [Приёмка Telegram](../../outputs/assetguard-telegram-2026-10-05.md), [функция и настройка](../features/telegram-notifications.md). Live: **11 PC, 1 online / 10 stale**, failed ingest 0, pending/retrying 0. Fleet acceptance, подпись/публикация installer 0.1.7 и Vision production остаются самостоятельными задачами.
+Telegram ранее принят на `0b90607`, schema `0026`; после UI-релиза очередь и штатное подавление повтора проверены вновь, таймеры активны. [Приёмка Telegram](../../outputs/assetguard-telegram-2026-10-05.md), [функция и настройка](../features/telegram-notifications.md). Live: **11 PC, 1 online / 10 stale**, failed ingest 0, pending/retrying 0. Fleet acceptance, подпись/публикация installer 0.1.8 и Vision production остаются самостоятельными задачами.
 
 Последняя проверенная production/R2 restore revision: **`0026_telegram_notifications`**, 2026-10-05 по времени клиента, **216 assets / 11 endpoints**.
 
@@ -47,8 +49,8 @@ AssetGuard является работающим pilot MVP: школьный р�
 | Пользователи и сессии | ✅ | Именованные пользователи, роли, login/logout, отзыв сессий, смена пароля и отключение | Auth lifecycle tests |
 | Права по локациям | ✅ для основных сценариев | Grants `VIEWER`/`EDITOR` на корпус, этаж или кабинет; API проверяет область доступа | Scoped-resource tests |
 | Credentials устройств | ✅ | Отдельный username/secret на каждый Agent, one-time показ, hash в БД, revoke | API, UI и installer flow |
-| Windows installer | ✅ для пилота | Опубликован `0.1.6`; локальный `0.1.7` добавляет version reporting, lifecycle log и approved re-enrolment; pinned GLPI Agent 1.20, HTTPS, отдельные credentials и Windows-служба | Версии Agent 1.19/1.20 проверены на двух ПК; installer `0.1.7` ещё не принят на третьем ПК и не подписан |
-| Работа Agent в фоне | ✅ | GLPI Agent работает Windows-службой; остановка/изменение требует административных прав ОС | Реальная установка |
+| Windows installer | 🟡 0.1.8 candidate | Опубликован 0.1.6; новый 0.1.8 сохраняет version reporting/re-enrolment и добавляет offline delivery, обновление с сохранением ключа | Полная fleet-приёмка нового задания, code signing и публикация ещё не закрыты |
+| Работа Agent в фоне | 🟡 0.1.8 candidate | Независимый локальный сбор, SYSTEM task, offline FIFO, jitter/retry и bounded queue; старый daemon отключается | 138 локальных tests; реальная установка/полный fleet 0.1.8 ещё требуют приёмки |
 | Физический обход | ✅ | Полная сверка каждой позиции: на месте / отсутствует / повреждено, количество, комментарий и исполнитель | Integration и browser E2E |
 | Физические инциденты | ✅ | Создание из расхождения, единый центр, исходное evidence, проверка, ремонт/операции и решения | Tenant/location integration и browser E2E |
 | Перемещение имущества | ✅ | Выбор целевого кабинета, целое или частичное перемещение групповой позиции, новый инвентарный номер, история | Integration test |
@@ -81,7 +83,7 @@ Production read-only counts: **216 assets, 11 endpoints, 51 raw inventories, 51 
 - [x] обязательные env settings smoke job и локальный real-model smoke без изменения Vision logic;
 - [x] публикация проверенных изменений и свежий GitHub CI, включая manual real-model smoke;
 - [x] свежие pre/post-deployment R2 backup/restore, upgrade/recovery rehearsal, rollout API/UI/schema и controlled production alert/dedup;
-- [ ] fleet acceptance на 3–5 реальных ПК, включая installer `0.1.7`.
+- [ ] fleet acceptance на 3–5 реальных ПК, включая installer `0.1.8`.
 
 ## Реализовано частично
 

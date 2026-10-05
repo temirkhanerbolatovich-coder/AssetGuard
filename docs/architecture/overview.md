@@ -74,3 +74,7 @@ flowchart LR
 - Bootstrap shared secrets сохранены для развёртывания и совместимости; основной пользовательский путь поддерживает named users и отзыв сессий.
 
 Текущие ограничения и подтверждённый незакрытый техдолг перечислены в [technical-debt.md](../technical-debt.md).
+
+## Windows Agent 0.1.8
+
+SYSTEM task запускает локальный upstream collector с hardware-only профилем, сохраняет immutable XML в bounded очередь, затем отправляет FIFO по прежнему HTTPS `/glpi-agent` contract. Сбор независим от сети; delivery имеет jitter, backoff и подтверждение XML. Native daemon отключён, secret остаётся в защищённом реестре. [Потоки и ограничения](../features/agent-continuous-inventory.md), [ADR-008](../decisions/ADR-008-agent-durable-delivery.md).

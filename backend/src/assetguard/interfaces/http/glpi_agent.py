@@ -27,8 +27,14 @@ from assetguard.modules.identity.models import AgentCredentialRecord
 from assetguard.modules.snapshots.normalizer import InventoryScopeError, normalize_raw_inventory
 
 router = APIRouter(prefix="/glpi-agent", tags=["inventory"])
-REPLY = b"<?xml version='1.0' encoding='UTF-8'?><REPLY><RESPONSE>SEND</RESPONSE><PROLOG_FREQ>24</PROLOG_FREQ></REPLY>\n"
 AUTH_CHALLENGE = {"WWW-Authenticate": 'Basic realm="AssetGuard"'}
+
+
+def inventory_reply() -> Response:
+    # GLPI 1.19/1.20 multiply PROLOG_FREQ by 3600; fractional hours are supported.
+    hours = format(get_settings().glpi_prolog_interval_seconds / 3600, ".8f").rstrip("0").rstrip(".")
+    reply = f"<?xml version='1.0' encoding='UTF-8'?><REPLY><RESPONSE>SEND</RESPONSE><PROLOG_FREQ>{hours}</PROLOG_FREQ></REPLY>\n"
+    return Response(reply.encode("ascii"), media_type="application/xml")
 
 
 def require_glpi_basic_auth(
@@ -71,7 +77,7 @@ async def receive_glpi_agent(
     except ValueError as error:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(error)) from error
     if observed.query == "PROLOG":
-        return Response(REPLY, media_type="application/xml")
+        return inventory_reply()
 
     metadata = InventorySourceMetadata(
         source="GLPI_AGENT", source_version=observed.source_version,
@@ -101,4 +107,4 @@ async def receive_glpi_agent(
         raise HTTPException(status.HTTP_409_CONFLICT, str(error)) from error
     except ValueError as error:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(error)) from error
-    return Response(REPLY, media_type="application/xml")
+    return inventory_reply()

@@ -6,6 +6,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'assetguard-agent-runtime.ps1')
 $serviceName = 'glpi-agent'
 $legacyConfigPath = Join-Path $AgentRoot 'etc\conf.d\99-assetguard.cfg'
 $registryPath = 'HKLM:\SOFTWARE\GLPI-Agent'
@@ -26,6 +27,14 @@ function Open-AgentRegistryKey {
 }
 
 if (-not (Test-Administrator)) { throw 'Run this uninstaller from an elevated PowerShell window.' }
+if ($PSCmdlet.ShouldProcess('AssetGuard inventory delivery', 'Stop and remove the AssetGuard delivery task')) {
+    $task = Get-ScheduledTask -TaskName 'AssetGuard inventory delivery' -ErrorAction SilentlyContinue
+    if ($task) {
+        Stop-ScheduledTask -TaskName $task.TaskName
+        Unregister-ScheduledTask -TaskName $task.TaskName -Confirm:$false
+    }
+    # Keep the protected queue and diagnostics; uninstall must not delete unsent evidence.
+}
 if (Test-Path -LiteralPath $legacyConfigPath) {
     $firstLine = Get-Content -LiteralPath $legacyConfigPath -TotalCount 1 -ErrorAction Stop
     if ($firstLine -notmatch '^# Managed by AssetGuard\.') {
@@ -37,7 +46,7 @@ if ($PSCmdlet.ShouldProcess($serviceName, 'Stop and disable GLPI Agent service')
     Stop-Service -Name $serviceName -Force -ErrorAction SilentlyContinue
     Set-Service -Name $serviceName -StartupType Disabled -ErrorAction SilentlyContinue
 }
-if (Test-Path -LiteralPath $registryAclBackupPath -and $PSCmdlet.ShouldProcess($registryPath, 'Remove AssetGuard registry configuration and its stored credential')) {
+if ((Test-Path -LiteralPath $registryAclBackupPath) -and $PSCmdlet.ShouldProcess($registryPath, 'Remove AssetGuard registry configuration and its stored credential')) {
     $configuredKey = Open-AgentRegistryKey
     try {
         foreach ($name in $managedRegistryValues) { $configuredKey.DeleteValue($name, $false) }
@@ -49,14 +58,14 @@ if (Test-Path -LiteralPath $registryAclBackupPath -and $PSCmdlet.ShouldProcess($
     finally { $configuredKey.Dispose() }
     Remove-Item -LiteralPath $registryAclBackupPath -Force
 }
-if (Test-Path -LiteralPath $legacyConfigPath -and $PSCmdlet.ShouldProcess($legacyConfigPath, 'Remove legacy AssetGuard configuration')) {
+if ((Test-Path -LiteralPath $legacyConfigPath) -and $PSCmdlet.ShouldProcess($legacyConfigPath, 'Remove legacy AssetGuard configuration')) {
     Remove-Item -LiteralPath $legacyConfigPath -Force
 }
 if ($RemoveUpstreamAgent) {
     $winget = Get-Command winget.exe -ErrorAction SilentlyContinue
     if (-not $winget) { throw 'WinGet is unavailable; remove the upstream GLPI Agent from Windows Apps instead.' }
     if ($PSCmdlet.ShouldProcess('GLPI Agent', 'Uninstall official upstream package')) {
-        $process = Start-Process -FilePath $winget.Source -ArgumentList @('uninstall', '--id', 'GLPI-Project.GLPI-Agent', '--exact', '--silent') -Wait -PassThru
+        $process = Start-Process -FilePath $winget.Source -ArgumentList @('uninstall', '--id', 'GLPI-Project.GLPI-Agent', '--exact', '--silent') -WindowStyle Hidden -Wait -PassThru
         if ($process.ExitCode -ne 0) { throw "WinGet GLPI Agent uninstall failed with exit code $($process.ExitCode)." }
     }
 }

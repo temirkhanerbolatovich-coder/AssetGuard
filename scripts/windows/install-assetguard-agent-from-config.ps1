@@ -15,6 +15,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'assetguard-agent-runtime.ps1')
 $diagnosticDirectory = Join-Path $env:ProgramData 'AssetGuard'
 $diagnosticPath = Join-Path $diagnosticDirectory 'last-agent-install-error.txt'
 

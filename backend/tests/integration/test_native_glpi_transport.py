@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+from xml.etree import ElementTree
 
 import httpx
 import pytest
@@ -47,6 +48,8 @@ async def _exercise_native_transport(agent_version: str) -> None:
         prolog = await client.post("/glpi-agent", headers=native, content=PROLOG)
         assert prolog.status_code == 200
         assert b"<RESPONSE>SEND</RESPONSE>" in prolog.content
+        hours = float(ElementTree.fromstring(prolog.content).findtext("PROLOG_FREQ"))
+        assert hours * 3600 == pytest.approx(get_settings().glpi_prolog_interval_seconds)
 
         inventory = INVENTORY.replace(b"1.19", agent_version.encode("ascii"))
         first = await client.post("/glpi-agent", headers=native, content=inventory)

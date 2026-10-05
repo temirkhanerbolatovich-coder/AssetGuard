@@ -1,11 +1,12 @@
 <#
 .SYNOPSIS
-Installs or configures the upstream GLPI Agent as the AssetGuard Windows service.
+Installs GLPI collection and the AssetGuard durable Windows delivery task.
 
 .DESCRIPTION
 The script installs the official GLPI Agent from WinGet when necessary, writes an
 AssetGuard-owned profile to the Windows configuration backend used by the upstream
-service, and starts the upstream glpi-agent service. The inventory password is
+service. A protected SYSTEM task collects locally and uploads its durable queue;
+the upstream daemon is disabled to prevent concurrent uploaders. The password is
 stored only in that local configuration, protected with an ACL for SYSTEM and
 local Administrators. It is never written to a command line, Scheduled Task, log,
 or this repository.
@@ -26,7 +27,11 @@ param(
     [string]$AgentUsername = 'assetguard',
 
     [ValidatePattern('^\d+\.\d+\.\d+$')]
-    [string]$InstallerVersion = '0.1.7',
+    [string]$InstallerVersion = '0.1.8',
+
+    [ValidateRange(1, 1440)][int]$CollectionIntervalMinutes = 5,
+    [ValidateRange(0, 3600)][int]$CollectionJitterSeconds = 60,
+    [ValidateRange(16, 1024)][int]$MaxQueueMegabytes = 256,
 
     [string]$AgentRoot = "$env:ProgramFiles\GLPI-Agent",
     [switch]$AllowTemporaryTunnel,
@@ -35,6 +40,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'assetguard-agent-runtime.ps1')
 $serviceName = 'glpi-agent'
 $registryPath = 'HKLM:\SOFTWARE\GLPI-Agent'
 $registrySubKey = 'SOFTWARE\GLPI-Agent'
@@ -44,6 +50,67 @@ $legacyConfigPath = Join-Path $AgentRoot 'etc\conf.d\99-assetguard.cfg'
 $managedRegistryValues = @('server', 'user', 'password', 'tag', 'no-category', 'no-compression', 'no-httpd', 'delaytime')
 $pinnedAgentVersion = '1.20'
 $supportedAgentVersions = @('1.19', '1.20')
+$deliveryTaskName = 'AssetGuard inventory delivery'
+$agentStateRoot = Join-Path $env:ProgramData 'AssetGuard\Agent'
+
+function Install-AgentDeliverySchedule {
+    $existingTask = Get-ScheduledTask -TaskName $deliveryTaskName -ErrorAction SilentlyContinue
+    if ($existingTask) {
+        Disable-ScheduledTask -TaskName $deliveryTaskName | Out-Null
+        Stop-ScheduledTask -TaskName $deliveryTaskName
+        $stopDeadline = (Get-Date).AddSeconds(30)
+        while ((Get-ScheduledTask -TaskName $deliveryTaskName).State -eq 'Running') {
+            if ((Get-Date) -ge $stopDeadline) { throw 'Existing Agent task did not stop; runtime files were not replaced.' }
+            Start-Sleep -Seconds 1
+        }
+    }
+    $runtimeDirectory = Join-Path $agentStateRoot 'runtime'
+    $assetGuardDirectory = Split-Path -Parent $agentStateRoot
+    foreach ($path in @($assetGuardDirectory, $agentStateRoot, $runtimeDirectory)) {
+        if ((Test-Path -LiteralPath $path) -and ((Get-Item -LiteralPath $path).Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'Agent runtime cannot use reparse points.' }
+        New-Item -ItemType Directory -Force -Path $path | Out-Null
+    }
+    # Protect scripts as well as data: the scheduled task runs them as SYSTEM.
+    $paths = @((Get-Item -LiteralPath $assetGuardDirectory), (Get-Item -LiteralPath $agentStateRoot)) + @(Get-ChildItem -LiteralPath $agentStateRoot -Recurse -Force)
+    foreach ($entry in $paths) {
+        if ($entry.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Agent runtime cannot use reparse points.' }
+        $acl = Get-Acl -LiteralPath $entry.FullName
+        $acl.SetOwner([Security.Principal.SecurityIdentifier]::new('S-1-5-32-544'))
+        $acl.SetAccessRuleProtection($true, $false)
+        foreach ($rule in @($acl.Access)) { [void]$acl.RemoveAccessRuleSpecific($rule) }
+        foreach ($sidValue in @('S-1-5-18', 'S-1-5-32-544')) {
+            $sid = [Security.Principal.SecurityIdentifier]::new($sidValue)
+            $rule = if ($entry.PSIsContainer) {
+                [Security.AccessControl.FileSystemAccessRule]::new($sid, 'FullControl', 'ContainerInherit, ObjectInherit', 'None', 'Allow')
+            } else { [Security.AccessControl.FileSystemAccessRule]::new($sid, 'FullControl', 'Allow') }
+            $acl.AddAccessRule($rule)
+        }
+        Set-Acl -LiteralPath $entry.FullName -AclObject $acl
+    }
+    foreach ($name in @('run-assetguard-agent.ps1', 'assetguard-agent-runtime.ps1', 'glpi-agent-minimal-profile.cfg')) {
+        Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination (Join-Path $runtimeDirectory $name) -Force
+    }
+    . (Join-Path $runtimeDirectory 'assetguard-agent-runtime.ps1')
+    Write-AgentJson (Join-Path $agentStateRoot 'policy.json') @{
+        agent_root = $AgentRoot; collection_interval_seconds = $CollectionIntervalMinutes * 60
+        collection_jitter_seconds = $CollectionJitterSeconds; max_send_per_cycle = 3
+        max_queue_bytes = $MaxQueueMegabytes * 1MB; max_queue_files = 10000
+    }
+    foreach ($entry in @((Get-Item -LiteralPath (Join-Path $agentStateRoot 'policy.json'))) + @(Get-ChildItem -LiteralPath $runtimeDirectory -File)) {
+        $acl = Get-Acl -LiteralPath $entry.FullName
+        $acl.SetOwner([Security.Principal.SecurityIdentifier]::new('S-1-5-32-544'))
+        Set-Acl -LiteralPath $entry.FullName -AclObject $acl
+    }
+    $powershell = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    $runner = Join-Path $runtimeDirectory 'run-assetguard-agent.ps1'
+    $action = New-ScheduledTaskAction -Execute $powershell -Argument "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$runner`""
+    $boot = New-ScheduledTaskTrigger -AtStartup
+    $repeat = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes 1)
+    $principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
+    $settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Minutes 5) -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+    $settings.Enabled = $false
+    Register-ScheduledTask -TaskName $deliveryTaskName -Action $action -Trigger @($boot, $repeat) -Principal $principal -Settings $settings -Description 'AssetGuard durable hardware inventory: collect offline, randomized delivery and retry.' -Force | Out-Null
+}
 
 function Test-Administrator {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -107,6 +174,7 @@ function Protect-AgentRegistryConfiguration {
     $protectedKey = Open-AgentRegistryKey
     try {
         $acl = $protectedKey.GetAccessControl()
+        $acl.SetOwner([Security.Principal.SecurityIdentifier]::new('S-1-5-32-544'))
         $acl.SetAccessRuleProtection($true, $false)
         foreach ($rule in @($acl.Access)) { [void]$acl.RemoveAccessRuleSpecific($rule) }
         foreach ($sidValue in @('S-1-5-18', 'S-1-5-32-544')) {
@@ -127,6 +195,9 @@ function Protect-AgentRegistryConfiguration {
 
 if (-not (Test-Administrator)) {
     throw 'Run this installer from an elevated PowerShell window (Run as administrator).'
+}
+if ($AgentRoot -cmatch '["\r\n\x80-\uFFFF]' -or $agentStateRoot -cmatch '["\r\n\x80-\uFFFF]') {
+    throw 'GLPI Agent and ProgramData paths must use ASCII and contain no quotes.'
 }
 if ($GatewayUri.Scheme -ne 'https') {
     throw 'GatewayUri must use HTTPS. A Windows service must not send inventory over plain HTTP.'
@@ -159,7 +230,7 @@ try {
                 'install', '--id', 'GLPI-Project.GLPI-Agent', '--exact',
                 '--version', $pinnedAgentVersion, '--source', 'winget', '--silent',
                 '--accept-package-agreements', '--accept-source-agreements', '--disable-interactivity'
-            ) -Wait -PassThru
+            ) -WindowStyle Hidden -Wait -PassThru
             if ($install.ExitCode -ne 0) { throw "WinGet GLPI Agent installation failed with exit code $($install.ExitCode)." }
         }
         if (-not (Test-Path -LiteralPath $launcher)) {
@@ -172,7 +243,6 @@ try {
         throw "GLPI Agent $installedAgentVersion is not supported by this AssetGuard installer. Supported versions: $($supportedAgentVersions -join ', ')."
     }
 
-    $upstreamLogPath = Join-Path $AgentRoot 'logs\glpi-agent.log'
     $excludedCategories = 'accesslog,antivirus,battery,database,environment,firewall,input,licenseinfo,local_group,local_user,lvm,modem,port,printer,process,provider,psu,registry,remote_mgmt,rudder,slot,software,sound,usb,user,virtualmachine'
     $configValues = @{
         'server' = $GatewayUri.AbsoluteUri
@@ -201,21 +271,15 @@ try {
     }
 
     $service = Get-Service -Name $serviceName -ErrorAction Stop
-    if ($PSCmdlet.ShouldProcess($serviceName, 'Enable automatic start and restart recovery')) {
-        Set-Service -Name $serviceName -StartupType Automatic
-        & sc.exe failure $serviceName 'reset=' '86400' 'actions=' 'restart/60000/restart/60000/restart/60000' | Out-Null
-        if ($LASTEXITCODE -ne 0) { throw "Could not configure failure recovery for '$serviceName'." }
-    }
-
-    if ($RunInventoryNow -and $PSCmdlet.ShouldProcess($serviceName, 'Request one immediate inventory from upstream GLPI Agent')) {
-        # Do not let the service and the foreground process post two initial scans at once.
+    if ($PSCmdlet.ShouldProcess($deliveryTaskName, 'Install durable collection and delivery task')) {
+        Install-AgentDeliverySchedule
+        # There must be only one uploader; the collector still uses upstream GLPI.
         if ((Get-Service -Name $serviceName).Status -eq 'Running') { Stop-Service -Name $serviceName -Force }
-        & $launcher '--force' '--logger=stderr'
-        if ($LASTEXITCODE -ne 0) { throw "Immediate GLPI inventory failed with exit code $LASTEXITCODE. Review $upstreamLogPath." }
+        Set-Service -Name $serviceName -StartupType Disabled
+        Enable-ScheduledTask -TaskName $deliveryTaskName | Out-Null
     }
-    if ($PSCmdlet.ShouldProcess($serviceName, 'Start configured upstream GLPI Agent service')) {
-        $currentService = Get-Service -Name $serviceName
-        if ($currentService.Status -eq 'Running') { Restart-Service -Name $serviceName -Force } else { Start-Service -Name $serviceName }
+    if ($RunInventoryNow -and $PSCmdlet.ShouldProcess($deliveryTaskName, 'Start first durable inventory tick')) {
+        Start-ScheduledTask -TaskName $deliveryTaskName
     }
 
     Write-AgentLifecycleEvent 'SUCCEEDED' $installedAgentVersion 'Agent installed or reconfigured successfully.'
@@ -223,7 +287,11 @@ try {
     [pscustomobject]@{
         Service = $serviceName
         AgentVersion = $installedAgentVersion
-        StartupType = 'Automatic'
+        StartupType = 'SYSTEM scheduled task at boot and every minute'
+        DeliveryTask = $deliveryTaskName
+        CollectionIntervalSeconds = $CollectionIntervalMinutes * 60
+        CollectionJitterSeconds = $CollectionJitterSeconds
+        QueueDirectory = Join-Path $agentStateRoot 'pending'
         GatewayUri = $GatewayUri.AbsoluteUri
         AgentUsername = $AgentUsername
         ConfigPath = $registryPath

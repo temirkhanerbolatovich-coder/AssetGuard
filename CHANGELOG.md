@@ -2,6 +2,13 @@
 
 Здесь фиксируются пользовательские, security и эксплуатационные изменения AssetGuard. Незначительные внутренние рефакторинги перечисляются в Git history, но не дублируются в этом файле.
 
+## 2026-10-05 — Agent 0.1.8: частый сбор и offline доставка
+
+- Локальный hardware collector работает независимо от сети; защищённая FIFO очередь сохраняет отчёты до XML ACK. Jitter, bounded batch и retry/429 ограничивают нагрузку; revoke и corruption не удаляют прежние данные.
+- SYSTEM task при загрузке и каждую минуту назначает сбор через 300 s + 0–60 s; native daemon отключается. PROLOG старых Agent исправлен с 24 h на настраиваемые 360 s при следующем контакте.
+- Installer имеет обновление с сохранением ключа и очереди; пароль не попадает в Task/JSONL/EXE. Кандидат неподписан, полный fleet/rollback остаются открыты.
+- Локально 122 backend + 16 browser E2E прошли. [Контракт](docs/features/agent-continuous-inventory.md), [ADR-008](docs/decisions/ADR-008-agent-durable-delivery.md), [протокол приёмки](outputs/assetguard-agent-reliability-2026-10-05.md).
+
 ## 2026-10-05 — техническая приёмка UI/UX, этап 5
 
 - Аппаратные сводки assets/endpoints читаются пакетно вместо запросов на каждый ПК; список endpoints также использует общий JOIN и однократную проверку room grants. Сохранены partial inventory, окно 50 snapshots на ПК, RAM MiB/bytes, счётчики и tenant/location scope. Шесть новых regression cases защищают поведение и постоянное число SQL reads. Application `0f67995` принят на production: 109 backend + 16 browser E2E, CI и pre/post R2 restore. На сервере SQL 65/105 → 4/4, ответы совпали; [замеры и ограничения](outputs/assetguard-registry-performance-2026-10-05.md). Без новых dependencies и migrations.

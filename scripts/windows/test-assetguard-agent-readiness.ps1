@@ -12,11 +12,12 @@ param(
     [ValidateSet('INITIAL', 'AFTER_REBOOT', 'OFFLINE', 'NETWORK_RESTORED', 'SERVICE_RECOVERED', 'HARDWARE_CHANGED', 'REENROLLED')]
     [string]$Phase = 'INITIAL',
     [string]$ExpectedAgentVersion = '1.20',
-    [string]$ExpectedInstallerVersion = '0.1.7',
+    [string]$ExpectedInstallerVersion = '0.1.8',
     [string]$OutputPath = ''
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'assetguard-agent-runtime.ps1')
 $serviceName = 'glpi-agent'
 $agentRoot = Join-Path $env:ProgramFiles 'GLPI-Agent'
 $launcher = Join-Path $agentRoot 'glpi-agent.bat'
@@ -56,10 +57,36 @@ $installerTag = if ($config) { [string]$config.tag } else { '' }
 $installerVersion = if ($installerTag -match '^assetguard-installer-(?<version>\d+\.\d+\.\d+)$') { $Matches.version } else { $null }
 $gateway = if ($config -and $config.server) { [uri][string]$config.server } else { $null }
 $checks = [System.Collections.Generic.List[object]]::new()
+$deliveryTask = Get-ScheduledTask -TaskName 'AssetGuard inventory delivery' -ErrorAction SilentlyContinue
+$runtimeRoot = Join-Path $env:ProgramData 'AssetGuard\Agent'
 
 Add-Check $checks 'service_exists' ($null -ne $service) $(if ($service) { $service.Name } else { 'missing' })
-Add-Check $checks 'service_running' ($service.State -eq 'Running') $(if ($service) { $service.State } else { 'missing' })
-Add-Check $checks 'service_automatic' ($service.StartMode -eq 'Auto') $(if ($service) { $service.StartMode } else { 'missing' })
+if ($deliveryTask -or $ExpectedInstallerVersion -eq '0.1.8') {
+    Add-Check $checks 'delivery_task_enabled' ($deliveryTask -and $deliveryTask.State -ne 'Disabled') $(if ($deliveryTask) { [string]$deliveryTask.State } else { 'missing' })
+    Add-Check $checks 'delivery_task_system' ($deliveryTask -and $deliveryTask.Principal.UserId -in @('SYSTEM', 'S-1-5-18')) $(if ($deliveryTask) { [string]$deliveryTask.Principal.UserId } else { 'missing' })
+    Add-Check $checks 'upstream_daemon_disabled' ($service.StartMode -eq 'Disabled' -and $service.State -eq 'Stopped') $(if ($service) { "$($service.State)/$($service.StartMode)" } else { 'missing' })
+    $policyPath = Join-Path $runtimeRoot 'policy.json'
+    $policy = if (Test-Path -LiteralPath $policyPath) { Get-Content -LiteralPath $policyPath -Raw | ConvertFrom-Json } else { $null }
+    Add-Check $checks 'collection_policy' ($policy -and $policy.collection_interval_seconds -ge 60 -and $policy.collection_interval_seconds -le 86400) $(if ($policy) { "$($policy.collection_interval_seconds) seconds + jitter $($policy.collection_jitter_seconds)" } else { 'missing' })
+    $runtimeLog = Join-Path $runtimeRoot 'runtime.jsonl'
+    $events = if (Test-Path -LiteralPath $runtimeLog) { @(Get-Content -LiteralPath $runtimeLog -Tail 5000 | ForEach-Object { $_ | ConvertFrom-Json }) } else { @() }
+    $lastCollected = $events | Where-Object code -eq 'COLLECTED' | Select-Object -Last 1
+    $lastDelivered = $events | Where-Object code -eq 'DELIVERED' | Select-Object -Last 1
+    $freshSeconds = if ($policy) { [math]::Max(900, [int]$policy.collection_interval_seconds + [int]$policy.collection_jitter_seconds + 300) } else { 900 }
+    $freshLimit = [DateTimeOffset]::UtcNow.AddSeconds(-$freshSeconds)
+    Add-Check $checks 'recent_collection' ($lastCollected -and [DateTimeOffset]$lastCollected.occurred_at -ge $freshLimit) $(if ($lastCollected) { [string]$lastCollected.occurred_at } else { 'missing' })
+    if ($Phase -ne 'OFFLINE') {
+        Add-Check $checks 'recent_delivery' ($lastDelivered -and [DateTimeOffset]$lastDelivered.occurred_at -ge $freshLimit) $(if ($lastDelivered) { [string]$lastDelivered.occurred_at } else { 'missing' })
+    }
+    else {
+        $pending = @(Get-ChildItem -LiteralPath (Join-Path $runtimeRoot 'pending') -Filter '*.json' -ErrorAction SilentlyContinue).Count
+        Add-Check $checks 'offline_queue' ($pending -gt 0) ([string]$pending)
+    }
+}
+else {
+    Add-Check $checks 'service_running' ($service.State -eq 'Running') $(if ($service) { $service.State } else { 'missing' })
+    Add-Check $checks 'service_automatic' ($service.StartMode -eq 'Auto') $(if ($service) { $service.StartMode } else { 'missing' })
+}
 Add-Check $checks 'agent_version' ($agentVersion -eq $ExpectedAgentVersion) $(if ($agentVersion) { $agentVersion } else { 'unknown' })
 Add-Check $checks 'installer_version' ($installerVersion -eq $ExpectedInstallerVersion) $(if ($installerVersion) { $installerVersion } else { 'unknown' })
 Add-Check $checks 'https_gateway' ($gateway -and $gateway.Scheme -eq 'https' -and $gateway.AbsolutePath.TrimEnd('/') -eq '/glpi-agent') $(if ($gateway) { $gateway.GetLeftPart([System.UriPartial]::Authority) + $gateway.AbsolutePath } else { 'missing' })

@@ -4,7 +4,7 @@
 ; AssetGuard-owned privacy-limited profile. It does not package or modify GLPI Agent.
 
 #define AppName "AssetGuard Agent"
-#define AppVersion "0.1.7"
+#define AppVersion "0.1.8"
 #define AppPublisher "AssetGuard"
 #define AppGuid "{{7BF917A0-D474-45CA-89E5-2F19C83142B3}"
 
@@ -33,6 +33,10 @@ Source: "..\..\scripts\windows\install-assetguard-agent-from-config.ps1"; DestDi
 Source: "..\..\scripts\windows\request-assetguard-agent-reenrolment.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\..\scripts\windows\uninstall-assetguard-agent-service.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\..\scripts\windows\test-assetguard-agent-readiness.ps1"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\scripts\windows\assetguard-agent-runtime.ps1"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\scripts\windows\run-assetguard-agent.ps1"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\scripts\windows\update-assetguard-agent.ps1"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\scripts\windows\glpi-agent-minimal-profile.cfg"; DestDir: "{app}"; Flags: ignoreversion
 
 [UninstallRun]
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\uninstall-assetguard-agent-service.ps1"""; Flags: runhidden waituntilterminated; RunOnceId: "AssetGuardAgentRemoveConfiguration"
@@ -71,7 +75,8 @@ begin
   Result := (Pos('https://', Lower) = 1) and
             (Copy(Lower, Length(Lower) - 10, 11) = '/glpi-agent') and
             (Pos('?', Value) = 0) and (Pos('#', Value) = 0) and (Pos('@', Value) = 0) and
-            (Pos(' ', Value) = 0);
+            (Pos(' ', Value) = 0) and (Pos('"', Value) = 0) and
+            (Pos(#13, Value) = 0) and (Pos(#10, Value) = 0);
 end;
 
 function JsonEscape(Value: String): String;
@@ -91,6 +96,9 @@ begin
 end;
 
 procedure InitializeWizard;
+var
+  ExistingGateway: String;
+  ExistingTag: String;
 begin
   GatewayPage := CreateInputQueryPage(wpSelectDir,
     'Подключение к AssetGuard',
@@ -98,6 +106,11 @@ begin
     'Адрес должен оканчиваться на /glpi-agent. Не используйте временный trycloudflare.com URL для постоянной установки.');
   GatewayPage.Add('Адрес сервера (HTTPS):', False);
   GatewayPage.Values[0] := 'https://';
+  if ((RegQueryStringValue(HKLM64, 'SOFTWARE\GLPI-Agent', 'tag', ExistingTag) and
+    (Pos('assetguard-installer-', ExistingTag) = 1)) or
+    FileExists(ExpandConstant('{commonappdata}\AssetGuard\glpi-agent-registry-acl.sddl'))) and
+    RegQueryStringValue(HKLM64, 'SOFTWARE\GLPI-Agent', 'server', ExistingGateway) and
+    IsValidGateway(ExistingGateway) then GatewayPage.Values[0] := ExistingGateway;
 
   EnrollmentPage := CreateInputOptionPage(GatewayPage.ID,
     'Сценарий подключения',
@@ -106,7 +119,9 @@ begin
     True, False);
   EnrollmentPage.Add('Новое подключение — у меня есть выданные логин и ключ');
   EnrollmentPage.Add('Восстановление после переустановки Windows');
+  EnrollmentPage.Add('Обновить Agent с сохранением текущего подключения');
   EnrollmentPage.Values[0] := True;
+  if ExpandConstant('{param:UPGRADE|0}') = '1' then EnrollmentPage.Values[2] := True;
 
   CredentialPage := CreateInputQueryPage(EnrollmentPage.ID,
     'Учётные данные устройства',
@@ -119,7 +134,7 @@ begin
   OptionsPage := CreateInputOptionPage(CredentialPage.ID,
     'Первичная инвентаризация',
     'Первая отправка данных',
-    'После установки служба запускается автоматически вместе с Windows. При желании можно сразу отправить первый безопасный аппаратный снимок.',
+    'Agent работает автоматически вместе с Windows, сохраняет снимки без интернета и отправляет очередь после восстановления связи.',
     True, False);
   OptionsPage.Add('Отправить первую инвентаризацию сразу после установки');
   OptionsPage.Values[0] := True;
@@ -127,7 +142,7 @@ end;
 
 function ShouldSkipPage(PageID: Integer): Boolean;
 begin
-  Result := (PageID = CredentialPage.ID) and EnrollmentPage.Values[1];
+  Result := (PageID = CredentialPage.ID) and (EnrollmentPage.Values[1] or EnrollmentPage.Values[2]);
 end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;
@@ -159,6 +174,14 @@ var
   ReEnrolJson: String;
 begin
   if CurStep = ssPostInstall then begin
+    if EnrollmentPage.Values[2] then begin
+      PowerShell := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+      if not Exec(PowerShell,
+        '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + ExpandConstant('{app}\update-assetguard-agent.ps1') + '" -GatewayUri "' + GatewayPage.Values[0] + '"',
+        '', SW_HIDE, ewWaitUntilTerminated, ResultCode) or (ResultCode <> 0) then
+        RaiseException('Не удалось обновить Agent. Проверьте существующее подключение и повторите установку.');
+      Exit;
+    end;
     if OptionsPage.Values[0] then RunNowJson := 'true' else RunNowJson := 'false';
     if EnrollmentPage.Values[1] then ReEnrolJson := 'true' else ReEnrolJson := 'false';
     OneTimeConfigPath := ExpandConstant('{app}\assetguard-install-once.json');

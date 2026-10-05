@@ -27,6 +27,7 @@ class Settings:
     max_inventory_payload_bytes: int
     rate_limit_per_minute: int
     endpoint_stale_after_hours: int
+    glpi_prolog_interval_seconds: int
     vision_model_id: str
     vision_confidence_threshold: float
     vision_classes: tuple[str, ...]
@@ -49,6 +50,9 @@ def get_settings() -> Settings:
         raise RuntimeError("ASSETGUARD_INVENTORY_SHARED_SECRET must be configured.")
     if not admin_shared_secret:
         raise RuntimeError("ASSETGUARD_ADMIN_SHARED_SECRET must be configured.")
+    glpi_interval = int(os.environ.get("ASSETGUARD_GLPI_PROLOG_INTERVAL_SECONDS", "360"))
+    if not 60 <= glpi_interval <= 86400:
+        raise RuntimeError("ASSETGUARD_GLPI_PROLOG_INTERVAL_SECONDS must be between 60 and 86400.")
 
     tesseract_temp_dir = os.environ.get("ASSETGUARD_OCR_TEMP_DIR") or None
     if tesseract_temp_dir:
@@ -76,6 +80,7 @@ def get_settings() -> Settings:
         ),
         rate_limit_per_minute=int(os.environ.get("ASSETGUARD_RATE_LIMIT_PER_MINUTE", "120")),
         endpoint_stale_after_hours=int(os.environ.get("ASSETGUARD_ENDPOINT_STALE_AFTER_HOURS", "24")),
+        glpi_prolog_interval_seconds=glpi_interval,
         vision_model_id=os.environ.get("ASSETGUARD_VISION_MODEL_ID", "IDEA-Research/grounding-dino-tiny"),
         vision_confidence_threshold=float(os.environ.get("ASSETGUARD_VISION_CONFIDENCE_THRESHOLD", "0.35")),
         vision_classes=tuple(item.strip().lower() for item in os.environ.get(
