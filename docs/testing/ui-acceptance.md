@@ -1,5 +1,38 @@
 # Приёмка интерфейса AssetGuard
 
+## Полный редизайн Ledger, 2026-10-05
+
+Общая система заменена во всём приложении: [изменения и референсы](../features/ui-ledger-redesign.md),
+[дизайн-система](../product/ui-design-system.md), [протокол со снимками](../../outputs/assetguard-redesign-2026-10-05/report.md).
+Существующие 16 browser E2E дополнены пятью проверками в `test_redesign.py`;
+полный набор — 122 backend + 21 browser E2E. Проверяются реальные операции
+в isolated PostgreSQL, отказ/повтор сохранения и чтения, источники и возврат,
+карточка компьютера до связи, фактически отрисованный Golos Text, завершённый
+onboarding, comparison с нулём/отсутствующими сведениями, responsive и motion.
+
+Новые размеры: 360, 390, 768, 1024, 1280, 1440, 1920 px; 1280 дополнительно
+защищает порядок desktop navigation от старых media rules. Старые проверки
+малой высоты и 320 px сохранены. **Настоящий zoom 200%** проверен через
+`chrome.tabs.setZoom` во временном тестовом Chromium profile: zoom 2,
+viewport 1440 → `innerWidth=720`, DPR 2. CSS zoom/pinch не подменяют проверку.
+Расширение никогда не устанавливается в приложение или профиль пользователя.
+
+Для обновления лабораторных артефактов перед запуском из `backend`:
+
+```powershell
+$env:ASSETGUARD_RUN_BROWSER_E2E='1'
+$env:ASSETGUARD_REDESIGN_PREVIEW_DIR='C:\AssetGuardChecks\redesign\screens'
+$env:ASSETGUARD_UI_PERFORMANCE_DIR='C:\AssetGuardChecks\redesign\performance'
+$env:ASSETGUARD_UI_MEASUREMENT_REPORT='C:\AssetGuardChecks\redesign\contrast.json'
+.\.venv\Scripts\python.exe -m pytest tests -q
+```
+
+Снимки используют только disposable test data. Production проверяется чтением;
+секреты и фотографии/имена реальных сотрудников в отчёт не сохраняются.
+Zoom 400%, NVDA/Safari/Firefox и usability с сотрудниками не заявляются
+выполненными. Ниже сохранена методика этапа 5; его прежнее ограничение 200%
+закрыто новым тестом, остальные ручные пункты остаются самостоятельными.
+
 Техническая проверка этапа 5 дополняет [ТЗ UI/UX](../product/ui-ux-modernization-spec.md). Она защищает критичные сценарии и измеряет известные ограничения; полный аудит WCAG и удобство работы сотрудника требуют отдельной ручной проверки.
 
 ## Автоматическая проверка

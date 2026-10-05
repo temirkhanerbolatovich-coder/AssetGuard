@@ -1,0 +1,134 @@
+{
+  "lcp": 80,
+  "cls": 0,
+  "events": [
+    {
+      "name": "pointerdown",
+      "duration": 16,
+      "interactionId": 9990
+    },
+    {
+      "name": "pointerup",
+      "duration": 16,
+      "interactionId": 9990
+    },
+    {
+      "name": "click",
+      "duration": 16,
+      "interactionId": 9990
+    },
+    {
+      "name": "pointerdown",
+      "duration": 16,
+      "interactionId": 9997
+    },
+    {
+      "name": "pointerup",
+      "duration": 16,
+      "interactionId": 9997
+    },
+    {
+      "name": "click",
+      "duration": 16,
+      "interactionId": 9997
+    },
+    {
+      "name": "pointerdown",
+      "duration": 16,
+      "interactionId": 10004
+    },
+    {
+      "name": "pointerup",
+      "duration": 16,
+      "interactionId": 10004
+    },
+    {
+      "name": "click",
+      "duration": 16,
+      "interactionId": 10004
+    },
+    {
+      "name": "pointerdown",
+      "duration": 16,
+      "interactionId": 10011
+    },
+    {
+      "name": "pointerup",
+      "duration": 16,
+      "interactionId": 10011
+    },
+    {
+      "name": "click",
+      "duration": 16,
+      "interactionId": 10011
+    },
+    {
+      "name": "pointerdown",
+      "duration": 16,
+      "interactionId": 10018
+    },
+    {
+      "name": "pointerup",
+      "duration": 16,
+      "interactionId": 10018
+    },
+    {
+      "name": "click",
+      "duration": 16,
+      "interactionId": 10018
+    },
+    {
+      "name": "keydown",
+      "duration": 16,
+      "interactionId": 10032
+    },
+    {
+      "name": "keypress",
+      "duration": 16,
+      "interactionId": 10032
+    },
+    {
+      "name": "click",
+      "duration": 16,
+      "interactionId": 10032
+    },
+    {
+      "name": "keyup",
+      "duration": 16,
+      "interactionId": 10032
+    },
+    {
+      "name": "keydown",
+      "duration": 16,
+      "interactionId": 10039
+    },
+    {
+      "name": "pointerdown",
+      "duration": 16,
+      "interactionId": 10046
+    },
+    {
+      "name": "pointerup",
+      "duration": 16,
+      "interactionId": 10046
+    },
+    {
+      "name": "click",
+      "duration": 16,
+      "interactionId": 10046
+    }
+  ],
+  "longTasks": [],
+  "assets": 1000,
+  "cold_workspace_ms": 256.39999997615814,
+  "warm_workspace_ms": 237.70000004768372,
+  "rendered_rows": 20,
+  "browser": "153.0.8010.12",
+  "viewport": {
+    "width": 1366,
+    "height": 900
+  },
+  "network": "localhost, no throttling",
+  "cpu_throttling": false,
+  "lcp_scope": "document/login; not authenticated workspace"
+}

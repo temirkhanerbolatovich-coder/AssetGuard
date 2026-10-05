@@ -25,6 +25,15 @@ from assetguard.modules.snapshots.models import ManagedEndpointRecord
 FIXTURES = Path(__file__).parents[1] / "fixtures"
 
 
+def capture_redesign_preview(page, name):
+    output = os.environ.get("ASSETGUARD_REDESIGN_PREVIEW_DIR")
+    if output:
+        directory = Path(output)
+        directory.mkdir(parents=True, exist_ok=True)
+        page.evaluate("Promise.all(document.getAnimations().filter(animation=>animation.effect.getComputedTiming().iterations!==Infinity).map(animation=>animation.finished.catch(()=>{})))")
+        page.screenshot(path=str(directory / name))
+
+
 pytestmark = pytest.mark.skipif(
     os.environ.get("ASSETGUARD_RUN_BROWSER_E2E") != "1",
     reason="Set ASSETGUARD_RUN_BROWSER_E2E=1 to run browser tests.",
@@ -230,8 +239,8 @@ def test_admin_can_open_dashboard_and_create_asset(live_server):
         page.locator("#token").fill(admin_secret)
         page.get_by_role("button", name="Войти").click()
         page.locator("#status").filter(has_text="Данные актуальны").wait_for()
-        assert page.get_by_role("heading", name="Центр контроля", exact=True).is_visible()
-        assert page.get_by_role("heading", name="Последний инцидент").is_visible()
+        assert page.get_by_role("heading", name="Обзор", exact=True).is_visible()
+        assert page.get_by_role("heading", name="Что требует внимания").is_visible()
         assert page.locator("#setup-guide").is_visible()
 
         for viewport in ({"width": 1920, "height": 1080}, {"width": 1366, "height": 768}, {"width": 768, "height": 900}):
@@ -242,12 +251,12 @@ def test_admin_can_open_dashboard_and_create_asset(live_server):
         # Desktop uses a persistent application sidebar and one visible route.
         page.set_viewport_size({"width": 1280, "height": 900})
         sidebar_width = page.locator(".app-header").evaluate("element => element.getBoundingClientRect().width")
-        assert 250 <= sidebar_width <= 280
+        assert 240 <= sidebar_width <= 280
         assert page.locator("#overview").is_visible()
         assert page.locator("#devices").is_hidden()
         page.locator("#main-nav a[href='#incidents']").click()
         page.locator("#incidents").wait_for(state="visible")
-        assert page.locator("#incidents").get_by_role("heading", name="Инциденты", exact=True).is_visible()
+        assert page.locator(".page-intro").get_by_role("heading", name="Инциденты", exact=True).is_visible()
         page.go_back()
         page.locator("#overview").wait_for(state="visible")
 
@@ -326,7 +335,7 @@ def test_admin_can_open_dashboard_and_create_asset(live_server):
         page.locator("#data-exchange").wait_for(state="visible")
         assert page.url.endswith("#data-exchange")
         assert page.locator("#devices").is_hidden()
-        assert page.locator("#data-exchange").get_by_role("heading", name="Импорт и экспорт", exact=True).is_visible()
+        assert page.locator(".page-intro").get_by_role("heading", name="Импорт и экспорт", exact=True).is_visible()
 
         import_workbook = Workbook()
         import_sheet = import_workbook.active
@@ -355,7 +364,7 @@ def test_admin_can_open_dashboard_and_create_asset(live_server):
         assert page.locator("#import-preview-rows").inner_text() == "29"
         page.locator("#cancel-import-preview").click()
         page.locator("#data-exchange-status").filter(has_text="Изменения не отправлены").wait_for()
-        page.get_by_role("link", name="Вернуться к устройствам").click()
+        page.get_by_role("link", name="Вернуться в реестр").click()
         page.locator("#devices").wait_for(state="visible")
 
         page.locator("#nav-toggle").click()
@@ -385,7 +394,7 @@ def test_admin_can_open_dashboard_and_create_asset(live_server):
         page.locator("#devices").wait_for(state="visible")
         row = page.locator("#assets tr", has_text=inventory_number)
         row.wait_for()
-        open_button = row.get_by_role("button", name="Открыть карточку")
+        open_button = row.locator(".device-open-link")
         assert open_button.is_visible()
         open_button.click()
         assert page.url.endswith(f"#asset={row.get_attribute('data-asset-id')}")
@@ -395,7 +404,7 @@ def test_admin_can_open_dashboard_and_create_asset(live_server):
         assert page.get_by_role("tab", name="Оборудование").is_hidden()
         assert page.get_by_role("tab", name="Эталон и изменения").is_hidden()
         assert page.get_by_role("tab", name="Технические данные").is_hidden()
-        assert page.get_by_role("tab", name="Обзор").get_attribute("aria-selected") == "true"
+        assert page.get_by_role("tab", name="Сведения").get_attribute("aria-selected") == "true"
         page.locator("#edit-asset").click()
         page.locator("#asset-edit-dialog").wait_for(state="visible")
         page.locator("#asset-edit-name").fill("Browser E2E workstation updated")
@@ -453,7 +462,7 @@ def test_admin_can_open_dashboard_and_create_asset(live_server):
         page.locator('[data-room-tab="inventory"]').click()
         assert page.locator("#room-tab-content").get_by_text("Проектор кабинета").is_visible()
         page.locator('[data-room-tab="history"]').click()
-        assert page.locator("#room-tab-content").get_by_text("Актив добавлен").is_visible()
+        assert page.locator("#room-tab-content").get_by_text("Имущество добавлено").is_visible()
         page.locator("#room-inspection-action").click()
         page.locator("#room-inspection-dialog").wait_for(state="visible")
         page.locator("#room-inspection-items .inspection-result-input").select_option("DAMAGED")
@@ -546,6 +555,7 @@ def test_incident_detail_supports_direct_link_and_managed_decision(live_server):
         assert page.locator("#incident-detail").is_visible()
         assert page.locator("#incident-detail-comparison").get_by_text("Было").is_visible()
         assert "RAM-FIXTURE-B" in page.locator("#incident-detail-evidence").text_content()
+        capture_redesign_preview(page, "incident-detail-desktop.png")
 
         page.reload()
         page.locator("#incident-detail-title").filter(has_text="Оперативная память").wait_for()
@@ -557,16 +567,18 @@ def test_incident_detail_supports_direct_link_and_managed_decision(live_server):
         dialog.wait_for(state="visible")
         page.locator("#incident-decision-classification").select_option("AUTHORIZED_CHANGE")
         page.locator("#incident-decision-comment").fill("Плановая замена модуля подтверждена")
+        capture_redesign_preview(page, "incident-decision-mobile.png")
         page.locator("#incident-decision-submit").click()
         dialog.wait_for(state="hidden")
         page.locator("#incident-detail-status").get_by_text("Закрыто").wait_for()
         assert page.locator("#incident-detail-decisions").get_by_text("Плановая замена модуля подтверждена").is_visible()
-        page.locator("#incident-device-action").get_by_role("button", name="Открыть карточку устройства").click()
+        page.locator("#incident-device-action").get_by_role("button", name="Карточка имущества").click()
         page.locator("#detail-title").filter(has_text="Incident E2E workstation").wait_for()
-        assert page.locator("#device-general").get_by_text("Версия Agent").is_visible()
-        assert page.locator("#device-general").get_by_text("1.20", exact=True).is_visible()
-        assert page.locator("#device-general").get_by_text("Версия установщика").is_visible()
-        assert page.locator("#device-general").get_by_text("0.1.6", exact=True).is_visible()
+        page.locator("[data-asset-tab=technical]").click()
+        assert page.locator("#device-system").get_by_text("Версия Agent").is_visible()
+        assert page.locator("#device-system").get_by_text("1.20", exact=True).is_visible()
+        assert page.locator("#device-system").get_by_text("Версия установщика").is_visible()
+        assert page.locator("#device-system").get_by_text("0.1.6", exact=True).is_visible()
 
         asset_detail_requests = []
         page.on(
@@ -607,7 +619,7 @@ def test_incident_detail_supports_direct_link_and_managed_decision(live_server):
         assert page.url.endswith(f"#asset={asset_id}&tab=technical")
         assert page.locator("#asset-tab-technical").is_visible()
         technical_tab.press("Home")
-        assert page.get_by_role("tab", name="Обзор").get_attribute("aria-selected") == "true"
+        assert page.get_by_role("tab", name="Сведения").get_attribute("aria-selected") == "true"
         baseline_tab = page.get_by_role("tab", name="Эталон и изменения")
         baseline_tab.click()
         assert page.locator("body").evaluate("element => element.scrollWidth <= element.clientWidth")
@@ -826,7 +838,7 @@ def test_late_asset_response_does_not_replace_new_route(live_server):
         page.wait_for_timeout(100)
         assert page.url.endswith("#overview")
         assert page.locator("#detail").is_hidden()
-        assert page.get_by_role("heading", name="Центр контроля", exact=True).is_visible()
+        assert page.get_by_role("heading", name="Обзор", exact=True).is_visible()
         browser.close()
 
 
@@ -917,7 +929,7 @@ def test_registry_pages_and_unified_physical_incident_workflow(live_server):
         page.locator("#clear-device-filters").click()
         assert page.locator("#device-sort").input_value() == "recent"
         page.locator("#device-search").fill("PRINTER")
-        assert page.locator("#assets").get_by_text("Ручной учёт", exact=True).is_visible()
+        assert page.locator("#assets .status-pill").get_by_text("Ручной учёт", exact=True).is_visible()
 
         page.locator("#main-nav a[href='#incidents']").click()
         assert page.locator("#incident-center-list").get_by_text("Agent · технический", exact=False).count() > 0

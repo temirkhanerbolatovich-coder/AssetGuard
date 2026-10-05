@@ -14,7 +14,7 @@ AssetGuard — система учёта и контролируемой инв�
 Подтверждено кодом, тестами или выполненной эксплуатационной проверкой:
 
 - FastAPI, PostgreSQL 17, SQLAlchemy и Alembic migrations до `0026_telegram_notifications`;
-- browser dashboard, реестр имущества, структура `организация → корпус → этаж → кабинет`;
+- browser dashboard Ledger с едиными компонентами, карточкой компьютера до связи и реестром по источникам; структура `организация → корпус → этаж → кабинет`;
 - native GLPI XML transport и JSON bridge;
 - raw inventory, snapshots, explicit baseline, changes, incidents и append-only history;
 - отдельные Agent credentials, отзыв ключа и подтверждаемое re-enrolment после переустановки Windows;
@@ -36,9 +36,11 @@ Telegram принят на production 2026-10-05: application commit `0b90607`, 
 
 Agent 0.1.8 принят на одном реальном PC, application `fa22015` развёрнут: offline очередь, частые локальные сборы и ограниченная доставка с jitter; реальные автоматические интервалы 304–366 s. **122 backend + 16 browser E2E**, CI и production API/projection прошли. Финальный EXE содержит исправление локализованного SYSTEM; его повторная установка отменена в UAC. Fleet на 3–5 PC, signing и публикация нового stable installer ещё открыты. [Протокол и ограничения](outputs/assetguard-agent-reliability-2026-10-05.md).
 
+Полный редизайн **Ledger** внедрён во всех рабочих экранах: единые Golos Text и компоненты, представления реестра, карточка компьютера до связи, сравнение изменений по полям, компактный обзор и формы с обратной связью. **122 backend + 21 browser E2E** прошли, настоящий browser zoom 200% проверен. [Реализация и шесть референсов](docs/features/ui-ledger-redesign.md), [приёмка со снимками](outputs/assetguard-redesign-2026-10-05/report.md). NVDA, Safari/Firefox, zoom 400%, representative performance и usability сотрудников остаются открыты.
+
 Порядок работы по интерфейсу изложен в [ТЗ UI/UX](docs/product/ui-ux-modernization-spec.md). **Этапы 1–4 и автоматическая часть этапа 5 приняты на production**. Application commit `0f67995`: измеренный контраст/keyboard focus, именованные dialogs, reflow, общий registry JOIN и пакетное чтение аппаратных сводок. **109 backend + 16 browser E2E**, [GitHub CI](https://github.com/temirkhanerbolatovich-coder/AssetGuard/actions/runs/37256897869), read-only production UI/API и encrypted R2 restore прошли. На текущих данных assets/endpoints выполняют по 4 SELECT вместо 65/105 с неизменным ответом. [Оптимизация и замеры](outputs/assetguard-registry-performance-2026-10-05.md), [UI этап 5](outputs/assetguard-ui-stage5-2026-10-05.md), [методика и ручная приёмка](docs/testing/ui-acceptance.md).
 
-Предыдущие этапы: [4 — Agent и администрирование](outputs/assetguard-ui-stage4-2026-10-05.md), [3 — кабинеты, обход и импорт](outputs/assetguard-ui-stage3-2026-10-05.md), [2 — реестр и инциденты](outputs/assetguard-ui-stage2-2026-10-05.md), [1 — вход и каркас](outputs/assetguard-ui-stage1-2026-10-05.md). Полная приёмка этапа 5 остаётся открытой: browser zoom, screen reader, representative performance и usability с сотрудниками ещё не проведены. Fleet, оставшиеся stale PC и публикация/подпись installer 0.1.8 остаются отдельными задачами.
+Предыдущие этапы: [4 — Agent и администрирование](outputs/assetguard-ui-stage4-2026-10-05.md), [3 — кабинеты, обход и импорт](outputs/assetguard-ui-stage3-2026-10-05.md), [2 — реестр и инциденты](outputs/assetguard-ui-stage2-2026-10-05.md), [1 — вход и каркас](outputs/assetguard-ui-stage1-2026-10-05.md). Полная приёмка этапа 5 остаётся открытой: zoom 400%, screen reader, representative performance и usability с сотрудниками ещё не проведены; zoom 200% закрыт Ledger. Fleet, оставшиеся stale PC и публикация/подпись installer 0.1.8 остаются отдельными задачами.
 
 Новые технические и физические инциденты помещаются в транзакционную Telegram-очередь; отдельный worker отправляет их в явно назначенный чат организации с retry и проверкой acceptance. Проблемы Agent и сервера отслеживает существующий monitor. [Настройка и гарантии доставки](docs/features/telegram-notifications.md), [план UI/UX](docs/product/ui-ux-modernization-spec.md).
 
