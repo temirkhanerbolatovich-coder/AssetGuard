@@ -71,7 +71,7 @@ AssetGuard является работающим pilot MVP: школьный р�
 
 Проверка стабилизации 2026-10-04 локально и в GitHub CI: **80 unit/integration и 2 browser E2E**. Disposable PostgreSQL 17 применяет все 25 migrations до `0025`, очищается перед каждым тестом; rate limiter также сбрасывается. Реальная Grounding DINO прошла offline smoke и manual GitHub model download/inference: **23 detections**. Это runtime smoke, а не quality benchmark. [Push CI](https://github.com/temirkhanerbolatovich-coder/AssetGuard/actions/runs/37223402190) и [manual CI](https://github.com/temirkhanerbolatovich-coder/AssetGuard/actions/runs/37223446315) на `93ff8ed` завершились success; transient secret-scan API rate-limit устранён успешным повтором без bypass.
 
-Production read-only counts: **216 assets, 11 endpoints, 51 raw inventories, 51 snapshots, 17 credentials, 0 re-enrolment requests**. Operations: 1 online, 10 stale, 0 offline/conflicts/failed ingests. Отсутствие свежей телеметрии 10 ПК остаётся предметом fleet acceptance; для прохождения приёмки эти данные не исправлялись вручную.
+Production read-only snapshot при приёмке Agent 2026-10-05 09:57 Asia/Qyzylorda: **216 assets, 11 endpoints, 65 raw inventories, 65 snapshots, 17 credentials, 0 re-enrolment requests**. Operations: **5 online, 6 stale**, 0 offline/conflicts/failed ingests. Оставшиеся stale ПК требуют проверки на местах; counters не исправлялись вручную. Числа inventory продолжают расти при автоматическом сборе.
 
 Закрыто в стабилизации и выкладке:
 
