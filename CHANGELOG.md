@@ -4,7 +4,7 @@
 
 ## 2026-10-05 — техническая приёмка UI/UX, этап 5
 
-- Аппаратные сводки assets/endpoints читаются пакетно вместо запросов на каждый ПК; список endpoints также использует общий JOIN и однократную проверку room grants. Сохранены partial inventory, окно 50 snapshots на ПК, RAM MiB/bytes, счётчики и tenant/location scope. Шесть новых regression cases защищают поведение и постоянное число SQL reads. Без новых dependencies и migrations.
+- Аппаратные сводки assets/endpoints читаются пакетно вместо запросов на каждый ПК; список endpoints также использует общий JOIN и однократную проверку room grants. Сохранены partial inventory, окно 50 snapshots на ПК, RAM MiB/bytes, счётчики и tenant/location scope. Шесть новых regression cases защищают поведение и постоянное число SQL reads. Application `0f67995` принят на production: 109 backend + 16 browser E2E, CI и pre/post R2 restore. На сервере SQL 65/105 → 4/4, ответы совпали; [замеры и ограничения](outputs/assetguard-registry-performance-2026-10-05.md). Без новых dependencies и migrations.
 
 - После live-профилирования устранены отдельные SQL endpoint lookups для каждой позиции реестра: LEFT JOIN сохраняет ответ и права, query-budget regression защищает от возврата N+1.
 

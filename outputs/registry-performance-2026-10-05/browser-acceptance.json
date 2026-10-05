@@ -1,0 +1,41 @@
+{
+  "cold_workspace_ms": 1895.8999999761581,
+  "overview": {
+    "text_samples": 38,
+    "fields": 0,
+    "contrast_failures": 0
+  },
+  "devices": {
+    "text_samples": 21,
+    "fields": 5,
+    "contrast_failures": 0
+  },
+  "incidents": {
+    "text_samples": 17,
+    "fields": 7,
+    "contrast_failures": 0
+  },
+  "locations": {
+    "text_samples": 22,
+    "fields": 3,
+    "contrast_failures": 0
+  },
+  "data-exchange": {
+    "text_samples": 18,
+    "fields": 0,
+    "contrast_failures": 0
+  },
+  "agent-credentials": {
+    "text_samples": 21,
+    "fields": 4,
+    "contrast_failures": 0
+  },
+  "location-access": {
+    "text_samples": 18,
+    "fields": 7,
+    "contrast_failures": 0
+  },
+  "browser": "153.0.8010.12",
+  "network": "public HTTPS from Windows client; no throttling",
+  "admin_mutations": 0
+}

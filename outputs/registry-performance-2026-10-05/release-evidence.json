@@ -1,0 +1,21 @@
+{
+  "application_commit": "0f679952738e1684de3da9b747fe068e9201c883",
+  "image": "sha256:49af94c252d4d53fd815e46736f6e53750c0533747f504421f42683157a7e473",
+  "ci_run": 37256897869,
+  "ci_result": "success",
+  "pre_backup": "assetguard-production-20261005-025913.sql.agbackup",
+  "pre_restore_utc": "03:00:07",
+  "post_backup": "assetguard-production-20261005-030315.sql.agbackup",
+  "post_restore_utc": "03:04:09",
+  "schema": "0026_telegram_notifications",
+  "assets": 216,
+  "endpoints": 11,
+  "admin_operations": 63,
+  "active_timers": 4,
+  "response_digests_match": true,
+  "existing_telegram_test": {
+    "status": "SENT",
+    "attempts": 1,
+    "repeated": false
+  }
+}
