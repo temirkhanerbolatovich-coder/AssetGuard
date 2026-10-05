@@ -9,6 +9,8 @@
 - Компьютер Agent имеет карточку до связи; аппаратные сведения и история доступны через прежние защищённые API. Сравнение инцидента показывает отдельные поля без вывода о замене по одному имени. Завершённый onboarding скрывается.
 - 122 backend + 21 browser E2E прошли; новые проверки font/reflow/reduced motion, отказа/повтора, связи и настоящего browser zoom 200%. Без новых dependencies, migrations или изменения Vision/Agent/Telegram. [Функция и референсы](docs/features/ui-ledger-redesign.md), [приёмка и снимки](outputs/assetguard-redesign-2026-10-05/report.md).
 
+- Application `1f7ff56` принят на production: CI, public checksums/fonts, 63 operations/auth, read-only browser по девяти разделам и реальным карточкам компьютера/инцидента, Agent metadata и прежний Telegram receipt прошли. Название изменения RAM учитывает известные объёмы и единицы измерения; сравнение серийного номера поддерживает оба существующих поля. Database/Caddy сохранены; pre-deploy R2 restore и возврат timers проверены. [Протокол](outputs/assetguard-redesign-2026-10-05/report.md).
+
 ## 2026-10-05 — Agent 0.1.8: частый сбор и offline доставка
 
 - Локальный hardware collector работает независимо от сети; защищённая FIFO очередь сохраняет отчёты до XML ACK. Jitter, bounded batch и retry/429 ограничивают нагрузку; revoke и corruption не удаляют прежние данные.

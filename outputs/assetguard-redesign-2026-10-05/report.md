@@ -46,7 +46,7 @@ vanilla JS/CSS. Новый UI route использует существующи�
 ## Проверка
 
 Локальный полный набор: **122 backend + 21 browser E2E = 143**.
-Полный набор прошёл за 111.81 s; `node --check`, `git diff --check` и `pip check` прошли. После окончательной правки текстов/QR выполнен дополнительный браузерный прогон: 21 passed за 67.83 s. Live-приёмка следует после публикации проверенного приложения.
+Полный набор прошёл за 111.81 s; `node --check`, `git diff --check` и `pip check` прошли. После правки текстов/QR выполнен дополнительный браузерный прогон: 21 passed за 67.83 s. Финальная версия `1f7ff56` прошла GitHub CI: [run 37276595514](https://github.com/temirkhanerbolatovich-coder/AssetGuard/actions/runs/37276595514), test/dependency audit и Secret scan — success. Дополнительные проверки формы, границ навигации, нормализации названия RAM и обоих полей серийного номера прошли локально; реальная Vision-модель в этом push не запускалась.
 
 Реальные сценарии в isolated PostgreSQL: поиск по имени/номеру, фильтры и
 страницы, открытие/возврат, добавление, server error и повтор с сохранённым
@@ -87,6 +87,47 @@ Chromium 153, localhost, viewport 1366×900, без throttling. LCP относи
 - [Добавление](screens/create-desktop.png), [ошибка](screens/create-error-desktop.png), [zoom 200%](screens/create-zoom-200.png).
 - [Связывание](screens/link-desktop.png), [кабинет](screens/room-desktop.png).
 - [Импорт/экспорт](screens/data-exchange-desktop.png), [Agent](screens/agent-credentials-desktop.png), [доступ](screens/location-access-desktop.png).
+
+## Production: финальная выкладка 2026-10-05, 07:22 UTC
+
+Публичный [AssetGuard](https://assetguard-temirkhan.duckdns.org/#devices)
+развёрнут из application commit **1f7ff561a0d675a004d53af6c700d621cf281106**.
+Image **sha256:3845a31ad23301ea307d796d8930f357d0f56ab87848e3da534121e51e49f3a9**.
+Первичная сборка 12443e4 использует штатный Dockerfile без Vision; финальный
+слой на ранее проверенном образе 84c3b34 копирует backend/frontend из 1f7ff56. Runtime backend, зависимости,
+инфраструктура и scripts между ними не менялись; тесты/оформление обновлены.
+На финальном образе pip check прошёл. Database и Caddy containers не пересоздавались.
+Сохранён предыдущий image для rollback; свежие encrypted R2 backup и isolated
+restore завершились успешно до выкладки, 06:29 и 06:31 UTC соответственно.
+
+- Public `/health`, `/health/ready` — 200. Index/JS/CSS побайтно совпали с
+  committed Git blobs и файлам образа; Windows working-tree CRLF не считается
+  production checksum. Три WOFF2 доступны и совпали с образом.
+- Schema 0026, 63 защищённые admin operations; проверенные без входа маршруты
+  вернули 401, авторизованное чтение — 200. Реальные room workspace и история
+  доступны. Physical incidents на production отсутствуют; полный workflow
+  проверен в isolated E2E, пустые production данные не подменялись.
+- На финальной проверке 220 assets / 11 endpoints; при первой выкладке было
+  216 assets. Приёмка не создавала и не редактировала записи; причина изменения
+  количества отдельно не исследовалась. Agent 0.1.8 / GLPI 1.19 продолжает
+  присылать обработанные данные, последний отчёт 07:16:51 UTC. На момент
+  проверки 5 online / 6 stale, failed ingest 0. Native public PROLOG — 360 s.
+- Telegram: 3 SENT, pending/retrying 0; прежний controlled test имеет одну
+  попытку и тот же receipt. Новый тест не отправлялся. Monitor/notifications
+  timers после выкладки снова active.
+- Read-only браузерная приёмка прошла на публичном HTTPS: все девять рабочих
+  разделов, реальные имущество/компьютер с пятью группами оборудования,
+  карточка существующего технического инцидента с семью строками сравнения,
+  возврат в нужную страницу реестра, контраст, keyboard focus, отмена dialog
+  с возвратом фокуса, mobile/breakpoint reflow. **0 admin mutations**;
+  фактически отрисован custom Golos Text, без synthetic weights.
+- Проверены 13 viewport configurations, включая 1120/1199/1200 и короткие
+  экраны. Cold workspace — один финальный sample 2424 ms, без throttling; сравнение
+  производительности на медленной сети этим числом не подменяется.
+  [Результат браузера без личных данных](production-browser.json).
+
+Снимки внешних референсов остаются локальными исследовательскими файлами;
+в frontend и Git включены только собственные UI-снимки и исследование со ссылками.
 
 ## Оставшиеся ограничения
 

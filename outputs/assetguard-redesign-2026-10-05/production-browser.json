@@ -1,0 +1,67 @@
+{
+  "application_commit": "1f7ff561a0d675a004d53af6c700d621cf281106",
+  "deployed_at_utc": "2026-10-05T07:22:39+00:00",
+  "viewport_configurations": [[1920, 900], [1366, 900], [1280, 900], [1200, 900], [1199, 900], [1120, 900], [1024, 900], [768, 900], [390, 900], [360, 900], [320, 900], [640, 400], [320, 256]],
+  "cold_workspace_ms": 2424.100000023842,
+  "overview": {
+    "text_samples": 13,
+    "fields": 0,
+    "contrast_failures": 0
+  },
+  "devices": {
+    "text_samples": 15,
+    "fields": 5,
+    "contrast_failures": 0
+  },
+  "incidents": {
+    "text_samples": 13,
+    "fields": 7,
+    "contrast_failures": 0
+  },
+  "locations": {
+    "text_samples": 10,
+    "fields": 3,
+    "contrast_failures": 0
+  },
+  "data-exchange": {
+    "text_samples": 10,
+    "fields": 0,
+    "contrast_failures": 0
+  },
+  "agent-credentials": {
+    "text_samples": 13,
+    "fields": 4,
+    "contrast_failures": 0
+  },
+  "location-access": {
+    "text_samples": 11,
+    "fields": 7,
+    "contrast_failures": 0
+  },
+  "vision": {
+    "text_samples": 10,
+    "fields": 3,
+    "contrast_failures": 0
+  },
+  "agent-workflow": {
+    "text_samples": 12,
+    "fields": 0,
+    "contrast_failures": 0
+  },
+  "incident_card": {
+    "read": true,
+    "comparison_rows": 7
+  },
+  "computer_card": {
+    "received_hardware": 5,
+    "read": true
+  },
+  "font": {
+    "family": "Golos Text",
+    "custom": true,
+    "synthetic": false
+  },
+  "browser": "153.0.8010.12",
+  "network": "public HTTPS from Windows client; no throttling",
+  "admin_mutations": 0
+}
