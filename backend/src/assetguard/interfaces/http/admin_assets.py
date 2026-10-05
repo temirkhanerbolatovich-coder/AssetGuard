@@ -376,6 +376,9 @@ def _asset_type_from_import(value: str | None) -> str | None:
     if not value:
         return value
     normalized = value.lower().replace("ё", "е").strip()
+    canonical_types = {name.lower(): name for name in ("Desktop", "Laptop", "Printer", "Projector", "Network", "Furniture", "Sports", "Educational", "Other")}
+    if normalized in canonical_types:
+        return canonical_types[normalized]
     if normalized in {"desktop", "пк", "pc", "computer", "workstation", "компьютер", "стационарный", "стационарный компьютер"} or "computer" in normalized or "workstation" in normalized or "компьютер" in normalized or "системный блок" in normalized:
         return "Desktop"
     if normalized in {"laptop", "ноутбук"} or "ноутбук" in normalized:
@@ -418,7 +421,7 @@ def _import_row_values(row: dict[str, object], row_number: int) -> ImportRow:
         "inventory_number", "name", "asset_type", "category", "status", "organization", "building", "floor", "room", "notes", "quantity", "unit", "tracking_mode",
     )}
     if any(not result[key] for key in required):
-        raise ValueError(f"Row {row_number}: inventory_number, name and asset_type are required.")
+        raise ValueError(f"Строка {row_number}: заполните инвентарный номер, название и тип имущества.")
     result["asset_type"] = _asset_type_from_import(result["asset_type"])
     if result["asset_type"] == "Other":
         name_type = _asset_type_from_import(result["name"])
@@ -426,44 +429,60 @@ def _import_row_values(row: dict[str, object], row_number: int) -> ImportRow:
             result["asset_type"] = name_type
     result["category"] = _asset_category_from_import(result["category"], result["asset_type"])
     if len(result["inventory_number"] or "") > 128 or len(result["name"] or "") > 255:
-        raise ValueError(f"Row {row_number}: inventory_number or name is too long.")
+        raise ValueError(f"Строка {row_number}: инвентарный номер — до 128 символов, название — до 255.")
     quantity = result["quantity"]
     if quantity:
         quantity = re.sub(r"\s+", "", quantity)
         if not re.fullmatch(r"\d+(?:[.,]\d+)?", quantity):
-            raise ValueError(f"Row {row_number}: quantity must be a whole number from 1 to 1000000.")
+            raise ValueError(f"Строка {row_number}: количество должно быть целым числом от 1 до 1000000.")
         number = Decimal(quantity.replace(",", "."))
         if number != number.to_integral_value() or not 1 <= number <= 1_000_000:
-            raise ValueError(f"Row {row_number}: quantity must be a whole number from 1 to 1000000; fractional accounting is unsupported.")
+            raise ValueError(f"Строка {row_number}: количество должно быть целым числом от 1 до 1000000; дробный учёт не поддерживается.")
         result["quantity"] = int(number)
     else:
         result["quantity"] = None
     mode = (result["tracking_mode"] or "").upper()
     if mode and mode not in {"INDIVIDUAL", "GROUPED"}:
-        raise ValueError(f"Row {row_number}: tracking_mode must be INDIVIDUAL or GROUPED.")
+        raise ValueError(f"Строка {row_number}: режим учёта — INDIVIDUAL или GROUPED.")
     if mode == "INDIVIDUAL" and result["quantity"] not in (None, 1):
-        raise ValueError(f"Row {row_number}: INDIVIDUAL assets must have quantity 1.")
+        raise ValueError(f"Строка {row_number}: для индивидуального учёта количество должно быть 1.")
     result["tracking_mode"] = mode or None
     if len(result["unit"] or "") > 32:
-        raise ValueError(f"Row {row_number}: unit is too long.")
+        raise ValueError(f"Строка {row_number}: единица измерения — до 32 символов.")
     result["unit"] = result["unit"] or None
     return result
 
 
-def _parse_import_rows(header: tuple[object, ...] | list[object], rows: object, first_row_number: int = 2) -> list[ImportRow]:
+def _parse_import_rows(
+    header: tuple[object, ...] | list[object], rows: object,
+    first_row_number: int = 2, page_number: int | None = None,
+) -> list[ImportRow]:
     columns = _canonical_import_columns(tuple(header))
     required_columns = {"inventory_number", "name", "asset_type"}
     if any(columns[column] is None for column in required_columns):
         raise HTTPException(422, "Required columns: inventory_number, name, asset_type (or Russian equivalents).")
     parsed: list[ImportRow] = []
-    try:
-        for row_number, values in enumerate(rows, start=first_row_number):
-            values = tuple(values or ())
-            if not any(value not in (None, "") for value in values):
-                continue
-            parsed.append(_import_row_values({name: values[index] if index is not None and index < len(values) else None for name, index in columns.items()}, row_number))
-    except ValueError as error:
-        raise HTTPException(422, str(error)) from error
+    errors = []
+    error_count = 0
+    for row_number, values in enumerate(rows, start=first_row_number):
+        values = tuple(values or ())
+        if not any(value not in (None, "") for value in values):
+            continue
+        try:
+            item = _import_row_values({name: values[index] if index is not None and index < len(values) else None for name, index in columns.items()}, row_number)
+        except ValueError as error:
+            error_count += 1
+            if len(errors) < 50:
+                errors.append({"row": row_number, "page": page_number, "message": str(error).partition(": ")[2]})
+            continue
+        item["_source_row"] = row_number
+        item["_source_page"] = page_number
+        item["_location_provided"] = any(columns[key] is not None for key in ("building", "floor", "room"))
+        parsed.append(item)
+    if errors:
+        # Reject the whole file before any domain write; never silently skip invalid rows.
+        raise HTTPException(422, {"code": "IMPORT_ROWS_INVALID", "message": "Исправьте строки в исходном файле и загрузите его снова.",
+                                  "errors": errors, "error_count": error_count})
     return parsed
 
 
@@ -494,7 +513,19 @@ def _import_assets(
     selected = [(index, item) for index, item in enumerate(parsed) if index not in excluded_rows]
     selected_keys = [(item["organization"], item["inventory_number"]) for _, item in selected]
     if len(selected_keys) != len(set(selected_keys)):
-        raise HTTPException(422, "Duplicate inventory numbers for the same organization in the import.")
+        seen = set()
+        errors = []
+        error_count = 0
+        for index, item in selected:
+            key = (item["organization"], item["inventory_number"])
+            if key in seen:
+                error_count += 1
+                if len(errors) < 50:
+                    errors.append({"row": item.get("_source_row", index + 1), "page": item.get("_source_page"),
+                                   "message": "Инвентарный номер повторяется в этой организации. Исправьте дубли в файле."})
+            seen.add(key)
+        raise HTTPException(422, {"code": "IMPORT_ROWS_INVALID", "message": "В файле есть повторяющиеся инвентарные номера.",
+                                  "errors": errors, "error_count": error_count})
     existing_query = select(AssetRecord, OrganizationRecord.name).join(OrganizationRecord)
     existing_query = existing_query.where(
         AssetRecord.inventory_number.in_({item["inventory_number"] for item in parsed}),
@@ -523,6 +554,9 @@ def _import_assets(
             for key in ("quantity", "unit", "tracking_mode", "status", "building", "floor", "room"):
                 item[key] = getattr(asset, key)
         else:
+            if asset and not item.get("_location_provided", any(item.get(key) is not None for key in ("building", "floor", "room"))):
+                for key in ("building", "floor", "room"):
+                    item[key] = getattr(asset, key)
             item["quantity"] = item["quantity"] if item["quantity"] is not None else (asset.quantity if asset else 1)
             item["unit"] = item["unit"] or (asset.unit if asset else "шт.")
             item["tracking_mode"] = item["tracking_mode"] or ("GROUPED" if item["quantity"] > 1 else (asset.tracking_mode if asset else "INDIVIDUAL"))
@@ -543,10 +577,13 @@ def _import_assets(
         return {
             "rows": len(selected), "total_rows": len(parsed), "creates": creates, "updates": updates, "applied": False,
             "source": source,
+            "scope": {"organization_id": str(principal.organization_id) if principal.organization_id else None,
+                      "organization_name": scoped_organization.name if scoped_organization else None},
             "samples": [{key: item.get(key) for key in ("inventory_number", "name", "asset_type", "organization", "quantity", "unit", "tracking_mode", "building", "floor", "room")} for item in parsed[:10]],
             "items": [
                 {
                     "row": index + 1,
+                    "source_row": item.get("_source_row"), "source_page": item.get("_source_page"),
                     "action": "update" if (item["organization"], item["inventory_number"]) in existing else "create",
                     "confidence": item.get("_ocr_confidence"),
                     **{key: item.get(key) for key in ("inventory_number", "name", "asset_type", "organization", "quantity", "unit", "tracking_mode", "source_quantity", "accounting_preserved", "quantity_unverified", "building", "floor", "room")},
@@ -571,6 +608,11 @@ def _import_assets(
                 asset.status = item["status"]
             asset.updated_at = now
             append_asset_history(session, asset_id=asset.id, event_type="ASSET_UPDATED", related_entity_type="Asset", related_entity_id=asset.id, message=f"Asset imported from {source}.", metadata={"source": source})
+        # Imported locations must be canonical so the same assets can be inspected in the room UI.
+        if asset.room:
+            _ensure_room_for_legacy_location(asset, session)
+        else:
+            asset.room_id = None
     session.commit()
     return {"rows": len(selected), "creates": creates, "updates": updates, "applied": True}
 
@@ -718,15 +760,22 @@ def import_assets_xlsx(
     } and not (file.filename or "").lower().endswith(".xlsx"):
         raise HTTPException(415, "Upload an .xlsx file.")
     try:
-        workbook = load_workbook(BytesIO(file.file.read(5 * 1024 * 1024 + 1)), read_only=True, data_only=True)
+        content = file.file.read(5 * 1024 * 1024 + 1)
+        if len(content) > 5 * 1024 * 1024:
+            raise HTTPException(413, "Excel-файл должен быть не больше 5 МБ.")
+        workbook = load_workbook(BytesIO(content), read_only=True, data_only=True)
+    except HTTPException:
+        raise
     except Exception as error:
         raise HTTPException(422, "The uploaded file is not a valid .xlsx workbook.") from error
-    sheet = workbook.active
-    rows = sheet.iter_rows(values_only=True)
-    header = next(rows, None)
-    if not header:
-        raise HTTPException(422, "The workbook is empty.")
-    return _import_assets(_parse_import_rows(header, rows), session, principal, apply, "xlsx", set(exclude_row if isinstance(exclude_row, list) else []))
+    try:
+        rows = workbook.active.iter_rows(values_only=True)
+        header = next(rows, None)
+        if not header:
+            raise HTTPException(422, "The workbook is empty.")
+        return _import_assets(_parse_import_rows(header, rows), session, principal, apply, "xlsx", set(exclude_row if isinstance(exclude_row, list) else []))
+    finally:
+        workbook.close()
 
 
 @router.post("/assets/import.pdf")
@@ -754,14 +803,13 @@ def import_assets_pdf(
             header, *rows = table
             if header:
                 try:
-                    generic_rows.extend(_parse_import_rows(header, rows))
+                    generic_rows.extend(_parse_import_rows(header, rows, page_number=page_number))
                 except HTTPException as error:
-                    if error.status_code != 422 or not error.detail.startswith("Required columns"):
+                    if error.status_code != 422 or not isinstance(error.detail, str) or not error.detail.startswith("Required columns"):
                         raise
             government_rows.extend(_government_inventory_rows(table, file.filename, page_number))
     if generic_rows:
-        deduplicated = {(item.get("organization"), item["inventory_number"]): item for item in generic_rows}
-        return _import_assets(list(deduplicated.values()), session, principal, apply, "pdf", set(exclude_row if isinstance(exclude_row, list) else []))
+        return _import_assets(generic_rows, session, principal, apply, "pdf", set(exclude_row if isinstance(exclude_row, list) else []))
     if government_rows:
         deduplicated = {(item.get("organization"), item["inventory_number"]): item for item in government_rows}
         return _import_assets(list(deduplicated.values()), session, principal, apply, "government PDF inventory statement", set(exclude_row if isinstance(exclude_row, list) else []))

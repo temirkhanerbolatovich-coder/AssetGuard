@@ -1,7 +1,7 @@
 const $ = (id) => document.getElementById(id);
 let token = sessionStorage.getItem("assetguard-admin-token") || "";
 function emptyState() {
-  return {assets: [], endpoints: [], devices: [], changes: [], incidents: [], physicalIncidents: [], devicePage: 1, incidentPage: 1, registryScrollY: 0, operations: null, locations: [], users: [], locationAccess: [], organizations: [], agentCredentials: [], currentUser: null, visionRooms: [], selectedAsset: null, assetTab: "overview", selectedIncident: null, incidentDecisionMode: null, linkingEndpoint: null, visionRoomId: null, visionScan: null, visionImageUrl: null, assetQrUrl: null, roomWorkspace: null, roomTab: "overview", physicalIncidentId: null};
+  return {assets: [], endpoints: [], devices: [], changes: [], incidents: [], physicalIncidents: [], devicePage: 1, incidentPage: 1, registryScrollY: 0, operations: null, locations: [], users: [], locationAccess: [], organizations: [], agentCredentials: [], currentUser: null, visionRooms: [], selectedAsset: null, assetTab: "overview", selectedIncident: null, incidentDecisionMode: null, linkingEndpoint: null, visionRoomId: null, visionScan: null, visionImageUrl: null, assetQrUrl: null, roomWorkspace: null, inspectionDraft: null, inspectionReceipt: null, roomTab: "overview", physicalIncidentId: null};
 }
 let state = emptyState();
 let sessionGeneration = 0;
@@ -221,7 +221,11 @@ function endSession(message = "") {
   $("device-change-filter").checked = false;
   $("device-sort").value = "recent";
   $("incident-status-filter").value = "ACTIVE";
-  ["assets", "incident-center-list", "incident-detail-facts", "incident-detail-actions", "incident-device-action", "device-pagination", "incident-pagination", "device-selected-filters", "incident-selected-filters", "attention-list", "activity-list", "location-tree", "agent-credentials-list", "agent-reenrolments-list", "current-hardware", "baseline-hardware", "detail-changes", "detail-history", "detail-incidents", "device-general", "device-system", "device-identifiers", "incident-detail-evidence", "incident-detail-comparison", "incident-detail-decisions", "room-tab-content", "vision-history", "vision-counts", "vision-comparison"].forEach((id) => $(id)?.replaceChildren());
+  ["assets", "incident-center-list", "incident-detail-facts", "incident-detail-actions", "incident-device-action", "device-pagination", "incident-pagination", "device-selected-filters", "incident-selected-filters", "attention-list", "activity-list", "location-tree", "agent-credentials-list", "agent-reenrolments-list", "current-hardware", "baseline-hardware", "detail-changes", "detail-history", "detail-incidents", "device-general", "device-system", "device-identifiers", "incident-detail-evidence", "incident-detail-comparison", "incident-detail-decisions", "room-tab-content", "room-inspection-items", "inspection-review-items", "import-preview-samples", "import-result", "import-file-errors", "import-preview-error", "import-preview-file", "import-preview-scope", "import-selection-summary", "inspection-context", "inspection-error", "inspection-review-comment", "vision-history", "vision-counts", "vision-comparison"].forEach((id) => $(id)?.replaceChildren());
+  ["inspection-review-counts", "import-preview-note", "inspection-progress-text"].forEach(id => $(id).textContent = "");
+  $("data-exchange-status").textContent = "PDF-сканы могут использовать OCR. Всегда сверяйте результат с оригиналом.";
+  $("import-result").hidden = true;
+  $("import-file-errors").hidden = true;
   ["detail-title", "detail-meta", "incident-detail-title", "incident-detail-meta", "room-detail-title", "room-detail-path"].forEach((id) => $(id).textContent = "");
   document.querySelectorAll("#app-main form, dialog form").forEach((form) => form.reset());
   document.querySelectorAll("dialog[open]").forEach((dialog) => dialog.close());
@@ -260,9 +264,9 @@ async function requestJson(path, options = {}, credential = token) {
     if (generation !== sessionGeneration) throw Object.assign(new Error("Сессия изменилась."), {stale: true});
     if (!response.ok) {
       const messages = {401: "Сессия истекла или данные входа неверны. Войдите снова.", 403: "У вас нет доступа к этому действию.", 404: "Запись не найдена или недоступна вам.", 429: "Слишком много запросов. Подождите немного и повторите попытку."};
-      const message = messages[response.status] || (response.status >= 500 ? "Сервер временно не может обработать запрос. Повторите попытку." : typeof body?.detail === "string" ? body.detail : "Проверьте заполненные поля и повторите попытку.");
+      const message = messages[response.status] || (response.status >= 500 ? "Сервер временно не может обработать запрос. Повторите попытку." : typeof body?.detail === "string" ? body.detail : typeof body?.detail?.message === "string" ? body.detail.message : "Проверьте заполненные поля и повторите попытку.");
       if (response.status === 401 && state.currentUser && credential === token) endSession(messages[401]);
-      throw Object.assign(new Error(message), {status: response.status});
+      throw Object.assign(new Error(message), {status: response.status, detail: body?.detail});
     }
     return body;
   } catch (error) {
@@ -583,6 +587,8 @@ function renderRoomTab() {
   } else {
     html=workspace.history.length?`<div class="timeline">${workspace.history.map((item)=>`<article><time>${dateTime(item.occurred_at)}</time><div><b>${escapeHtml(eventLabels[item.type]||item.type)}</b><p>${escapeHtml(item.message)}</p><small>${item.source==="AGENT"?"Agent":item.source==="VISION"?"Vision":item.source==="PHYSICAL"?"Физический обход":"Реестр имущества"}</small></div></article>`).join("")}</div>`:'<p class="empty">История кабинета появится после добавления имущества или первой проверки.</p>';
   }
+  const receipt = state.inspectionReceipt;
+  if (tab === "inspection" && receipt?.roomId === workspace.room.id) html = `<div class="workflow-receipt" role="status"><strong>Обход сохранён</strong><p>${dateTime(receipt.inspection.completed_at)} · ${escapeHtml(receipt.inspection.inspector_name)} · ${receipt.inspection.items.length} позиций. Расхождения доступны во вкладке «Инциденты».</p></div>` + html;
   $("room-tab-content").innerHTML=html;
   document.querySelectorAll(".open-room-asset").forEach((button)=>button.onclick=()=>{$("room-detail").hidden=true;detail(button.dataset.id);});
   document.querySelectorAll(".room-vision-launch").forEach((button)=>button.onclick=()=>launchRoomVision(workspace.room.id));
@@ -592,6 +598,12 @@ function renderRoomTab() {
 }
 async function openRoomWorkspace(roomId, scroll = true) {
   const requestView = ++viewGeneration;
+  state.roomWorkspace = null;
+  $("room-detail").dataset.loadState = "loading";
+  $("room-detail-path").textContent = "";
+  $("room-detail-state").textContent = "Загрузка…";
+  ["room-inspection-action", "room-edit-action", "room-vision-action"].forEach(id => $(id).hidden = true);
+  $("room-tabs").querySelectorAll("button").forEach(button => button.disabled = true);
   document.querySelectorAll("main > .page-section").forEach((section) => { section.hidden = section.id !== "room-detail"; });
   setPageHeading("locations");
   $("room-detail").hidden=false; $("room-detail-title").textContent="Загрузка кабинета…"; $("room-detail-error").hidden=true; $("room-tab-content").innerHTML='<div class="skeleton"></div>';
@@ -599,12 +611,15 @@ async function openRoomWorkspace(roomId, scroll = true) {
     const workspace=await readRouteData("room",roomId,`/admin/locations/rooms/${roomId}/workspace`);
     if (requestView !== viewGeneration) return;
     state.roomWorkspace=workspace; state.roomTab="overview";
+    $("room-detail").dataset.loadState = "ready";
+    $("room-tabs").querySelectorAll("button").forEach(button => button.disabled = false);
     $("room-detail-title").textContent=`Кабинет ${workspace.room.name}`; $("room-detail-path").textContent=[workspace.path.building,workspace.path.floor&&`этаж ${workspace.path.floor}`,workspace.room.purpose].filter(Boolean).join(" · ");
     $("room-edit-action").hidden=state.currentUser?.role!=="ADMIN"; $("room-vision-action").hidden=state.currentUser?.role!=="ADMIN"; $("room-inspection-action").hidden=!canEditRoom(workspace.room.id)||!workspace.inventory.assets.length;
     const attention=workspace.incidents.length||(workspace.physical_incidents||[]).some((item)=>["OPEN","UNDER_REVIEW"].includes(item.status))||workspace.agents.some((item)=>item.status!=="ONLINE")||workspace.vision?.latest_scan?.status==="WARNING"; $("room-detail-state").textContent=attention?"Требует внимания":"В норме"; $("room-detail-state").className=`status-pill ${attention?"warning":"ok"}`;
     renderRoomTab(); if(scroll)window.scrollTo({top:0,behavior:"smooth"});
   } catch(error) {
     if (requestView !== viewGeneration || error.stale) return;
+    $("room-detail").dataset.loadState = "error";
     $("room-detail-title").textContent="Не удалось открыть кабинет";
     $("room-detail-error").innerHTML=`<span class="attention-icon">!</span><div><strong>Ошибка загрузки</strong><p>${escapeHtml(error.message)}</p><button type="button" class="button-secondary retry-route">Повторить</button></div>`;
     $("room-detail-error").hidden=false;
@@ -619,12 +634,109 @@ function openRoomEditDialog() {
   openDialog("room-edit-dialog", "room-edit-purpose");
 }
 function openRoomInspectionDialog() {
-  const workspace=state.roomWorkspace;if(!workspace||!canEditRoom(workspace.room.id))return;
-  if(!workspace.inventory.assets.length){showToast("Сначала добавьте имущество в кабинет",true);return;}
-  $("room-inspection-comment").value="";
-  $("room-inspection-items").innerHTML=workspace.inventory.assets.map((asset)=>`<article class="inspection-item" data-asset="${asset.id}" data-quantity="${asset.quantity}"><div class="inspection-item-title"><strong>${escapeHtml(asset.name)}</strong><small>${escapeHtml(asset.inventory_number)} · ${asset.quantity} ${escapeHtml(asset.unit)}</small></div><label>Результат<select class="inspection-result-input"><option value="PRESENT">На месте</option><option value="MISSING">Отсутствует</option><option value="DAMAGED">Повреждено</option></select></label><label class="inspection-affected" hidden>Проблемных единиц<input class="inspection-affected-input" type="number" min="1" max="${asset.quantity}" value="1"></label><label>Комментарий<input class="inspection-item-comment" maxlength="2000" placeholder="Необязательно"></label></article>`).join("");
-  $("room-inspection-items").querySelectorAll(".inspection-result-input").forEach((select)=>select.onchange=()=>{const item=select.closest(".inspection-item"),affected=item.querySelector(".inspection-affected"),input=item.querySelector(".inspection-affected-input"),present=select.value==="PRESENT";affected.hidden=present;input.disabled=present;});
-  openDialog("room-inspection-dialog", $("room-inspection-items").querySelector("select"));
+  const workspace = state.roomWorkspace;
+  if (!workspace || !canEditRoom(workspace.room.id)) return;
+  if (!workspace.inventory.assets.length) { showToast("Сначала добавьте имущество в кабинет", true); return; }
+  state.inspectionDraft = {roomId: workspace.room.id, assets: workspace.inventory.assets.map(asset => ({...asset})), review: null};
+  $("room-inspection-comment").value = "";
+  $("inspection-context").textContent = `Кабинет ${workspace.room.name} · ${workspace.path.building || ""} · ${workspace.inventory.assets.length} позиций · ${state.currentUser.username}`;
+  $("inspection-error").hidden = true;
+  $("room-inspection-items").innerHTML = state.inspectionDraft.assets.map((asset, index) => `<article class="inspection-item" data-asset="${asset.id}" data-quantity="${asset.quantity}">
+    <div class="inspection-item-title"><strong>${escapeHtml(asset.name)}</strong><small>${escapeHtml(asset.inventory_number)} · ожидалось ${asset.quantity} ${escapeHtml(asset.unit)}</small></div>
+    <label>Результат<select id="inspection-result-${index}" class="inspection-result-input"><option value="">Не проверено</option><option value="PRESENT">На месте</option><option value="MISSING">Отсутствует</option><option value="DAMAGED">Повреждено</option></select></label>
+    <label class="inspection-affected" hidden>Проблемных единиц<input id="inspection-quantity-${index}" class="inspection-affected-input" type="number" min="1" max="${asset.quantity}" step="1" value="1" disabled></label>
+    <label>Комментарий<input class="inspection-item-comment" maxlength="2000" placeholder="Необязательно"></label><p id="inspection-item-error-${index}" class="form-error inspection-item-error" hidden></p>
+  </article>`).join("");
+  $("room-inspection-items").onchange = event => {
+    const item = event.target.closest(".inspection-item");
+    if (!item) return;
+    const result = item.querySelector(".inspection-result-input").value;
+    const affected = ["MISSING", "DAMAGED"].includes(result);
+    item.querySelector(".inspection-affected").hidden = !affected;
+    item.querySelector(".inspection-affected-input").disabled = !affected;
+    updateInspectionProgress();
+  };
+  setInspectionStep(false);
+  updateInspectionProgress();
+  openDialog("room-inspection-dialog", "inspection-result-0");
+}
+function updateInspectionProgress() {
+  const controls = [...$("room-inspection-items").querySelectorAll(".inspection-result-input")];
+  const checked = controls.filter(control => control.value).length;
+  $("inspection-progress-text").textContent = `Проверено ${checked} из ${controls.length} позиций`;
+  $("inspection-progress").max = Math.max(1, controls.length);
+  $("inspection-progress").value = checked;
+}
+function setInspectionStep(review) {
+  $("room-inspection-form").dataset.step = review ? "review" : "check";
+  $("inspection-check-step").hidden = review;
+  $("inspection-review-step").hidden = !review;
+  $("inspection-review-back").hidden = !review;
+  $("room-inspection-submit").textContent = review ? "Сохранить обход" : "Проверить итог";
+}
+function reviewRoomInspection() {
+  const errors = [], items = [];
+  $("room-inspection-items").querySelectorAll(".inspection-item").forEach((row, index) => {
+    const result = row.querySelector(".inspection-result-input"), quantity = row.querySelector(".inspection-affected-input");
+    [result, quantity].forEach(control => { control.removeAttribute("aria-invalid"); control.removeAttribute("aria-describedby"); });
+    const message = !result.value ? "Отметьте результат проверки." : result.value !== "PRESENT" && (!quantity.value || !Number.isInteger(Number(quantity.value)) || Number(quantity.value) < 1 || Number(quantity.value) > Number(row.dataset.quantity)) ? `Укажите целое число от 1 до ${row.dataset.quantity}.` : "";
+    const field = !result.value ? result : quantity, error = $("inspection-item-error-" + index);
+    error.hidden = !message; error.textContent = message;
+    if (message) {
+      field.setAttribute("aria-invalid", "true"); field.setAttribute("aria-describedby", error.id);
+      errors.push(`<li><a href="#${field.id}">${escapeHtml(state.inspectionDraft.assets[index].name)}: ${escapeHtml(message)}</a></li>`);
+    }
+    items.push({asset_id: row.dataset.asset, result: result.value, affected_quantity: result.value === "PRESENT" ? 0 : Number(quantity.value), comment: row.querySelector(".inspection-item-comment").value.trim() || null});
+  });
+  if (errors.length) {
+    $("inspection-error").innerHTML = `<strong>Проверьте ${errors.length} позиций перед итогом</strong><ul>${errors.join("")}</ul>`;
+    $("inspection-error").querySelectorAll("a").forEach(link => link.onclick = event => { event.preventDefault(); $(link.getAttribute("href").slice(1)).focus(); });
+    $("inspection-error").hidden = false; $("inspection-error").focus(); return;
+  }
+  $("inspection-error").hidden = true;
+  state.inspectionDraft.review = {comment: $("room-inspection-comment").value.trim() || null, items};
+  const missing = items.filter(item => item.result === "MISSING").length, damaged = items.filter(item => item.result === "DAMAGED").length;
+  $("inspection-review-counts").textContent = `Позиций на месте: ${items.length-missing-damaged} · отсутствует: ${missing} · повреждено: ${damaged}`;
+  $("inspection-review-items").innerHTML = items.map((item, index) => {
+    const asset = state.inspectionDraft.assets[index];
+    return `<article><div><strong>${escapeHtml(asset.name)}</strong><small>${escapeHtml(asset.inventory_number)} · ожидалось ${asset.quantity} ${escapeHtml(asset.unit)}</small></div><span class="inspection-result ${item.result.toLowerCase()}">${escapeHtml(inspectionLabels[item.result])}${item.affected_quantity ? ` · ${item.affected_quantity} ${escapeHtml(asset.unit)}` : ""}</span>${item.comment ? `<p>${escapeHtml(item.comment)}</p>` : ""}</article>`;
+  }).join("");
+  $("inspection-review-comment").textContent = state.inspectionDraft.review.comment || "Общих замечаний нет.";
+  setInspectionStep(true); $("inspection-review-step").focus();
+}
+async function saveRoomInspection(event) {
+  event.preventDefault();
+  const draft = state.inspectionDraft, button = $("room-inspection-submit");
+  if (!draft || button.disabled) return;
+  if ($("room-inspection-form").dataset.step !== "review") { reviewRoomInspection(); return; }
+  const generation = sessionGeneration;
+  button.disabled = true; button.textContent = "Сохраняем…";
+  $("room-inspection-form").setAttribute("aria-busy", "true");
+  ["room-inspection-cancel", "inspection-review-back"].forEach(id => $(id).disabled = true);
+  $("inspection-error").hidden = true;
+  try {
+    const inspection = await api(`/admin/locations/rooms/${draft.roomId}/inspections`, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(draft.review)});
+    if (generation !== sessionGeneration) return;
+    state.inspectionReceipt = {roomId: draft.roomId, inspection};
+    $("room-inspection-dialog").close();
+    const refreshed = await load(false);
+    if (refreshed && location.hash === `#room=${draft.roomId}`) {
+      await openRoomWorkspace(draft.roomId, false);
+      if (generation === sessionGeneration && location.hash === `#room=${draft.roomId}` && state.roomWorkspace?.room.id === draft.roomId) {
+        state.roomTab = "inspection"; renderRoomTab();
+      }
+    }
+    showToast(refreshed ? "Обход сохранён; результат и инциденты доступны в кабинете" : "Обход сохранён. Повторите загрузку данных, чтобы увидеть результат.");
+  } catch (error) {
+    if (error.stale) return;
+    $("inspection-error").textContent = `Не удалось подтвердить сохранение. ${error.message} Результаты оставлены в форме. При потере связи проверьте историю кабинета перед повторной отправкой.`;
+    $("inspection-error").hidden = false; $("inspection-error").focus();
+  } finally {
+    button.disabled = false;
+    button.textContent = $("room-inspection-form").dataset.step === "review" ? "Сохранить обход" : "Проверить итог";
+    $("room-inspection-form").setAttribute("aria-busy", "false");
+    ["room-inspection-cancel", "inspection-review-back"].forEach(id => $(id).disabled = false);
+  }
 }
 function openPhysicalIncidentDialog(incidentId) {
   const incident=state.roomWorkspace?.physical_incidents?.find((item)=>item.id===incidentId);if(!incident)return;
@@ -735,7 +847,7 @@ function renderAgentReenrolments() {
 }
 function syncRoleControls() {
   const user=state.currentUser, isAdmin=user?.role==="ADMIN", editableRooms=new Set(user?.editable_room_ids||[]), canEditAssets=isAdmin||editableRooms.size>0;
-  $("room-edit-action").hidden=!isAdmin;$("room-vision-action").hidden=!isAdmin;$("room-inspection-action").hidden=!state.roomWorkspace||!canEditRoom(state.roomWorkspace.room.id)||!state.roomWorkspace.inventory.assets.length;
+  $("room-edit-action").hidden=!isAdmin||!state.roomWorkspace;$("room-vision-action").hidden=!isAdmin||!state.roomWorkspace;$("room-inspection-action").hidden=!state.roomWorkspace||!canEditRoom(state.roomWorkspace.room.id)||!state.roomWorkspace.inventory.assets.length;
   $("show-create").hidden=!canEditAssets;
   if(!canEditAssets)$("create-asset").hidden=true;
   ["export-assets","export-assets-pdf","import-assets","import-assets-pdf","create-building","vision-upload","vision-baseline"].forEach((id)=>$(id).hidden=!isAdmin);
@@ -1241,52 +1353,117 @@ async function downloadAssetExport(format) {
 }
 $("export-assets").onclick=()=>downloadAssetExport("xlsx");
 $("export-assets-pdf").onclick=()=>downloadAssetExport("pdf");
-function confirmAssetImport(file,format,preview) {
-  $("import-preview-file").textContent=`${file.name} · ${format.toUpperCase()} · ${(file.size/1024).toLocaleString("ru-RU",{maximumFractionDigits:1})} КБ`;
-  const items=preview.items||preview.samples||[], selected=new Set(items.map((_,index)=>index)), pageSize=25;
-  const table=$("import-preview-samples"), search=$("import-preview-search"), selectPage=$("import-preview-select-page"), applyButton=$("apply-import-preview");
-  const update=()=>{
-    const query=search.value.trim().toLocaleLowerCase("ru"), filtered=items.map((item,index)=>({item,index})).filter(({item})=>!query||[item.inventory_number,item.name,item.asset_type,item.building,item.floor,item.room].some((value)=>String(value||"").toLocaleLowerCase("ru").includes(query)));
-    const pageCount=Math.max(1,Math.ceil(filtered.length/pageSize));state.importPreviewPage=Math.min(Math.max(state.importPreviewPage||0,0),pageCount-1);
-    const start=state.importPreviewPage*pageSize, visible=filtered.slice(start,start+pageSize), visibleIndices=visible.map(({index})=>index);
-    const chosen=items.map((item,index)=>selected.has(index)?item:null).filter(Boolean);
-    $("import-preview-rows").textContent=chosen.length;
-    $("import-preview-creates").textContent=chosen.filter((item)=>item.action!=="update").length;
-    $("import-preview-updates").textContent=chosen.filter((item)=>item.action==="update").length;
-    $("import-preview-page-info").textContent=filtered.length?`Позиции ${start+1}–${start+visible.length} из ${filtered.length} · всего в файле ${items.length}`:`Совпадений нет · всего в файле ${items.length}`;
-    $("import-preview-prev").disabled=state.importPreviewPage===0;$("import-preview-next").disabled=state.importPreviewPage>=pageCount-1;
-    const checkedCount=visibleIndices.filter((index)=>selected.has(index)).length;selectPage.checked=visibleIndices.length>0&&checkedCount===visibleIndices.length;selectPage.indeterminate=checkedCount>0&&checkedCount<visibleIndices.length;
-    applyButton.disabled=chosen.length===0;
-    table.innerHTML=visible.length?'<table><thead><tr><th scope="col">В импорт</th><th scope="col">№</th><th scope="col">Инв. №</th><th scope="col">Наименование</th><th scope="col">Тип</th><th scope="col">Количество / учёт</th><th scope="col">Кабинет</th><th scope="col">Действие</th><th scope="col">OCR</th></tr></thead><tbody>'+visible.map(({item,index})=>`<tr><td><input type="checkbox" data-import-row="${index}" aria-label="Импортировать строку ${index+1}" ${selected.has(index)?"checked":""}></td><td>${index+1}</td><td>${escapeHtml(item.inventory_number||"—")}</td><td>${escapeHtml(item.name||"—")}<small>${escapeHtml(item.organization||"")}</small></td><td>${escapeHtml(item.asset_type||"—")}</td><td>${item.quantity==null?"Уточните в Excel":`${item.quantity} ${escapeHtml(item.unit||"шт.")}`}<small>${item.tracking_mode==="GROUPED"?"Групповой":"Индивидуальный"}${item.accounting_preserved?" · сохранён остаток по акту":""}${item.quantity_unverified?" · количество не распознано":""}</small>${item.accounting_preserved&&item.source_quantity!=null?`<small>В файле: ${item.source_quantity}</small>`:""}</td><td>${escapeHtml([item.building,item.floor,item.room].filter(Boolean).join(" · ")||"—")}</td><td><span class="import-action ${item.action==="update"?"is-update":"is-create"}">${item.action==="update"?"Обновится":"Новая"}</span></td><td>${Number.isFinite(item.confidence)?`${item.confidence}%`:"—"}</td></tr>`).join("")+'</tbody></table>':'<p class="empty">'+(items.length?"По этому запросу ничего не найдено.":"Строки для импорта не найдены.")+'</p>';
-  };
-  state.importPreviewPage=0;search.value="";
-  $("import-preview-note").textContent=(preview.source||"").toLowerCase().includes("ocr")?"Это скан: текст распознан OCR, процент — ориентир, а не гарантия точности. Сверьте названия и номера с оригиналом и снимите галочку у ошибочных строк.":"Сопоставление с реестром выполняется по инвентарному номеру. Все строки включены по умолчанию: снимите галочку у тех, которые не нужно добавлять или обновлять.";
-  search.oninput=()=>{state.importPreviewPage=0;update();};
-  $("import-preview-prev").onclick=()=>{state.importPreviewPage--;update();};$("import-preview-next").onclick=()=>{state.importPreviewPage++;update();};
-  selectPage.onchange=()=>{const query=search.value.trim().toLocaleLowerCase("ru"), filtered=items.map((item,index)=>({item,index})).filter(({item})=>!query||[item.inventory_number,item.name,item.asset_type,item.building,item.floor,item.room].some((value)=>String(value||"").toLocaleLowerCase("ru").includes(query))),start=(state.importPreviewPage||0)*pageSize;filtered.slice(start,start+pageSize).forEach(({index})=>selectPage.checked?selected.add(index):selected.delete(index));update();};
-  table.onchange=(event)=>{const checkbox=event.target.closest("[data-import-row]");if(!checkbox)return;const index=Number(checkbox.dataset.importRow);checkbox.checked?selected.add(index):selected.delete(index);update();};
-  update();
-  const dialog=$("import-preview-dialog");
-  dialog.returnValue="";
-  return new Promise((resolve)=>{dialog.addEventListener("close",()=>{applyButton.disabled=false;resolve(dialog.returnValue==="apply"?{excludedRows:items.map((_,index)=>index).filter((index)=>!selected.has(index))}:null);},{once:true});openDialog("import-preview-dialog", "import-preview-search");});
+function showImportError(id, error) {
+  const container = $(id), detail = error.detail;
+  const rows = Array.isArray(detail?.errors) ? detail.errors.slice(0, 50) : [];
+  container.innerHTML = `<strong>${escapeHtml(error.message)}</strong>` + (rows.length ? `<ul>${rows.map(item => `<li>${item.page ? `Страница ${escapeHtml(item.page)}, ` : ""}строка ${escapeHtml(item.row)}: ${escapeHtml(item.message)}</li>`).join("")}</ul>${detail.error_count > rows.length ? `<p>Всего проблемных строк: ${detail.error_count}; показаны первые ${rows.length}.</p>` : ""}` : "") + '<p>Проверьте файл и повторите загрузку. При потере ответа на сохранение сначала проверьте реестр.</p>';
+  container.hidden = false; container.focus();
 }
-async function importAssetFile(file,format) {
-  $("data-exchange-status").textContent=`Анализируем ${file.name} · ${(file.size/1024).toLocaleString("ru-RU",{maximumFractionDigits:1})} КБ…`;
-  const previewForm=new FormData(); previewForm.append("file",file);
-  const preview=await api(`/admin/assets/import.${format}`,{method:"POST",body:previewForm});
-  $("data-exchange-status").textContent=`Проверьте ${(preview.items||preview.samples||[]).length} найденных позиций перед записью.`;
-  const selection=await confirmAssetImport(file,format,preview);if(!selection){$("data-exchange-status").textContent=`Импорт ${file.name} отменён. Реестр не изменён.`;return;}
-  $("data-exchange-status").textContent=`Применяем выбранные позиции из ${file.name}…`;
-  const applyForm=new FormData(); applyForm.append("file",file);
-  selection.excludedRows.forEach((index)=>applyForm.append("exclude_row",String(index)));
-  const result=await api(`/admin/assets/import.${format}?apply=true`,{method:"POST",body:applyForm});
-  $("data-exchange-status").textContent=`Импорт завершён: новых записей — ${result.creates}, обновлено — ${result.updates}.`;
-  showToast(`Импорт завершён: новых записей — ${result.creates}, обновлено — ${result.updates}.`);
-  await load(false);
+function confirmAssetImport(file, format, preview) {
+  const generation = sessionGeneration, dialog = $("import-preview-dialog");
+  $("import-preview-file").textContent = `${file.name} · ${format.toUpperCase()} · ${(file.size/1024).toLocaleString("ru-RU", {maximumFractionDigits: 1})} КБ`;
+  $("import-preview-scope").textContent = preview.scope?.organization_name ? `Область импорта: ${preview.scope.organization_name}` : "Область администратора платформы: организация берётся из каждой строки; без неё — Default Organization.";
+  $("import-preview-error").hidden = true;
+  const items = preview.items || preview.samples || [], selected = new Set(items.map((item, index) => item.quantity != null ? index : null).filter(index => index !== null)), pageSize = 25;
+  const table = $("import-preview-samples"), search = $("import-preview-search"), selectPage = $("import-preview-select-page"), applyButton = $("apply-import-preview");
+  let busy = false, saved = null, attempted = false;
+  const filteredRows = () => {
+    const query = search.value.trim().toLocaleLowerCase("ru"), filter = $("import-preview-filter").value;
+    return items.map((item, index) => ({item, index})).filter(({item}) => (!query || [item.inventory_number, item.name, item.asset_type, item.building, item.floor, item.room].some(value => String(value || "").toLocaleLowerCase("ru").includes(query))) && (!filter || (filter === "warning" ? item.quantity == null || item.accounting_preserved || item.quantity_unverified : item.action === filter)));
+  };
+  const update = () => {
+    const filtered = filteredRows(), pageCount = Math.max(1, Math.ceil(filtered.length/pageSize));
+    state.importPreviewPage = Math.min(Math.max(state.importPreviewPage || 0, 0), pageCount-1);
+    const start = state.importPreviewPage*pageSize, visible = filtered.slice(start, start+pageSize);
+    const chosen = items.filter((_, index) => selected.has(index));
+    $("import-preview-rows").textContent = chosen.length;
+    $("import-preview-creates").textContent = chosen.filter(item => item.action !== "update").length;
+    $("import-preview-updates").textContent = chosen.filter(item => item.action === "update").length;
+    $("import-preview-page-info").textContent = filtered.length ? `Позиции ${start+1}–${start+visible.length} из ${filtered.length} · всего в файле ${items.length}` : `Совпадений нет · всего в файле ${items.length}`;
+    $("import-preview-prev").disabled = busy || state.importPreviewPage === 0;
+    $("import-preview-next").disabled = busy || state.importPreviewPage >= pageCount-1;
+    const available = visible.filter(({item}) => item.quantity != null), checked = available.filter(({index}) => selected.has(index)).length;
+    selectPage.checked = available.length > 0 && checked === available.length;
+    selectPage.indeterminate = checked > 0 && checked < available.length;
+    selectPage.disabled = busy || !available.length;
+    applyButton.disabled = busy || !chosen.length;
+    applyButton.textContent = busy ? "Сохраняем…" : `Импортировать ${chosen.length} позиций`;
+    $("import-selection-summary").textContent = `Выбрано ${chosen.length} из ${items.length} · исключено ${items.length-chosen.length}. Поиск и страницы не меняют выбор остальных строк.`;
+    table.innerHTML = visible.length ? '<table><thead><tr><th scope="col">В импорт</th><th scope="col">Строка</th><th scope="col">Инв. №</th><th scope="col">Наименование</th><th scope="col">Тип</th><th scope="col">Количество / учёт</th><th scope="col">Кабинет</th><th scope="col">Действие</th><th scope="col">OCR</th></tr></thead><tbody>' + visible.map(({item, index}) => `<tr>
+      <td data-label="В импорт"><label class="import-row-choice"><input type="checkbox" data-import-row="${index}" aria-label="Импортировать строку ${index+1}" ${selected.has(index) ? "checked" : ""} ${busy || item.quantity == null ? "disabled" : ""}><span class="sr-only">Выбрать позицию</span></label></td>
+      <td data-label="Строка">${item.source_page ? `стр. ${item.source_page} · ` : ""}${item.source_row || item.row || index+1}</td>
+      <td data-label="Инв. №">${escapeHtml(item.inventory_number || "—")}</td><td data-label="Наименование">${escapeHtml(item.name || "—")}<small>${escapeHtml(item.organization || "")}</small></td>
+      <td data-label="Тип">${escapeHtml(assetTypeLabels[item.asset_type] || item.asset_type || "—")}</td>
+      <td data-label="Количество / учёт">${item.quantity == null ? "Уточните в Excel; строка исключена" : `${item.quantity} ${escapeHtml(item.unit || "шт.")}`}<small>${item.tracking_mode === "GROUPED" ? "Групповой" : "Индивидуальный"}${item.accounting_preserved ? " · сохранён остаток по акту" : ""}${item.quantity_unverified ? " · сверьте количество" : ""}</small>${item.accounting_preserved && item.source_quantity != null ? `<small>В файле: ${item.source_quantity}</small>` : ""}</td>
+      <td data-label="Кабинет">${escapeHtml([item.building, item.floor, item.room].filter(Boolean).join(" · ") || "Не указан")}</td>
+      <td data-label="Действие"><span class="import-action ${item.action === "update" ? "is-update" : "is-create"}">${item.action === "update" ? "Обновится" : "Новая"}</span></td><td data-label="OCR">${Number.isFinite(item.confidence) ? `${item.confidence}%` : "—"}</td></tr>`).join("") + '</tbody></table>' : '<p class="empty">' + (items.length ? "По этому запросу ничего не найдено." : "Строки для импорта не найдены.") + '</p>';
+  };
+  state.importPreviewPage = 0; search.value = ""; $("import-preview-filter").value = "";
+  const blocked = items.filter(item => item.quantity == null).length;
+  $("import-preview-note").textContent = `${(preview.source || "").toLowerCase().includes("ocr") ? "Распознано OCR: процент не гарантирует точность. Сверьте номера и количество с оригиналом." : "Сопоставление с реестром — по организации и инвентарному номеру. Снимите выбор с ненужных строк."} ${blocked ? `Не выбрано позиций без количества: ${blocked}. Исправьте их в Excel для отдельной загрузки.` : ""} Остатки и кабинеты после актов сохраняются.`;
+  search.oninput = $("import-preview-filter").onchange = () => {state.importPreviewPage = 0; update();};
+  $("import-preview-prev").onclick = () => {state.importPreviewPage--; update();};
+  $("import-preview-next").onclick = () => {state.importPreviewPage++; update();};
+  selectPage.onchange = () => {filteredRows().slice(state.importPreviewPage*pageSize, (state.importPreviewPage+1)*pageSize).filter(({item}) => item.quantity != null).forEach(({index}) => selectPage.checked ? selected.add(index) : selected.delete(index)); update();};
+  table.onchange = event => {const checkbox = event.target.closest("[data-import-row]"); if (!checkbox || busy) return; const index = Number(checkbox.dataset.importRow); checkbox.checked ? selected.add(index) : selected.delete(index); update();};
+  $("import-preview-form").setAttribute("aria-busy", "false");
+  $("cancel-import-preview").disabled = search.disabled = $("import-preview-filter").disabled = false;
+  $("import-preview-form").onsubmit = async event => {
+    event.preventDefault();
+    if (busy) return;
+    if (event.submitter?.id === "cancel-import-preview") {dialog.close("cancel"); return;}
+    if (!selected.size) return;
+    busy = true; attempted = true; $("import-preview-form").setAttribute("aria-busy", "true");
+    $("cancel-import-preview").disabled = search.disabled = $("import-preview-filter").disabled = true;
+    $("import-preview-error").hidden = true; update();
+    try {
+      const form = new FormData(); form.append("file", file);
+      items.forEach((_, index) => {if (!selected.has(index)) form.append("exclude_row", String(index));});
+      const result = await api(`/admin/assets/import.${format}?apply=true`, {method: "POST", body: form});
+      if (generation !== sessionGeneration) return;
+      if (result.applied !== true) throw new Error("Сервер не подтвердил применение. Проверьте реестр перед повтором.");
+      saved = {...result, excluded: items.length-selected.size, total: items.length};
+      dialog.close("applied");
+    } catch (error) { if (generation === sessionGeneration && !error.stale) showImportError("import-preview-error", error); }
+    finally {
+      busy = false;
+      if (generation === sessionGeneration) {
+        $("import-preview-form").setAttribute("aria-busy", "false");
+        $("cancel-import-preview").disabled = search.disabled = $("import-preview-filter").disabled = false;
+        update();
+      }
+    }
+  };
+  update(); dialog.returnValue = "";
+  return new Promise(resolve => {dialog.addEventListener("close", () => resolve(saved || {cancelled: true, attempted}), {once: true}); openDialog("import-preview-dialog", "import-preview-heading");});
+}
+async function importAssetFile(file, format) {
+  const generation = sessionGeneration, limit = (format === "xlsx" ? 5 : 10)*1024*1024;
+  $("import-file-errors").hidden = $("import-result").hidden = true;
+  if (file.size > limit) throw new Error(`Файл больше ${format === "xlsx" ? 5 : 10} МБ. Разделите ведомость на меньшие файлы.`);
+  $("data-exchange-status").textContent = `Анализируем ${file.name} · ${(file.size/1024).toLocaleString("ru-RU", {maximumFractionDigits: 1})} КБ…`;
+  const form = new FormData(); form.append("file", file);
+  const preview = await api(`/admin/assets/import.${format}`, {method: "POST", body: form});
+  $("data-exchange-status").textContent = `Проверьте ${(preview.items || preview.samples || []).length} найденных позиций. Реестр пока не изменён.`;
+  const result = await confirmAssetImport(file, format, preview);
+  if (generation !== sessionGeneration) return;
+  if (result.cancelled) {$("data-exchange-status").textContent = result.attempted ? `Импорт ${file.name} закрыт; сохранение не подтверждено. Проверьте реестр перед повтором.` : `Импорт ${file.name} отменён. Изменения не отправлены.`; return;}
+  $("data-exchange-status").textContent = `Импорт завершён: новых — ${result.creates}, обновлено — ${result.updates}, исключено — ${result.excluded}.`;
+  $("import-result").innerHTML = `<span class="eyebrow">Результат импорта</span><h3>Файл обработан</h3><p>${escapeHtml(file.name)} · ${dateTime(new Date())}</p><div class="summary-lines"><div class="summary-line"><span>Новые позиции</span><strong>${result.creates}</strong></div><div class="summary-line"><span>Обновлённые позиции</span><strong>${result.updates}</strong></div><div class="summary-line"><span>Исключено из ${result.total}</span><strong>${result.excluded}</strong></div></div><p>В реестр записаны только выбранные позиции. Повторная загрузка сопоставляет существующие записи по организации и инвентарному номеру.</p><div class="actions"><a class="button-anchor" href="#devices">Открыть реестр</a><a class="button-anchor button-secondary" href="#locations">Открыть кабинеты</a></div>`;
+  $("import-result").hidden = false;
+  const refreshed = await load(false);
+  if (!refreshed) showToast("Импорт сохранён. Повторите загрузку данных.");
 }
 $("import-assets").onclick = () => $("import-assets-file").click();
 $("import-assets-pdf").onclick = () => $("import-assets-pdf-file").click();
-async function handleAssetImportInput(event,format) { const input=event.target,file=input.files?.[0];if(!file)return;const buttons=[$("import-assets"),$("import-assets-pdf")];buttons.forEach((button)=>button.disabled=true);try{await importAssetFile(file,format);}catch(error){$("data-exchange-status").textContent=`Не удалось обработать ${file.name}: ${error.message}`;showToast(error.message,true);}finally{buttons.forEach((button)=>button.disabled=false);input.value="";} }
+async function handleAssetImportInput(event, format) {
+  const input = event.target, file = input.files?.[0]; if (!file) return;
+  const generation = sessionGeneration, buttons = [$("import-assets"), $("import-assets-pdf")];
+  buttons.forEach(button => button.disabled = true);
+  try { await importAssetFile(file, format); }
+  catch (error) { if (!error.stale && generation === sessionGeneration) {$("data-exchange-status").textContent = `Не удалось обработать ${file.name}.`; showImportError("import-file-errors", error);} }
+  finally { buttons.forEach(button => button.disabled = false); input.value = ""; if (generation === sessionGeneration && state.currentUser) $(format === "xlsx" ? "import-assets" : "import-assets-pdf").focus({preventScroll: true}); }
+}
 $("import-assets-file").onchange=(event)=>handleAssetImportInput(event,"xlsx");
 $("import-assets-pdf-file").onchange=(event)=>handleAssetImportInput(event,"pdf");
 $("create-asset").addEventListener("submit",async(event)=>{event.preventDefault();const form=event.currentTarget;try{const body=Object.fromEntries(new FormData(form).entries());body.room_id=body.room_id||null;body.quantity=body.quantity||1;body.category=({Desktop:"IT",Laptop:"IT",Printer:"IT",Projector:"IT",Network:"IT",Furniture:"FURNITURE",Sports:"SPORTS",Educational:"EDUCATIONAL",Other:"OTHER"})[body.asset_type]||"OTHER";await api("/admin/assets",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});form.reset();form.hidden=true;syncTrackingMode();showToast("Имущество добавлено в реестр");await load(false);}catch(error){showToast(error.message,true);}});
@@ -1313,7 +1490,10 @@ $("room-inspection-action").onclick=openRoomInspectionDialog;
 $("room-edit-cancel").onclick=()=>$("room-edit-dialog").close();
 $("room-edit-form").addEventListener("submit",async(event)=>{event.preventDefault();const roomId=state.roomWorkspace?.room.id;if(!roomId)return;const button=$("room-edit-submit"),body={purpose:$("room-edit-purpose").value.trim()||null,responsible_name:$("room-edit-responsible").value.trim()||null,responsible_contact:$("room-edit-contact").value.trim()||null,notes:$("room-edit-notes").value.trim()||null};button.disabled=true;try{await api(`/admin/locations/rooms/${roomId}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});await load(false);await openRoomWorkspace(roomId);$("room-edit-dialog").close();showToast("Данные кабинета сохранены");}catch(error){showToast(error.message,true);}finally{button.disabled=false;}});
 $("room-inspection-cancel").onclick=()=>$("room-inspection-dialog").close();
-$("room-inspection-form").addEventListener("submit",async(event)=>{event.preventDefault();const roomId=state.roomWorkspace?.room.id;if(!roomId)return;const button=$("room-inspection-submit"),items=[...$("room-inspection-items").querySelectorAll(".inspection-item")].map((row)=>{const result=row.querySelector(".inspection-result-input").value;return {asset_id:row.dataset.asset,result,affected_quantity:result==="PRESENT"?0:Number(row.querySelector(".inspection-affected-input").value),comment:row.querySelector(".inspection-item-comment").value.trim()||null};}),body={comment:$("room-inspection-comment").value.trim()||null,items};button.disabled=true;try{await api(`/admin/locations/rooms/${roomId}/inspections`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});await load(false);await openRoomWorkspace(roomId);state.roomTab="inspection";renderRoomTab();$("room-inspection-dialog").close();showToast("Обход кабинета сохранён");}catch(error){showToast(error.message,true);}finally{button.disabled=false;}});
+$("room-inspection-form").addEventListener("submit", saveRoomInspection);
+$("inspection-review-back").onclick = () => { $("inspection-error").hidden = true; setInspectionStep(false); $("inspection-result-0").focus(); };
+$("room-inspection-dialog").addEventListener("cancel", event => { if ($("room-inspection-submit").disabled) event.preventDefault(); });
+$("import-preview-dialog").addEventListener("cancel", event => { if ($("import-preview-form").getAttribute("aria-busy") === "true") event.preventDefault(); });
 $("physical-incident-cancel").onclick=()=>$("physical-incident-dialog").close();
 $("physical-incident-action-select").addEventListener("change",syncPhysicalOperationFields);
 $("physical-incident-quantity").addEventListener("input",syncPhysicalOperationFields);

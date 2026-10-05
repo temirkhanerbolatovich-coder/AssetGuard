@@ -13,6 +13,8 @@ Production: **https://assetguard-temirkhan.duckdns.org**
 
 Telegram ранее принят на `0b90607`, schema `0026`; после UI-релиза очередь и штатное подавление повтора проверены вновь, таймеры активны. [Приёмка Telegram](../../outputs/assetguard-telegram-2026-10-05.md), [функция и настройка](../features/telegram-notifications.md). Fleet acceptance остаётся самостоятельной задачей.
 
+UI/UX 3 реализован локально и проходит release acceptance: [обход и импорт](../features/rooms-inspection-and-import.md), 101 backend + 8 browser E2E прошли. Ошибки строк, scope, canonical комнаты, повторный импорт, review до сохранения и сохранение ввода после отказа проверены в изолированной БД. Production статус выше обновляется только по завершённой выкладке.
+
 Последняя проверенная production/R2 restore revision: **`0026_telegram_notifications`**, 2026-10-05 по времени клиента, **216 assets / 11 endpoints**.
 
 Предыдущий этап: **стабилизация принята на production 2026-10-04**, application commit `93ff8ed`, schema `0025`. Push/manual CI прошли, включая реальную модель; backup/restore и recovery проверены. [Исторический протокол](../../outputs/assetguard-release-2026-10-04.md). Windows installer `0.1.7` пока не опубликован.

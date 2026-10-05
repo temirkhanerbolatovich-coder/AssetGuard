@@ -37,6 +37,63 @@ def import_file(kind: str, headers: list[str], rows: list[list[object]]) -> tupl
 
 
 @pytest.mark.parametrize("kind", ["xlsx", "pdf"])
+def test_import_row_errors_are_atomic_and_locations_remain_canonical(kind: str) -> None:
+    async def exercise():
+        now = datetime.now(UTC)
+        with get_session_factory()() as session:
+            own = OrganizationRecord(name="Canonical school", created_at=now)
+            foreign = OrganizationRecord(name="Foreign school", created_at=now)
+            session.add_all([own, foreign]); session.flush()
+            session.add(UserRecord(username="canonical-admin", password_hash=hash_password("Canonical-test-123"),
+                                   role="ADMIN", organization_id=own.id, is_active=True, created_at=now))
+            session.commit()
+        columns = ["inventory_number", "name", "asset_type", "quantity", "unit", "building", "floor", "room"]
+        valid = ["CAN-1", "Desks", "Furniture", 8, "шт", "Main", "1", "101"]
+        bad = [valid, ["CAN-2", "", "Furniture", 2, "шт", "Main", "1", "101"],
+               ["CAN-3", "Chairs", "Furniture", "1.5", "шт", "Main", "1", "101"]]
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as client:
+            login = await client.post("/auth/login", json={"username": "canonical-admin", "password": "Canonical-test-123"})
+            headers = {"X-AssetGuard-Admin-Token": login.json()["access_token"]}
+            path = f"/admin/assets/import.{kind}"
+            for apply in (False, True):
+                response = await client.post(path, headers=headers, params={"apply": str(apply).lower()},
+                                             files={"file": import_file(kind, columns, bad)})
+                assert response.status_code == 422
+                detail = response.json()["detail"]
+                assert detail["code"] == "IMPORT_ROWS_INVALID" and detail["error_count"] == 2
+                assert [item["row"] for item in detail["errors"]] == [3, 4]
+                assert all(item["page"] == (1 if kind == "pdf" else None) for item in detail["errors"])
+                assert (await client.get("/admin/assets", headers=headers)).json() == []
+            duplicate = await client.post(path, headers=headers, files={"file": import_file(kind, columns, [valid, valid])})
+            assert duplicate.status_code == 422
+            assert duplicate.json()["detail"]["errors"][0]["row"] == 3
+            good_file = import_file(kind, columns, [valid])
+            preview = await client.post(path, headers=headers, files={"file": good_file})
+            assert preview.status_code == 200
+            assert preview.json()["scope"]["organization_name"] == "Canonical school"
+            assert preview.json()["items"][0]["source_row"] == 2
+            assert (await client.get("/admin/locations/tree", headers=headers)).json() == []
+            for _ in range(2):
+                assert (await client.post(path, params={"apply": "true"}, headers=headers, files={"file": good_file})).status_code == 200
+            assets = (await client.get("/admin/assets", headers=headers)).json()
+            assert len(assets) == 1 and assets[0]["room_id"]
+            room_id = assets[0]["room_id"]
+            tree = (await client.get("/admin/locations/tree", headers=headers)).json()
+            assert len(tree) == 1 and tree[0]["organization_id"] == preview.json()["scope"]["organization_id"]
+            workspace = (await client.get(f"/admin/locations/rooms/{room_id}/workspace", headers=headers)).json()
+            assert workspace["inventory"]["assets"][0]["quantity"] == 8
+            old_format = import_file(kind, ["inventory_number", "name", "asset_type"], [["CAN-1", "Updated desks", "Furniture"]])
+            assert (await client.post(path, params={"apply": "true"}, headers=headers, files={"file": old_format})).status_code == 200
+            updated = (await client.get("/admin/assets", headers=headers)).json()[0]
+            assert updated["room_id"] == room_id and updated["room"] == "101" and updated["quantity"] == 8
+            foreign_file = import_file(kind, ["inventory_number", "name", "asset_type", "organization"],
+                                       [["FORBIDDEN", "Desk", "Furniture", "Foreign school"]])
+            assert (await client.post(path, params={"apply": "true"}, headers=headers, files={"file": foreign_file})).status_code == 403
+            assert len((await client.get("/admin/assets", headers=headers)).json()) == 1
+    asyncio.run(exercise())
+
+
+@pytest.mark.parametrize("kind", ["xlsx", "pdf"])
 def test_import_uses_authenticated_organization_for_preview_create_and_update(kind: str) -> None:
     async def exercise() -> None:
         now = datetime.now(UTC)

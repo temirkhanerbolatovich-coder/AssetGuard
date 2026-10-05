@@ -211,7 +211,7 @@ def test_admin_can_open_dashboard_and_create_asset(live_server):
         page.locator('[data-import-row="25"]').uncheck()
         assert page.locator("#import-preview-rows").inner_text() == "29"
         page.locator("#cancel-import-preview").click()
-        page.locator("#data-exchange-status").filter(has_text="Реестр не изменён").wait_for()
+        page.locator("#data-exchange-status").filter(has_text="Изменения не отправлены").wait_for()
         page.get_by_role("link", name="Вернуться к устройствам").click()
         page.locator("#devices").wait_for(state="visible")
 
@@ -317,8 +317,10 @@ def test_admin_can_open_dashboard_and_create_asset(live_server):
         page.locator("#room-inspection-items .inspection-affected-input").fill("1")
         page.locator("#room-inspection-comment").fill("E2E обход кабинета")
         page.locator("#room-inspection-submit").click()
+        page.locator("#inspection-review-step").wait_for(state="visible")
+        page.locator("#room-inspection-submit").click()
         page.locator("#room-inspection-dialog").wait_for(state="hidden")
-        assert page.locator("#room-tab-content").get_by_text("E2E обход кабинета").is_visible()
+        page.locator("#room-tab-content").get_by_text("E2E обход кабинета").wait_for()
         assert page.locator("#room-tab-content").get_by_text("Повреждено · 1").is_visible()
         page.locator('[data-room-tab="incidents"]').click()
         assert page.locator("#room-tab-content").get_by_text("Проектор кабинета: повреждено").is_visible()
@@ -327,7 +329,7 @@ def test_admin_can_open_dashboard_and_create_asset(live_server):
         page.locator("#physical-incident-comment").fill("Передать проектор в ремонт")
         page.locator("#physical-incident-submit").click()
         page.locator("#physical-incident-dialog").wait_for(state="hidden")
-        assert page.locator("#room-tab-content").get_by_text("Ремонт").is_visible()
+        page.locator("#room-tab-content").get_by_text("Ремонт").wait_for()
         page.locator("#room-vision-action").click()
         assert page.locator("#vision-location-room").input_value() == room["id"]
         assert page.locator("#vision-asset-id option").count() == 2
@@ -830,5 +832,161 @@ def test_registry_pages_and_unified_physical_incident_workflow(live_server):
         page.locator("#clear-incident-filters").click()
         page.locator("#incident-status-filter").select_option("RESOLVED")
         assert page.locator("#incident-center-list .incident-card").count() == 1
+        assert failures == [], failures
+        browser.close()
+
+
+def test_import_to_room_inspection_preserves_selection_and_reviews_before_save(live_server):
+    playwright = pytest.importorskip("playwright.sync_api")
+    headers = {"X-AssetGuard-Admin-Token": get_settings().admin_shared_secret}
+
+    def spreadsheet(rows, filename="school.xlsx"):
+        workbook = Workbook()
+        workbook.active.append(["inventory_number", "name", "asset_type", "quantity", "unit", "building", "floor", "room"])
+        for row in rows:
+            workbook.active.append(row)
+        stream = BytesIO()
+        workbook.save(stream)
+        workbook.close()
+        return {"name": filename, "mimeType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "buffer": stream.getvalue()}
+
+    valid = spreadsheet([
+        ["DESKS", "Desks", "Furniture", 8, "шт.", "Main", "1", "101"],
+        ["PROJECTOR", "Projector", "Projector", 1, "шт.", "Main", "1", "101"],
+        ["CHAIRS", "Chairs", "Furniture", 12, "шт.", "Main", "1", "101"],
+        ["EXCLUDED", "Excluded equipment", "Other", 1, "шт.", "Main", "1", "102"],
+    ])
+    invalid = spreadsheet([
+        ["DESKS", "Desks", "Furniture", 8],
+        ["BAD", "", "Furniture", 1],
+        ["BAD-QUANTITY", "Invalid quantity", "Furniture", 1.5],
+    ], "invalid.xlsx")
+    with playwright.sync_playwright() as runtime:
+        browser = runtime.chromium.launch()
+        page = browser.new_page(viewport={"width": 1366, "height": 900})
+        page.set_default_timeout(10_000)
+        failures = []
+        page.on("pageerror", lambda error: failures.append(str(error)))
+
+        def get(path):
+            response = page.request.get(live_server + path, headers=headers)
+            assert response.ok, response.text()
+            return response.json()
+
+        def capture(name):
+            if os.environ.get("ASSETGUARD_CAPTURE_UI_PREVIEWS") == "1":
+                output = Path(__file__).resolve().parents[3] / "outputs/ui-stage3-preview-2026-10-05"
+                output.mkdir(parents=True, exist_ok=True)
+                page.screenshot(path=str(output / name))
+
+        def verify_modal(dialog_id, prefix):
+            for width in (1366, 768, 320, 390):
+                page.set_viewport_size({"width": width, "height": 900})
+                assert_no_page_overflow(page, width)
+                assert page.locator(dialog_id).evaluate("element => element.scrollWidth <= element.clientWidth"), width
+                if width in (1366, 390):
+                    if dialog_id == "#import-preview-dialog":
+                        page.locator(".import-preview-body").evaluate("element => element.scrollTop = 0")
+                    capture(f"{prefix}-{'desktop' if width == 1366 else 'mobile'}.png")
+                    if dialog_id == "#import-preview-dialog" and width == 390:
+                        page.locator("#import-preview-samples").evaluate("element => element.scrollIntoView()")
+                        capture("import-rows-mobile.png")
+            page.set_viewport_size({"width": 1366, "height": 900})
+
+        page.goto(live_server + "/#data-exchange")
+        page.locator("#login-mode").click()
+        page.locator("#token").fill(get_settings().admin_shared_secret)
+        page.locator("#login").click()
+        page.locator("#status").filter(has_text="Данные актуальны").wait_for()
+        page.locator("#import-assets-file").set_input_files(invalid)
+        page.locator("#import-file-errors").wait_for(state="visible")
+        assert "строка 3" in page.locator("#import-file-errors").inner_text()
+        assert "строка 4" in page.locator("#import-file-errors").inner_text()
+        assert get("/admin/assets") == []
+
+        page.locator("#import-assets-file").set_input_files(valid)
+        page.locator("#import-preview-dialog").wait_for(state="visible")
+        assert "Default Organization" in page.locator("#import-preview-scope").inner_text()
+        page.locator('[data-import-row="3"]').uncheck()
+        page.locator("#import-preview-filter").select_option("create")
+        verify_modal("#import-preview-dialog", "import-preview")
+        apply_url = "**/admin/assets/import.xlsx?apply=true"
+        page.route(apply_url, lambda route: route.fulfill(status=503, json={"detail": "Controlled test outage"}), times=1)
+        page.locator("#apply-import-preview").click()
+        page.locator("#import-preview-error").wait_for(state="visible")
+        assert not page.locator('[data-import-row="3"]').is_checked()
+        assert page.locator("#import-preview-rows").inner_text() == "3"
+        assert get("/admin/assets") == []
+        page.locator("#apply-import-preview").click()
+        page.locator("#import-preview-dialog").wait_for(state="hidden")
+        page.locator("#import-result").wait_for(state="visible")
+        assert "новых — 3, обновлено — 0, исключено — 1" in page.locator("#data-exchange-status").inner_text()
+        assets = get("/admin/assets")
+        assert len(assets) == 3
+        assert next(asset for asset in assets if asset["inventory_number"] == "PROJECTOR")["asset_type"] == "Projector"
+        assert all(asset["room_id"] for asset in assets)
+        room_id = assets[0]["room_id"]
+        assert len({asset["room_id"] for asset in assets}) == 1
+        page.locator("#import-assets-file").set_input_files(valid)
+        page.locator("#import-preview-dialog").wait_for(state="visible")
+        assert page.locator("#import-preview-updates").inner_text() == "3"
+        page.locator('[data-import-row="3"]').uncheck()
+        page.locator("#apply-import-preview").click()
+        page.locator("#import-preview-dialog").wait_for(state="hidden")
+        page.locator("#data-exchange-status").filter(has_text="новых — 0, обновлено — 3, исключено — 1").wait_for()
+        assert len(get("/admin/assets")) == 3
+        page.locator("#import-result a[href='#locations']").click()
+        page.locator(f'.room-report[data-room="{room_id}"]').click()
+        page.locator("#room-detail-title").filter(has_text="101").wait_for()
+        page.locator("#room-inspection-action").click()
+        assert page.locator(".inspection-result-input").evaluate_all("elements => elements.every(element => element.value === '')")
+        page.locator("#room-inspection-submit").click()
+        assert "3 позиций" in page.locator("#inspection-error").inner_text()
+
+        def inspection_row(name):
+            return page.locator("#room-inspection-items .inspection-item", has=page.get_by_text(name, exact=True))
+
+        desks, projector, chairs = (inspection_row(name) for name in ("Desks", "Projector", "Chairs"))
+        desks.locator("select").select_option("MISSING")
+        desks.locator(".inspection-affected-input").fill("9")
+        projector.locator("select").select_option("PRESENT")
+        chairs.locator("select").select_option("DAMAGED")
+        chairs.locator(".inspection-affected-input").fill("2")
+        page.locator("#room-inspection-comment").fill("Controlled school inspection")
+        page.locator("#room-inspection-submit").click()
+        assert "от 1 до 8" in page.locator("#inspection-error").inner_text()
+        desks.locator(".inspection-affected-input").fill("2")
+        page.locator("#room-inspection-submit").click()
+        page.locator("#inspection-review-step").wait_for(state="visible")
+        assert "на месте: 1 · отсутствует: 1 · повреждено: 1" in page.locator("#inspection-review-counts").inner_text()
+        assert get(f"/admin/locations/rooms/{room_id}/inspections") == []
+        verify_modal("#room-inspection-dialog", "inspection-review")
+        inspection_url = f"**/admin/locations/rooms/{room_id}/inspections"
+        page.route(inspection_url, lambda route: route.fulfill(status=503, json={"detail": "Controlled test outage"}) if route.request.method == "POST" else route.continue_(), times=1)
+        page.locator("#room-inspection-submit").click()
+        page.locator("#inspection-error").wait_for(state="visible")
+        assert page.locator("#inspection-review-step").is_visible()
+        assert get(f"/admin/locations/rooms/{room_id}/inspections") == []
+        page.locator("#inspection-review-back").click()
+        assert desks.locator(".inspection-affected-input").input_value() == "2"
+        chairs.locator(".inspection-affected-input").fill("1")
+        page.locator("#room-inspection-submit").click()
+        page.locator("#room-inspection-form").evaluate("form => { form.requestSubmit(); form.requestSubmit(); }")
+        page.locator("#room-inspection-dialog").wait_for(state="hidden")
+        page.locator("#room-tab-content .workflow-receipt").wait_for()
+        page.locator("#room-tab-content").get_by_text("Controlled school inspection", exact=True).wait_for()
+        inspections = get(f"/admin/locations/rooms/{room_id}/inspections")
+        assert len(inspections) == 1
+        assert len(inspections[0]["items"]) == 3
+        assert sorted(item["affected_quantity"] for item in inspections[0]["items"]) == [0, 1, 2]
+        assert len(get("/admin/locations/physical-incidents")) == 2
+        capture("inspection-result-desktop.png")
+        page.reload()
+        page.locator("#room-detail-title").filter(has_text="101").wait_for()
+        page.locator('[data-room-tab="inspection"]').click()
+        page.locator("#room-tab-content").get_by_text("Controlled school inspection", exact=True).wait_for()
+        page.set_viewport_size({"width": 390, "height": 900})
+        assert_no_page_overflow(page, 390)
+        capture("inspection-result-mobile.png")
         assert failures == [], failures
         browser.close()

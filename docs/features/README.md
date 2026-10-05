@@ -11,6 +11,7 @@
 | Per-Agent credentials, revoke и подтверждаемое re-enrolment | [Agent ADR](../decisions/ADR-005-agent-reenrolment.md), [Windows operations](../../scripts/windows/README.md) |
 | Dashboard, поиск, карточка оборудования и история | [UX workflow](../product/ux-workflow.md), browser E2E tests |
 | Реестр, карточки и единый центр инцидентов | [Этап UI/UX 2](registry-and-incident-center.md), browser E2E и tenant/location tests |
+| Кабинеты, обход с итогом и импорт | [Этап UI/UX 3](rooms-inspection-and-import.md), атомарные ошибки Excel/PDF и browser E2E |
 | Экран входа, каркас и состояния запросов | [Этап UI/UX 1](frontend-shell-and-auth.md), [ТЗ](../product/ui-ux-modernization-spec.md) |
 | PDF/OCR import, QR и PDF-акты | [PDF/OCR](../operations/pdf-import-ocr.md), unit tests |
 | AssetGuard Vision | [Vision requirements](../product/assetguard-vision-requirements.md), [data flow](../architecture/data-flow.md) |

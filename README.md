@@ -38,6 +38,8 @@ Telegram принят на production 2026-10-05: application commit `0b90607`, 
 
 Новые технические и физические инциденты помещаются в транзакционную Telegram-очередь; отдельный worker отправляет их в явно назначенный чат организации с retry и проверкой acceptance. Проблемы Agent и сервера отслеживает существующий monitor. [Настройка и гарантии доставки](docs/features/telegram-notifications.md), [план UI/UX](docs/product/ui-ux-modernization-spec.md).
 
+Кандидат UI/UX 3 реализован локально: [кабинеты, обход с итогом и импорт](docs/features/rooms-inspection-and-import.md). 101 backend + 8 browser E2E прошли; CI/production acceptance выполняется отдельно. Ошибки Excel/PDF атомарны и привязаны к строкам; canonical кабинет доступен для обхода сразу после импорта. Исходное ТЗ, Vision и схема БД не изменены.
+
 ```text
 GLPI Agent / JSON bridge
           │ HTTPS

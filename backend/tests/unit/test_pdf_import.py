@@ -45,6 +45,27 @@ def test_import_rejects_invalid_accounting_values(values) -> None:
         admin_assets._import_row_values({"inventory_number": "INVALID", "name": "Desk", "asset_type": "Furniture", **values}, 2)
 
 
+def test_import_errors_are_bounded_and_keep_original_source_rows() -> None:
+    header = ["inventory_number", "name", "asset_type"]
+    with pytest.raises(HTTPException) as failure:
+        admin_assets._parse_import_rows(header, [[f"BAD-{index}", "", "Other"] for index in range(60)], page_number=2)
+    assert failure.value.status_code == 422
+    assert failure.value.detail["error_count"] == 60
+    assert len(failure.value.detail["errors"]) == 50
+    assert failure.value.detail["errors"][0]["row"] == 2
+    assert failure.value.detail["errors"][-1]["page"] == 2
+    rows = admin_assets._parse_import_rows(header, [[None, None, None], ["GOOD", "Desk", "Furniture"]])
+    assert rows[0]["_source_row"] == 3
+
+
+def test_import_keeps_canonical_asset_types_when_rows_are_validated_again() -> None:
+    for asset_type in ("Desktop", "Laptop", "Printer", "Projector", "Network", "Furniture", "Sports", "Educational", "Other"):
+        row = admin_assets._import_row_values({"inventory_number": "ROUNDTRIP", "name": "Equipment", "asset_type": asset_type}, 2)
+        assert admin_assets._import_row_values(row, 2)["asset_type"] == asset_type
+    assert admin_assets._asset_type_from_import("Проектор") == "Projector"
+    assert admin_assets._asset_type_from_import("Принтер") == "Printer"
+
+
 def test_government_rows_keep_repeated_sequence_numbers_unique_between_pages() -> None:
     table = [["№ строки", "Наименование", "Номенклатурный номер", "Единица", "Цена", "Количество", "Сумма", "Количество", "Сумма", "Примечание", "№ строки"],
              ["1", "Парта ученическая", "123456", "шт", "1", "", "", "12,000", "12", "", "1"]]
