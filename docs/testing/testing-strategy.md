@@ -15,7 +15,7 @@
 | Static/config checks | JavaScript, PowerShell, shell, Python scripts и Compose config | `.github/workflows/ci.yml` |
 | Security checks | Gitleaks, `pip check`, `pip-audit` | `.github/workflows/ci.yml` |
 
-В текущем наборе 80 unit/integration и 2 browser E2E tests. Число является снимком состояния репозитория на 2026-10-04 и должно обновляться вместе с изменением набора.
+В текущем наборе **101 unit/integration и 8 browser E2E tests** (UI/UX 3, 2026-10-05). Число является снимком состояния репозитория и должно обновляться вместе с изменением набора. Browser сценарии включают login/session/read races, совместные фильтры и возврат в реестр, физический инцидент/акт, импорт → canonical кабинет → обход с итогом, ошибки сохранения и защиту от двойного submit. [Контракт проверки обхода и импорта](../features/rooms-inspection-and-import.md).
 
 ## Тестовое окружение
 
