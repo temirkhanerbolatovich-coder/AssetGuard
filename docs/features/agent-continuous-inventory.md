@@ -17,10 +17,11 @@ Agent сохраняет аппаратные отчёты на диске не�
 
 Собрать EXE: `scripts/windows/build-agent-installer.ps1`. Installer 0.1.8 имеет три режима: новое подключение, approved re-enrolment после переустановки Windows и обновление с сохранением подключения. Обновление не требует нового ключа и не инициирует re-enrolment. Оно переиспользует защищённые локальные credentials, сохраняет очередь и endpoint, проверяемый сервером по hardware identity.
 
-Для обновления уже подключённого PC из повышенного PowerShell:
+Для обновления уже подключённого PC из повышенного PowerShell (без параметра используется сохранённый адрес):
 
 ```powershell
-.\scripts\windows\update-assetguard-agent.ps1
+.\scripts\windows\update-assetguard-agent.ps1 `
+  -GatewayUri 'https://assetguard-temirkhan.duckdns.org/glpi-agent'
 ```
 
 Настроить частоту при новой установке или переустановке конфигурации:
@@ -65,6 +66,8 @@ $secret = Read-Host 'Inventory secret' -AsSecureString
 `ASSETGUARD_GLPI_PROLOG_INTERVAL_SECONDS=360` задаёт штатным старым Agent PROLOG в дробных часах вместо прежних 24 часов. Допустимо 60–86400 секунд; production/free-demo Compose передаёт настройку. Старый Agent увидит её только при следующем контакте: уже сохранённый суточный deadline сервер удалённо не отменяет. Укороченный PROLOG сам по себе не обеспечивает накопление offline отчётов; для этого нужен 0.1.8.
 
 В immutable XML сохраняется `ASSETGUARD_CAPTURED_AT`, но текущая серверная модель/панель продолжает датировать snapshot временем приёма. Точная offline timeline ещё не отображается по времени сбора. FIFO сохраняет порядок изменений. Доставка — at least once с дедупликацией, не exactly once. Повтор существующего отчёта после потери ACK проверен тестами transport и queue.
+
+Версия installer читается из штатного native `CONTENT/ACCOUNTINFO` с `KEYNAME=TAG` или bridge `CONTENT/TAG`; ранее принятые immutable отчёты не переписываются. Readiness проверяет SYSTEM по SID `S-1-5-18`, включая локализованное имя Windows.
 
 Частые отчёты увеличивают объём БД. До массового развёртывания нужны замеры на реальном парке и политика retention. Текущий серверный лимит ingest по IP и 429 сохраняются; несколько PC за одним NAT могут попасть под него даже с jitter. Backoff снижает повторную нагрузку, но не заменяет capacity planning. Публичный installer 0.1.6 не обновляется автоматически; 0.1.8 пока кандидат без code signing и без полной fleet-приёмки 3–5 PC.
 
