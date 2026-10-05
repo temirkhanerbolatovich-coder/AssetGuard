@@ -50,7 +50,7 @@ AssetGuard является работающим pilot MVP: школьный р�
 | Права по локациям | ✅ для основных сценариев | Grants `VIEWER`/`EDITOR` на корпус, этаж или кабинет; API проверяет область доступа | Scoped-resource tests |
 | Credentials устройств | ✅ | Отдельный username/secret на каждый Agent, one-time показ, hash в БД, revoke | API, UI и installer flow |
 | Windows installer | 🟡 0.1.8 candidate | Опубликован 0.1.6; новый 0.1.8 сохраняет version reporting/re-enrolment и добавляет offline delivery, обновление с сохранением ключа | Полная fleet-приёмка нового задания, code signing и публикация ещё не закрыты |
-| Работа Agent в фоне | 🟡 0.1.8 candidate | Независимый локальный сбор, SYSTEM task, offline FIFO, jitter/retry и bounded queue; старый daemon отключается | 138 локальных tests; реальная установка/полный fleet 0.1.8 ещё требуют приёмки |
+| Работа Agent в фоне | ✅ на одном PC / 🟡 fleet | 0.1.8: независимый сбор, SYSTEM task, offline FIFO и randomized delivery; native daemon отключён | 138 tests, реальные автоматические циклы, 3 controlled offline captures → 4 HTTPS attempts → 3 raw/snapshots у прежнего endpoint; физический network/reboot fleet открыт |
 | Физический обход | ✅ | Полная сверка каждой позиции: на месте / отсутствует / повреждено, количество, комментарий и исполнитель | Integration и browser E2E |
 | Физические инциденты | ✅ | Создание из расхождения, единый центр, исходное evidence, проверка, ремонт/операции и решения | Tenant/location integration и browser E2E |
 | Перемещение имущества | ✅ | Выбор целевого кабинета, целое или частичное перемещение групповой позиции, новый инвентарный номер, история | Integration test |

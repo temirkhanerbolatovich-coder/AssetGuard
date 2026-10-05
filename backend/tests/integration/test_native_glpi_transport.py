@@ -9,12 +9,15 @@ import pytest
 
 from assetguard.app import app
 from assetguard.infrastructure.config import get_settings
+from assetguard.interfaces.http.admin_assets import _installer_version
+from assetguard.modules.inventory.adapters import DirectGlpiAgentAdapter
 
 PROLOG = b"""<?xml version='1.0' encoding='UTF-8'?>
 <REQUEST><DEVICEID>native-fixture-pc</DEVICEID><QUERY>PROLOG</QUERY></REQUEST>"""
 
 INVENTORY = b"""<?xml version='1.0' encoding='UTF-8'?>
 <REQUEST><CONTENT>
+  <ACCOUNTINFO><KEYNAME>TAG</KEYNAME><KEYVALUE>assetguard-installer-0.1.8</KEYVALUE></ACCOUNTINFO>
   <BIOS><BSERIAL>NATIVE-BIOS</BSERIAL></BIOS>
   <HARDWARE><UUID>NATIVE-UUID</UUID><NAME>native-fixture-pc</NAME></HARDWARE>
   <CPUS><NAME>Native CPU</NAME></CPUS>
@@ -52,6 +55,8 @@ async def _exercise_native_transport(agent_version: str) -> None:
         assert hours * 3600 == pytest.approx(get_settings().glpi_prolog_interval_seconds)
 
         inventory = INVENTORY.replace(b"1.19", agent_version.encode("ascii"))
+        parsed = DirectGlpiAgentAdapter().parse(inventory)
+        assert _installer_version(parsed.payload["content"]) == "0.1.8"
         first = await client.post("/glpi-agent", headers=native, content=inventory)
         duplicate = await client.post("/glpi-agent", headers=native, content=inventory)
         assert first.status_code == duplicate.status_code == 200

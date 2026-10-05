@@ -1072,7 +1072,13 @@ def _components(session: Session, snapshot: HardwareSnapshotRecord | None) -> li
 def _installer_version(content: dict) -> str | None:
     """Read the version tag written by the AssetGuard installer from GLPI inventory."""
     tags = content.get("tag")
-    values = tags if isinstance(tags, list) else [tags]
+    values = list(tags) if isinstance(tags, list) else [tags]
+    # Local GLPI XML writes tags as ACCOUNTINFO, unlike the JSON bridge.
+    account_info = content.get("accountinfo")
+    entries = account_info if isinstance(account_info, list) else [account_info]
+    for entry in entries:
+        if isinstance(entry, dict) and str(entry.get("keyname", "")).upper() == "TAG":
+            values.append(entry.get("keyvalue"))
     for value in values:
         if isinstance(value, str) and value.startswith(ASSETGUARD_INSTALLER_TAG_PREFIX):
             version = value.removeprefix(ASSETGUARD_INSTALLER_TAG_PREFIX).strip()
