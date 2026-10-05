@@ -183,6 +183,12 @@ def test_complete_workspace_reflow_fonts_onboarding_and_comparison(live_server, 
         assert page.evaluate("incidentLabel({component_type:'RAM',evidence:{previous:{capacity:8192},current:{capacity:0}}})") == 'Изменились сведения о модуле памяти'
         assert page.evaluate("incidentLabel({component_type:'RAM',evidence:{previous:{capacity:8192},current:{capacity:8589934592}}})") == 'Изменились сведения о модуле памяти'
         assert page.evaluate("incidentLabel({component_type:'RAM',evidence:{previous:{capacity:8192},current:{capacity:16384}}})") == 'Изменился объём оперативной памяти'
+        serials = page.evaluate("""() => {
+            const template=document.createElement('template');
+            template.innerHTML=renderFieldComparison('RAM',{previous:{serialnumber:'OLD-MODULE'},current:{serial:'NEW-MODULE'}});
+            return [...template.content.querySelector('tbody tr').cells].map(cell=>cell.textContent);
+        }""")
+        assert serials == ['Серийный номер','OLD-MODULE','NEW-MODULE']
         missing = page.evaluate("renderFieldComparison('RAM',{previous:{capacity:8192,serial:'OLD'},current:null})")
         assert 'Нет данных' in missing and 'Компонент не представлен' in missing
         assert 'Отсутствует' not in missing

@@ -1193,8 +1193,8 @@ function componentSummary(type, raw) {
 }
 
 function comparisonFields(type) {
-  const common = [['Модель',['model','name']],['Описание',['description','caption']],['Производитель',['manufacturer']],['Серийный номер',['serial']]];
-  if (type === 'RAM') return [['Объём',['capacity'],value => Number(value) > 0 ? bytes(memoryCapacityBytes(value)) : 'Не указан'],['Тип памяти',['type','description','caption']],['Частота',['speed'],value => Number(value) > 0 ? `${value} МГц` : 'Не указана'],['Слот',['numslots','slot']],['Производитель',['manufacturer']],['Серийный номер',['serial']],['Модель',['model']]];
+  const common = [['Модель',['model','name']],['Описание',['description','caption']],['Производитель',['manufacturer']],['Серийный номер',['serial','serialnumber']]];
+  if (type === 'RAM') return [['Объём',['capacity'],value => Number(value) > 0 ? bytes(memoryCapacityBytes(value)) : 'Не указан'],['Тип памяти',['type','description','caption']],['Частота',['speed'],value => Number(value) > 0 ? `${value} МГц` : 'Не указана'],['Слот',['numslots','slot']],['Производитель',['manufacturer']],['Серийный номер',['serial','serialnumber']],['Модель',['model']]];
   if (type === 'STORAGE') return [...common,['Объём',['disksize'],value => Number(value) > 0 ? storageSize(value) : 'Не указан'],['Интерфейс',['interface']]];
   if (type === 'CPU') return [...common,['Ядра',['core']],['Потоки',['thread']],['Частота',['speed'],value => Number(value) > 0 ? `${value} МГц` : 'Не указана']];
   if (type === 'ENDPOINT') return [['Имя компьютера',['hostname','value']]];
