@@ -1,6 +1,6 @@
 # ADR-008: Независимый локальный сбор и ограниченная очередь Windows Agent
 
-Status: Accepted  
+Status: Accepted
 Date: 2026-10-05
 
 ## Context

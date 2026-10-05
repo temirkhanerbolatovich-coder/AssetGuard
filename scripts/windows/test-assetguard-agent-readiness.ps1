@@ -63,7 +63,18 @@ $runtimeRoot = Join-Path $env:ProgramData 'AssetGuard\Agent'
 Add-Check $checks 'service_exists' ($null -ne $service) $(if ($service) { $service.Name } else { 'missing' })
 if ($deliveryTask -or $ExpectedInstallerVersion -eq '0.1.8') {
     Add-Check $checks 'delivery_task_enabled' ($deliveryTask -and $deliveryTask.State -ne 'Disabled') $(if ($deliveryTask) { [string]$deliveryTask.State } else { 'missing' })
-    Add-Check $checks 'delivery_task_system' ($deliveryTask -and $deliveryTask.Principal.UserId -in @('SYSTEM', 'S-1-5-18')) $(if ($deliveryTask) { [string]$deliveryTask.Principal.UserId } else { 'missing' })
+    $taskPrincipalSid = ''
+    if ($deliveryTask) {
+        try {
+            $taskUser = [string]$deliveryTask.Principal.UserId
+            # Task Scheduler returns localized names (e.g. SYSTEM on Russian Windows).
+            $taskPrincipalSid = if ($taskUser -match '^S-1-') { $taskUser } else {
+                ([Security.Principal.NTAccount]::new($taskUser)).Translate([Security.Principal.SecurityIdentifier]).Value
+            }
+        }
+        catch { $taskPrincipalSid = 'unresolved' }
+    }
+    Add-Check $checks 'delivery_task_system' ($taskPrincipalSid -eq 'S-1-5-18') $taskPrincipalSid
     Add-Check $checks 'upstream_daemon_disabled' ($service.StartMode -eq 'Disabled' -and $service.State -eq 'Stopped') $(if ($service) { "$($service.State)/$($service.StartMode)" } else { 'missing' })
     $policyPath = Join-Path $runtimeRoot 'policy.json'
     $policy = if (Test-Path -LiteralPath $policyPath) { Get-Content -LiteralPath $policyPath -Raw | ConvertFrom-Json } else { $null }
