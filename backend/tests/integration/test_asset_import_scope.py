@@ -44,7 +44,7 @@ def test_import_row_errors_are_atomic_and_locations_remain_canonical(kind: str) 
             own = OrganizationRecord(name="Canonical school", created_at=now)
             foreign = OrganizationRecord(name="Foreign school", created_at=now)
             session.add_all([own, foreign]); session.flush()
-            session.add(UserRecord(username="canonical-admin", password_hash=hash_password("Canonical-test-123"),
+            session.add(UserRecord(username="canonical-admin", password_hash=hash_password("test-password"),
                                    role="ADMIN", organization_id=own.id, is_active=True, created_at=now))
             session.commit()
         columns = ["inventory_number", "name", "asset_type", "quantity", "unit", "building", "floor", "room"]
@@ -52,7 +52,7 @@ def test_import_row_errors_are_atomic_and_locations_remain_canonical(kind: str) 
         bad = [valid, ["CAN-2", "", "Furniture", 2, "шт", "Main", "1", "101"],
                ["CAN-3", "Chairs", "Furniture", "1.5", "шт", "Main", "1", "101"]]
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as client:
-            login = await client.post("/auth/login", json={"username": "canonical-admin", "password": "Canonical-test-123"})
+            login = await client.post("/auth/login", json={"username": "canonical-admin", "password": "test-password"})
             headers = {"X-AssetGuard-Admin-Token": login.json()["access_token"]}
             path = f"/admin/assets/import.{kind}"
             for apply in (False, True):
