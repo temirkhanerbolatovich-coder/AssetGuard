@@ -10,7 +10,7 @@ Production: **https://assetguard-temirkhan.duckdns.org**
 Текущий UI — **полный редизайн Ledger**: все рабочие разделы, карточки и формы,
 Golos Text, источники реестра, карточка компьютера до связи, field comparison,
 скрытый завершённый onboarding и общая анимация. **122 backend + 21 browser E2E**
-прошли локально и в GitHub CI; application **1f7ff56** развёрнут на production, API/шрифты/девять экранов и реальные карточки компьютера/инцидента проверены чтением без admin mutations. Свежий pre-deploy R2 restore прошёл, timers active. Проверен настоящий browser zoom 200%; NVDA, zoom 400%,
+прошли локально и в GitHub CI; application **1107389** развёрнут на production, включая QR-запуск обхода и сканирование имущества. API/шрифты/девять экранов и реальные карточки компьютера/инцидента проверены чтением без admin mutations; авторизованный QR реального кабинета сформирован. Pre/post-deploy backup прошёл, timers active. Проверен настоящий browser zoom 200%; NVDA, zoom 400%,
 Safari/Firefox и usability сотрудников остаются открыты. [Реализация и референсы](../features/ui-ledger-redesign.md),
 [приёмка со снимками](../../outputs/assetguard-redesign-2026-10-05/report.md).
 
