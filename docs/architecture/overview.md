@@ -18,8 +18,10 @@ flowchart LR
     API --> Vision[(Vision images volume)]
     API --> Models[(Hugging Face model cache)]
     Ops[Backup and monitoring scripts] --> DB
-    Ops --> Vision
     Ops --> R2[Cloudflare R2]
+    DB --> Worker[Telegram notification worker]
+    Worker --> Telegram[Telegram API]
+    Ops -->|server and Agent alerts| Telegram
 ```
 
 В локальной разработке клиенты могут обращаться к FastAPI напрямую. В production публичным компонентом является Caddy; API и PostgreSQL находятся во внутренней Docker-сети.
@@ -35,6 +37,7 @@ flowchart LR
 | Incidents и history | Инциденты, решения и журнал действий по активу или endpoint | `modules/incidents/`, `modules/history/` |
 | Assets | Организации, здания, этажи, помещения, активы и физические проверки | `modules/assets/` |
 | Identity | Пользователи, сессии, роли, Agent credentials, re-enrolment и доступ к помещениям | `modules/identity/` |
+| Notifications | Транзакционный outbox инцидентов, tenant-scoped metadata и отдельная отправка/retry в Telegram | `modules/notifications/`, `scripts/linux/assetguard-server-notifications.sh` |
 | Vision | Grounding DINO, scans, detections и room baseline | `modules/vision/` |
 | Persistence | SQLAlchemy sessions и Alembic migrations | `infrastructure/database.py`, `backend/migrations/` |
 | Web UI | Статический browser dashboard, смонтированный FastAPI | `frontend/`, `assetguard/app.py` |
@@ -46,8 +49,10 @@ flowchart LR
 - PostgreSQL хранит доменные сущности, raw inventory, snapshots, события, инциденты, решения, сессии и метаданные Vision.
 - Оригиналы и аннотированные изображения Vision хранятся в файловой системе. В production это volume `assetguard-vision-data`.
 - Модель Vision кэшируется отдельно в `assetguard-model-cache`.
-- Alembic является единственным подтверждённым механизмом изменения схемы; на момент этого документа цепочка включает migrations `0001`–`0025_agent_reenrolment`.
+- Alembic является единственным подтверждённым механизмом изменения схемы; цепочка включает migrations `0001`–`0026_telegram_notifications`.
 - Raw inventory, снимки и история являются свидетельствами; новый снимок не заменяет baseline автоматически.
+
+Существующий backup сохраняет PostgreSQL, включая outbox; Vision images volume в него не входит. Инцидент и outbox фиксируются одной транзакцией. Минутный systemd worker отправляет сообщения отдельно от HTTP request; monitor отслеживает Agent/сервер каждые пять минут. [Гарантии и ограничения Telegram](../features/telegram-notifications.md).
 
 ## Развёртывание
 

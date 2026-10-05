@@ -9,7 +9,7 @@ Production: **https://assetguard-temirkhan.duckdns.org**
 
 Рабочая точка 2026-10-05: **этапы UI/UX 1–4 приняты на production**, application commit `45d739b`. **102 backend + 9 browser E2E**, GitHub CI, Secret scan и dependency audit прошли. Этап 4: конкретные ПК/свежесть/порог STALE, credentials/re-enrolment, безопасные формы сотрудников/назначений, ADMIN-only tenant-scoped очередь доставки. Schema `0026`, **63 защищённые операции**. Authenticated/anonymous production browser/API и pre/post off-site restore прошли; browser acceptance не меняла рабочие записи. [Приёмка этапа 4](../../outputs/assetguard-ui-stage4-2026-10-05.md), [контракт](../features/agent-administration-and-delivery.md), [ТЗ UI/UX](ui-ux-modernization-spec.md).
 
-Предыдущие UI/UX этапы: [1 — вход и каркас](../../outputs/assetguard-ui-stage1-2026-10-05.md) (`d8f6a63`), [2 — реестр и инциденты](../../outputs/assetguard-ui-stage2-2026-10-05.md) (`c254125`), [3 — кабинеты, обход и импорт](../../outputs/assetguard-ui-stage3-2026-10-05.md) (`2ae4b01`). Следующий UI/UX этап **5 — accessibility/zoom/performance/usability**. Pagination Agent ограничивает DOM; endpoints пока загружаются целиком. API exactly-once записи не заявляется: при потере ответа сначала проверяется состояние/история.
+Предыдущие UI/UX этапы: [1 — вход и каркас](../../outputs/assetguard-ui-stage1-2026-10-05.md) (`d8f6a63`), [2 — реестр и инциденты](../../outputs/assetguard-ui-stage2-2026-10-05.md) (`c254125`), [3 — кабинеты, обход и импорт](../../outputs/assetguard-ui-stage3-2026-10-05.md) (`2ae4b01`). UI/UX этап **5**: технические исправления и автоматическая приёмка выполнены локально (**102 backend + 16 browser E2E**); production выкладка пока ожидается. [Протокол](../../outputs/assetguard-ui-stage5-2026-10-05.md), [ручная приёмка](../testing/ui-acceptance.md). Browser zoom, screen reader, representative performance и usability с сотрудниками остаются открытыми. Pagination Agent ограничивает DOM; endpoints пока загружаются целиком. API exactly-once записи не заявляется: при потере ответа сначала проверяется состояние/история.
 
 Telegram ранее принят на `0b90607`, schema `0026`; после UI-релиза очередь и штатное подавление повтора проверены вновь, таймеры активны. [Приёмка Telegram](../../outputs/assetguard-telegram-2026-10-05.md), [функция и настройка](../features/telegram-notifications.md). Live: **11 PC, 1 online / 10 stale**, failed ingest 0, pending/retrying 0. Fleet acceptance, подпись/публикация installer 0.1.7 и Vision production остаются самостоятельными задачами.
 
@@ -35,7 +35,7 @@ AssetGuard является работающим pilot MVP: школьный р�
 
 | Область | Статус | Что работает сейчас | Проверка |
 | --- | --- | --- | --- |
-| Backend и БД | ✅ | FastAPI, PostgreSQL 17, SQLAlchemy, Alembic; production migrations до `0025` | CI; isolated upgrade/downgrade/re-upgrade; actual production revision и R2 restore `0025` |
+| Backend и БД | ✅ | FastAPI, PostgreSQL 17, SQLAlchemy, Alembic; production migrations до `0026` | CI; isolated upgrade/downgrade/re-upgrade; actual production revision и свежий R2 restore `0026` |
 | Raw inventory | ✅ | Неизменяемый исходный payload, hash, idempotency, processing status | Integration tests и DB triggers |
 | GLPI Agent transport | ✅ | Native GLPI Agent 1.19/1.20 `PROLOG → INVENTORY` и JSON bridge | Два реальных Windows-PC и fixtures |
 | Аппаратная инвентаризация | ✅ | CPU, RAM, накопители, GPU, motherboard, сеть, мониторы, BIOS/идентификаторы | Unit/integration tests |

@@ -101,9 +101,9 @@ input,select,button{max-width:100%}button{line-height:1.25}.login-help{overflow-
   --surface-raised: #ffffff;
   --ink: #182536;
   --navy: #142b45;
-  --muted: #627083;
+  --muted: #526272;
   --line: #dce3e8;
-  --line-strong: #bfcbd5;
+  --line-strong: #7b8996;
   --accent: #0d6975;
   --accent-hover: #095864;
   --accent-soft: #e6f3f4;
@@ -123,7 +123,7 @@ h1, h2, h3, h4 { color: var(--navy); letter-spacing: -.018em; }
 h1 { font-size: clamp(1.75rem, 2.2vw, 2.25rem); line-height: 1.15; }
 h2 { font-size: clamp(1.3rem, 1.6vw, 1.6rem); line-height: 1.25; }
 h3 { font-size: 1rem; line-height: 1.35; }
-.eyebrow { color: #627c93; font-size: .68rem; letter-spacing: .105em; }
+.eyebrow { color: #526b80; font-size: .68rem; letter-spacing: .105em; }
 .page-intro { padding: 4px 0 22px; border-bottom: 1px solid var(--line); }
 .page-intro .status { max-width: 420px; line-height: 1.45; }
 
@@ -166,7 +166,7 @@ input, select, textarea {
   background: #fff;
   color: var(--ink);
 }
-input:hover, select:hover, textarea:hover { border-color: #8ea2b1; }
+input:hover, select:hover, textarea:hover { border-color: #526b80; }
 input:focus, select:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(13, 105, 117, .12); outline: 0; }
 
 .attention-banner { border-radius: 10px; border-left-width: 4px; background: var(--warn-soft); }
@@ -401,3 +401,28 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .admin-shortcuts { flex-wrap: wrap; margin-bottom: 20px; }
 #agent-fleet-panel, #agent-install-panel, #agent-reenrolment-panel, #notification-panel { scroll-margin-top: 20px; }
 @media (max-width: 1199px) { #agent-fleet-panel, #agent-install-panel, #agent-reenrolment-panel, #notification-panel { scroll-margin-top: 190px; } }
+
+/* Measured contrast and focus: the input :focus reset must not hide keyboard focus. */
+.attention-banner p { color: var(--muted); }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible,
+a:focus-visible, summary:focus-visible, [tabindex]:focus-visible, .metric-card:focus-visible {
+  outline: 3px solid #0b766e;
+  outline-offset: 3px;
+}
+.app-header :focus-visible { outline-color: #8ee2d8; }
+:focus-visible { scroll-margin-block: 200px 80px; }
+dialog :focus-visible { scroll-margin-block: 20px; }
+.toast { pointer-events: none; }
+input::placeholder, textarea::placeholder { color: #526272; opacity: 1; }
+input, select, textarea { scroll-margin-block: 200px 80px; }
+dialog { max-height: calc(100dvh - 24px); overflow-y: auto; }
+dialog input, dialog select, dialog textarea { scroll-margin-block: 20px; }
+.asset-tabs button, .room-tabs button { min-height: 44px; }
+@media (max-height: 480px) and (max-width: 1199px) {
+  .app-header { position: static; }
+  /* A short viewport must keep both navigation and feedback clear of active fields. */
+  .toast { position: static; margin: 16px; max-width: none; }
+  html { scroll-padding-top: 16px; }
+  input, select, textarea { scroll-margin-block: 24px; }
+  #agent-fleet-panel, #agent-install-panel, #agent-reenrolment-panel, #notification-panel { scroll-margin-top: 16px; }
+}

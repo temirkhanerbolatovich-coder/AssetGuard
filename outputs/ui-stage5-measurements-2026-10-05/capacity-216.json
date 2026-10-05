@@ -1,0 +1,119 @@
+{
+  "lcp": 68,
+  "cls": 0,
+  "events": [
+    {
+      "name": "pointerdown",
+      "duration": 16,
+      "interactionId": 6438
+    },
+    {
+      "name": "pointerup",
+      "duration": 16,
+      "interactionId": 6438
+    },
+    {
+      "name": "click",
+      "duration": 16,
+      "interactionId": 6438
+    },
+    {
+      "name": "pointerdown",
+      "duration": 16,
+      "interactionId": 6445
+    },
+    {
+      "name": "pointerup",
+      "duration": 16,
+      "interactionId": 6445
+    },
+    {
+      "name": "click",
+      "duration": 16,
+      "interactionId": 6445
+    },
+    {
+      "name": "pointerdown",
+      "duration": 16,
+      "interactionId": 6452
+    },
+    {
+      "name": "pointerup",
+      "duration": 16,
+      "interactionId": 6452
+    },
+    {
+      "name": "click",
+      "duration": 16,
+      "interactionId": 6452
+    },
+    {
+      "name": "pointerdown",
+      "duration": 16,
+      "interactionId": 6459
+    },
+    {
+      "name": "pointerup",
+      "duration": 16,
+      "interactionId": 6459
+    },
+    {
+      "name": "click",
+      "duration": 16,
+      "interactionId": 6459
+    },
+    {
+      "name": "pointerdown",
+      "duration": 16,
+      "interactionId": 6466
+    },
+    {
+      "name": "pointerup",
+      "duration": 16,
+      "interactionId": 6466
+    },
+    {
+      "name": "click",
+      "duration": 16,
+      "interactionId": 6466
+    },
+    {
+      "name": "keyup",
+      "duration": 16,
+      "interactionId": 6480
+    },
+    {
+      "name": "keydown",
+      "duration": 16,
+      "interactionId": 6487
+    },
+    {
+      "name": "pointerdown",
+      "duration": 16,
+      "interactionId": 6494
+    },
+    {
+      "name": "pointerup",
+      "duration": 16,
+      "interactionId": 6494
+    },
+    {
+      "name": "click",
+      "duration": 16,
+      "interactionId": 6494
+    }
+  ],
+  "longTasks": [],
+  "assets": 216,
+  "cold_workspace_ms": 862.8999999761581,
+  "warm_workspace_ms": 344.59999990463257,
+  "rendered_rows": 20,
+  "browser": "153.0.8010.12",
+  "viewport": {
+    "width": 1366,
+    "height": 900
+  },
+  "network": "localhost, no throttling",
+  "cpu_throttling": false,
+  "lcp_scope": "document/login; not authenticated workspace"
+}

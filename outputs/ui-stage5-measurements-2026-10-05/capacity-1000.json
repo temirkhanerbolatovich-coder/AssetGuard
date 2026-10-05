@@ -1,0 +1,124 @@
+{
+  "lcp": 80,
+  "cls": 0.005956435092044567,
+  "events": [
+    {
+      "name": "pointerdown",
+      "duration": 16,
+      "interactionId": 394
+    },
+    {
+      "name": "pointerup",
+      "duration": 16,
+      "interactionId": 394
+    },
+    {
+      "name": "click",
+      "duration": 16,
+      "interactionId": 394
+    },
+    {
+      "name": "pointerdown",
+      "duration": 16,
+      "interactionId": 401
+    },
+    {
+      "name": "pointerup",
+      "duration": 16,
+      "interactionId": 401
+    },
+    {
+      "name": "click",
+      "duration": 16,
+      "interactionId": 401
+    },
+    {
+      "name": "pointerdown",
+      "duration": 16,
+      "interactionId": 408
+    },
+    {
+      "name": "pointerup",
+      "duration": 16,
+      "interactionId": 408
+    },
+    {
+      "name": "click",
+      "duration": 16,
+      "interactionId": 408
+    },
+    {
+      "name": "pointerdown",
+      "duration": 16,
+      "interactionId": 415
+    },
+    {
+      "name": "pointerup",
+      "duration": 16,
+      "interactionId": 415
+    },
+    {
+      "name": "click",
+      "duration": 16,
+      "interactionId": 415
+    },
+    {
+      "name": "pointerdown",
+      "duration": 24,
+      "interactionId": 422
+    },
+    {
+      "name": "pointerup",
+      "duration": 24,
+      "interactionId": 422
+    },
+    {
+      "name": "click",
+      "duration": 24,
+      "interactionId": 422
+    },
+    {
+      "name": "keyup",
+      "duration": 16,
+      "interactionId": 436
+    },
+    {
+      "name": "keydown",
+      "duration": 16,
+      "interactionId": 443
+    },
+    {
+      "name": "keyup",
+      "duration": 16,
+      "interactionId": 443
+    },
+    {
+      "name": "pointerdown",
+      "duration": 16,
+      "interactionId": 450
+    },
+    {
+      "name": "pointerup",
+      "duration": 16,
+      "interactionId": 450
+    },
+    {
+      "name": "click",
+      "duration": 16,
+      "interactionId": 450
+    }
+  ],
+  "longTasks": [],
+  "assets": 1000,
+  "cold_workspace_ms": 1366.3999999761581,
+  "warm_workspace_ms": 1367.7000000476837,
+  "rendered_rows": 20,
+  "browser": "153.0.8010.12",
+  "viewport": {
+    "width": 1366,
+    "height": 900
+  },
+  "network": "localhost, no throttling",
+  "cpu_throttling": false,
+  "lcp_scope": "document/login; not authenticated workspace"
+}

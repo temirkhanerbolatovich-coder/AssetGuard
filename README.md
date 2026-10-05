@@ -36,7 +36,7 @@ Telegram принят на production 2026-10-05: application commit `0b90607`, 
 
 Порядок работы по интерфейсу изложен в [ТЗ UI/UX](docs/product/ui-ux-modernization-spec.md); **этапы 1–4 внедрены на production**. Текущий application commit `45d739b`: конкретные ПК Agent/STALE, ключи и восстановление с контекстными подтверждениями, ошибки форм сотрудников/назначений и ADMIN-only панель доставки Telegram. **102 backend + 9 browser E2E**, GitHub CI, public/authenticated UI/API и pre/post R2 restore прошли. Browser acceptance не меняла рабочие записи; повтор старого Telegram-теста не отправлен. [Приёмка этапа 4](outputs/assetguard-ui-stage4-2026-10-05.md), [контракт](docs/features/agent-administration-and-delivery.md).
 
-Предыдущие этапы: [3 — кабинеты, обход и импорт](outputs/assetguard-ui-stage3-2026-10-05.md), [2 — реестр и инциденты](outputs/assetguard-ui-stage2-2026-10-05.md), [1 — вход и каркас](outputs/assetguard-ui-stage1-2026-10-05.md). Следующий UI-этап **5**: accessibility/zoom/performance/usability; fleet, 10 stale PC и публикация/подпись installer 0.1.7 остаются отдельными задачами.
+Предыдущие этапы: [3 — кабинеты, обход и импорт](outputs/assetguard-ui-stage3-2026-10-05.md), [2 — реестр и инциденты](outputs/assetguard-ui-stage2-2026-10-05.md), [1 — вход и каркас](outputs/assetguard-ui-stage1-2026-10-05.md). Техническая часть UI-этапа **5** реализована локально: измеренный контраст, фокус, reflow и synthetic capacity; [проверки и ручная приёмка](docs/testing/ui-acceptance.md), [протокол](outputs/assetguard-ui-stage5-2026-10-05.md). Browser zoom, screen reader и usability с сотрудниками ещё не приняты; fleet, 10 stale PC и публикация/подпись installer 0.1.7 остаются отдельными задачами.
 
 Новые технические и физические инциденты помещаются в транзакционную Telegram-очередь; отдельный worker отправляет их в явно назначенный чат организации с retry и проверкой acceptance. Проблемы Agent и сервера отслеживает существующий monitor. [Настройка и гарантии доставки](docs/features/telegram-notifications.md), [план UI/UX](docs/product/ui-ux-modernization-spec.md).
 
@@ -92,7 +92,7 @@ node --check frontend/app.js
 git diff --check
 ```
 
-Текущий подтверждённый набор: **50 unit/integration tests и 2 browser E2E**. Каждый backend-запуск создаёт отдельную PostgreSQL database, применяет migrations до `head`, очищает состояние между тестами и удаляет базу после завершения.
+Текущий подтверждённый набор: **102 unit/integration tests и 16 browser E2E**. Каждый backend-запуск создаёт отдельную PostgreSQL database, применяет migrations до `head`, очищает состояние между тестами и удаляет базу после завершения.
 
 ## Windows Agent
 

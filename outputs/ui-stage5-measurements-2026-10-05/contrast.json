@@ -1,0 +1,1851 @@
+{
+  "login": {
+    "issues": [],
+    "samples": [
+      {
+        "id": "STRONG",
+        "ratio": 14.371459235562707,
+        "minimum": 4.5,
+        "color": "rgb(255, 255, 255)",
+        "background": [
+          20,
+          43,
+          69
+        ]
+      },
+      {
+        "id": "SMALL",
+        "ratio": 9.0688397727119,
+        "minimum": 4.5,
+        "color": "rgb(189, 208, 223)",
+        "background": [
+          20,
+          43,
+          69
+        ]
+      },
+      {
+        "id": "eyebrow",
+        "ratio": 9.59484656058957,
+        "minimum": 4.5,
+        "color": "rgb(142, 226, 216)",
+        "background": [
+          20,
+          43,
+          69
+        ]
+      },
+      {
+        "id": "H2",
+        "ratio": 14.371459235562707,
+        "minimum": 3,
+        "color": "rgb(255, 255, 255)",
+        "background": [
+          20,
+          43,
+          69
+        ]
+      },
+      {
+        "id": "P",
+        "ratio": 9.581639048958424,
+        "minimum": 4.5,
+        "color": "rgb(197, 213, 227)",
+        "background": [
+          20,
+          43,
+          69
+        ]
+      },
+      {
+        "id": "eyebrow",
+        "ratio": 6.270862443927925,
+        "minimum": 4.5,
+        "color": "rgb(82, 98, 114)",
+        "background": [
+          255,
+          255,
+          255
+        ]
+      },
+      {
+        "id": "login-title",
+        "ratio": 14.371459235562707,
+        "minimum": 3,
+        "color": "rgb(20, 43, 69)",
+        "background": [
+          255,
+          255,
+          255
+        ]
+      },
+      {
+        "id": "username-field",
+        "ratio": 7.686950396641675,
+        "minimum": 4.5,
+        "color": "rgb(71, 84, 103)",
+        "background": [
+          255,
+          255,
+          255
+        ]
+      },
+      {
+        "id": "username",
+        "ratio": 15.478352597542928,
+        "minimum": 4.5,
+        "color": "rgb(24, 37, 54)",
+        "background": [
+          255,
+          255,
+          255
+        ]
+      },
+      {
+        "id": "toggle-password",
+        "ratio": 7.19334468854603,
+        "minimum": 4.5,
+        "color": "rgb(11, 98, 93)",
+        "background": [
+          255,
+          255,
+          255
+        ]
+      },
+      {
+        "id": "login",
+        "ratio": 6.374039402608097,
+        "minimum": 4.5,
+        "color": "rgb(255, 255, 255)",
+        "background": [
+          13,
+          105,
+          117
+        ]
+      },
+      {
+        "id": "login-mode",
+        "ratio": 7.587731693249858,
+        "minimum": 4.5,
+        "color": "rgb(63, 86, 110)",
+        "background": [
+          255,
+          255,
+          255
+        ]
+      },
+      {
+        "id": "auth-footnote",
+        "ratio": 5.890415859057309,
+        "minimum": 4.5,
+        "color": "rgb(82, 98, 114)",
+        "background": [
+          246,
+          248,
+          250
+        ]
+      }
+    ],
+    "borders": [
+      {
+        "id": "username",
+        "ratio": 3.892107034158479
+      },
+      {
+        "id": "token",
+        "ratio": 3.892107034158479
+      }
+    ]
+  },
+  "overview": {
+    "issues": [],
+    "samples": [
+      {
+        "id": "skip-navigation",
+        "ratio": 7.19334468854603,
+        "minimum": 4.5,
+        "color": "rgb(11, 98, 93)",
+        "background": [
+          255,
+          255,
+          255
+        ]
+      },
+      {
+        "id": "STRONG",
+        "ratio": 14.371459235562707,
+        "minimum": 4.5,
+        "color": "rgb(255, 255, 255)",
+        "background": [
+          20,
+          43,
+          69
+        ]
+      },
+      {
+        "id": "SMALL",
+        "ratio": 8.41165179227539,
+        "minimum": 4.5,
+        "color": "rgb(184, 200, 216)",
+        "background": [
+          20,
+          43,
+          69
+        ]
+      },
+      {
+        "id": "nav-group-label",
+        "ratio": 5.763353856864244,
+        "minimum": 4.5,
+        "color": "rgb(143, 167, 188)",
+        "background": [
+          20,
+          43,
+          69
+        ]
+      },
+      {
+        "id": "SPAN",
+        "ratio": 9.01055744841425,
+        "minimum": 4.5,
+        "color": "rgb(255, 255, 255)",
+        "background": [
+          11,
+          80,
+          96
+        ]
+      },
+      {
+        "id": "SPAN",
+        "ratio": 11.142885642289345,
+        "minimum": 4.5,
+        "color": "rgb(217, 228, 238)",
+        "background": [
+          20,
+          43,
+          69
+        ]
+      },
+      {
+        "id": "session-role",
+        "ratio": 9.0688397727119,
+        "minimum": 4.5,
+        "color": "rgb(189, 208, 223)",
+        "background": [
+          20,
+          43,
+          69
+        ]
+      },
+      {
+        "id": "logout",
+        "ratio": 12.125953982253533,
+        "minimum": 4.5,
+        "color": "rgb(228, 237, 244)",
+        "background": [
+          20,
+          43,
+          69
+        ]
+      },
+      {
+        "id": "organization-context",
+        "ratio": 5.835564070640177,
+        "minimum": 4.5,
+        "color": "rgb(82, 98, 114)",
+        "background": [
+          245,
+          247,
+          248
+        ]
+      },
+      {
+        "id": "refresh-data",
+        "ratio": 14.371459235562707,
+        "minimum": 4.5,
+        "color": "rgb(20, 43, 69)",
+        "background": [
+          255,
+          255,
+          255
+        ]
+      },
+      {
+        "id": "eyebrow",
+        "ratio": 5.178750122590256,
+        "minimum": 4.5,
+        "color": "rgb(82, 107, 128)",
+        "background": [
+          245,
+          247,
+          248
+        ]
+      },
+      {
+        "id": "H1",
+        "ratio": 13.373849595270057,
+        "minimum": 3,
+        "color": "rgb(20, 43, 69)",
+        "background": [
+          245,
+          247,
+          248
+        ]
+      },
+      {
+        "id": "attention-icon",
+        "ratio": 5.161743146217955,
+        "minimum": 4.5,
+        "color": "rgb(154, 93, 8)",
+        "background": [
+          249.95999999999998,
+          251.64,
+          252.48000000000002
+        ]
+      },
+      {
+        "id": "STRONG",
+        "ratio": 13.821362529625436,
+        "minimum": 4.5,
+        "color": "rgb(24, 37, 54)",
+        "background": [
+          237,
+          243,
+          246
+        ]
+      },
+      {
+        "id": "P",
+        "ratio": 5.59955348379254,
+        "minimum": 4.5,
+        "color": "rgb(82, 98, 114)",
+        "background": [
+          237,
+          243,
+          246
+        ]
+      },
+      {
+        "id": "eyebrow",
+        "ratio": 5.565054081682931,
+        "minimum": 4.5,
+        "color": "rgb(82, 107, 128)",
+        "background": [
+          255,
+          255,
+          255
+        ]
+      },
+      {
+        "id": "H2",
+        "ratio": 14.371459235562707,
+        "minimum": 3,
+        "color": "rgb(20, 43, 69)",
+        "background": [
+          255,
+          255,
+          255
+        ]
+      },
+      {
+        "id": "P",
+        "ratio": 6.270862443927925,
+        "minimum": 4.5,
+        "color": "rgb(82, 98, 114)",
+        "background": [
+          255,
+          255,
+          255
+        ]
+      },
+      {
+        "id": "setup-progress",
+        "ratio": 5.240112368708587,
+        "minimum": 4.5,
+        "color": "rgb(89, 101, 121)",
+        "background": [
+          238,
+          242,
+          246
+        ]
+      },
+      {
+        "id": "setup-check",
+        "ratio": 5.612543966178631,
+        "minimum": 4.5,
+        "color": "rgb(13, 105, 117)",
+        "background": [
+          230,
+          243,
+          244
+        ]
+      },
+      {
+        "id": "A",
+        "ratio": 6.374039402608097,
+        "minimum": 4.5,
+        "color": "rgb(13, 105, 117)",
+        "background": [
+          255,
+          255,
+          255
+        ]
+      },
+      {
+        "id": "STRONG",
+        "ratio": 13.727167216811077,
+        "minimum": 4.5,
+        "color": "rgb(20, 43, 69)",
+        "background": [
+          248,
+          250,
+          251
+        ]
+      },
+      {
+        "id": "P",
+        "ratio": 5.989731171376679,
+        "minimum": 4.5,
+        "color": "rgb(82, 98, 114)",
+        "background": [
+          248,
+          250,
+          251
+        ]
+      },
+      {
+        "id": "A",
+        "ratio": 6.08828256699418,
+        "minimum": 4.5,
+        "color": "rgb(13, 105, 117)",
+        "background": [
+          248,
+          250,
+          251
+        ]
+      },
+      {
+        "id": "attention-badge",
+        "ratio": 5.224592344942932,
+        "minimum": 4.5,
+        "color": "rgb(19, 115, 76)",
+        "background": [
+          232,
+          245,
+          238
+        ]
+      },
+      {
+        "id": "SPAN",
+        "ratio": 7.686950396641675,
+        "minimum": 4.5,
+        "color": "rgb(71, 84, 103)",
+        "background": [
+          255,
+          255,
+          255
+        ]
+      },
+      {
+        "id": "STRONG",
+        "ratio": 16.026508555442035,
+        "minimum": 4.5,
+        "color": "rgb(24, 34, 48)",
+        "background": [
+          255,
+          255,
+          255
+        ]
+      },
+      {
+        "id": "eyebrow",
+        "ratio": 5.474310326749569,
+        "minimum": 4.5,
+        "color": "rgb(82, 107, 128)",
+        "background": [
+          255,
+          253,
+          248
+        ]
+      },
+      {
+        "id": "H2",
+        "ratio": 14.137118264969244,
+        "minimum": 3,
+        "color": "rgb(20, 43, 69)",
+        "background": [
+          255,
+          253,
+          248
+        ]
+      },
+      {
+        "id": "STRONG",
+        "ratio": 14.137118264969244,
+        "minimum": 4.5,
+        "color": "rgb(20, 43, 69)",
+        "background": [
+          255,
+          253,
+          248
+        ]
+      },
+      {
+        "id": "P",
+        "ratio": 6.168609779986062,
+        "minimum": 4.5,
+        "color": "rgb(82, 98, 114)",
+        "background": [
+          255,
+          253,
+          248
+        ]
+      },
+      {
+        "id": "A",
+        "ratio": 6.270104335491743,
+        "minimum": 4.5,
+        "color": "rgb(13, 105, 117)",
+        "background": [
+          255,
+          253,
+          248
+        ]
+      }
+    ],
+    "borders": []
+  },
+  "devices": {
+    "issues": [],
+    "samples": [
+      {
+        "id": "skip-navigation",
+        "ratio": 7.19334468854603,
+        "minimum": 4.5,
+        "color": "rgb(11, 98, 93)",
+        "background": [
+          255,
+          255,
+          255
+        ]
+      },
+      {
+        "id": "STRONG",
+        "ratio": 14.371459235562707,
+        "minimum": 4.5,
+        "color": "rgb(255, 255, 255)",
+        "background": [
+          20,
+          43,
+          69
+        ]
+      },
+      {
+        "id": "SMALL",
+        "ratio": 8.41165179227539,
+        "minimum": 4.5,
+        "color": "rgb(184, 200, 216)",
+        "background": [
+          20,
+          43,
+          69
+        ]
+      },
+      {
+        "id": "nav-group-label",
+        "ratio": 5.763353856864244,
+        "minimum": 4.5,
+        "color": "rgb(143, 167, 188)",
+        "background": [
+          20,
+          43,
+          69
+        ]
+      },
+      {
+        "id": "SPAN",
+        "ratio": 11.142885642289345,
+        "minimum": 4.5,
+        "color": "rgb(217, 228, 238)",
+        "background": [
+          20,
+          43,
+          69
+        ]
+      },
+      {
+        "id": "SPAN",
+        "ratio": 9.01055744841425,
+        "minimum": 4.5,
+        "color": "rgb(255, 255, 255)",
+        "background": [
+          11,
+          80,
+          96
+        ]
+      },
+      {
+        "id": "session-role",
+        "ratio": 9.0688397727119,
+        "minimum": 4.5,
+        "color": "rgb(189, 208, 223)",
+        "background": [
+          20,
+          43,
+          69
+        ]
+      },
+      {
+        "id": "logout",
+        "ratio": 12.125953982253533,
+        "minimum": 4.5,
+        "color": "rgb(228, 237, 244)",
+        "background": [
+          20,
+          43,
+          69
+        ]
+      },
+      {
+        "id": "organization-context",
+        "ratio": 5.835564070640177,
+        "minimum": 4.5,
+        "color": "rgb(82, 98, 114)",
+        "background": [
+          245,
+          247,
+          248
+        ]
+      },
+      {
+        "id": "refresh-data",
+        "ratio": 14.371459235562707,
+        "minimum": 4.5,
+        "color": "rgb(20, 43, 69)",
+        "background": [
+          255,
+          255,
+          255
+        ]
+      },
+      {
+        "id": "eyebrow",
+        "ratio": 5.178750122590256,
+        "minimum": 4.5,
+        "color": "rgb(82, 107, 128)",
+        "background": [
+          245,
+          247,
+          248
+        ]
+      },
+      {
+        "id": "H1",
+        "ratio": 13.373849595270057,
+        "minimum": 3,
+        "color": "rgb(20, 43, 69)",
+        "background": [
+          245,
+          247,
+          248
+        ]
+      },
+      {
+        "id": "show-create",
+        "ratio": 6.374039402608097,
+        "minimum": 4.5,
+        "color": "rgb(255, 255, 255)",
+        "background": [
+          13,
+          105,
+          117
+        ]
+      },
+      {
+        "id": "device-search",
+        "ratio": 15.478352597542928,
+        "minimum": 4.5,
+        "color": "rgb(24, 37, 54)",
+        "background": [
+          255,
+          255,
+          255
+        ]
+      },
+      {
+        "id": "LABEL",
+        "ratio": 7.686950396641675,
+        "minimum": 4.5,
+        "color": "rgb(71, 84, 103)",
+        "background": [
+          255,
+          255,
+          255
+        ]
+      },
+      {
+        "id": "clear-device-filters",
+        "ratio": 7.587731693249858,
+        "minimum": 4.5,
+        "color": "rgb(63, 86, 110)",
+        "background": [
+          255,
+          255,
+          255
+        ]
+      },
+      {
+        "id": "TH",
+        "ratio": 5.3912227687077,
+        "minimum": 4.5,
+        "color": "rgb(83, 103, 122)",
+        "background": [
+          243,
+          246,
+          248
+        ]
+      },
+      {
+        "id": "P",
+        "ratio": 6.270862443927925,
+        "minimum": 4.5,
+        "color": "rgb(82, 98, 114)",
+        "background": [
+          255,
+          255,
+          255
+        ]
+      },
+      {
+        "id": "device-result-count",
+        "ratio": 6.052673992519221,
+        "minimum": 4.5,
+        "color": "rgb(82, 98, 114)",
+        "background": [
+          250,
+          251,
+          252
+        ]
+      }
+    ],
+    "borders": [
+      {
+        "id": "device-search",
+        "ratio": 3.583094020734325
+      },
+      {
+        "id": "device-status-filter",
+        "ratio": 3.583094020734325
+      },
+      {
+        "id": "device-category-filter",
+        "ratio": 3.583094020734325
+      },
+      {
+        "id": "device-room-filter",
+        "ratio": 3.583094020734325
+      },
+      {
+        "id": "device-sort",
+        "ratio": 3.583094020734325
+      }
+    ]
+  },
+  "incidents": {
+    "issues": [],
+    "samples": [
+      {
+        "id": "skip-navigation",
+        "ratio": 7.19334468854603,
+        "minimum": 4.5,
+        "color": "rgb(11, 98, 93)",
+        "background": [
+          255,
+          255,
+          255
+        ]
+      },
+      {
+        "id": "STRONG",
+        "ratio": 14.371459235562707,
+        "minimum": 4.5,
+        "color": "rgb(255, 255, 255)",
+        "background": [
+          20,
+          43,
+          69
+        ]
+      },
+      {
+        "id": "SMALL",
+        "ratio": 8.41165179227539,
+        "minimum": 4.5,
+        "color": "rgb(184, 200, 216)",
+        "background": [
+          20,
+          43,
+          69
+        ]
+      },
+      {
+        "id": "nav-group-label",
+        "ratio": 5.763353856864244,
+        "minimum": 4.5,
+        "color": "rgb(143, 167, 188)",
+        "background": [
+          20,
+          43,
+          69
+        ]
+      },
+      {
+        "id": "SPAN",
+        "ratio": 11.142885642289345,
+        "minimum": 4.5,
+        "color": "rgb(217, 228, 238)",
+        "background": [
+          20,
+          43,
+          69
+        ]
+      },
+      {
+        "id": "SPAN",
+        "ratio": 9.01055744841425,
+        "minimum": 4.5,
+        "color": "rgb(255, 255, 255)",
+        "background": [
+          11,
+          80,
+          96
+        ]
+      },
+      {
+        "id": "session-role",
+        "ratio": 9.0688397727119,
+        "minimum": 4.5,
+        "color": "rgb(189, 208, 223)",
+        "background": [
+          20,
+          43,
+          69
+        ]
+      },
+      {
+        "id": "logout",
+        "ratio": 12.125953982253533,
+        "minimum": 4.5,
+        "color": "rgb(228, 237, 244)",
+        "background": [
+          20,
+          43,
+          69
+        ]
+      },
+      {
+        "id": "organization-context",
+        "ratio": 5.835564070640177,
+        "minimum": 4.5,
+        "color": "rgb(82, 98, 114)",
+        "background": [
+          245,
+          247,
+          248
+        ]
+      },
+      {
+        "id": "refresh-data",
+        "ratio": 14.371459235562707,
+        "minimum": 4.5,
+        "color": "rgb(20, 43, 69)",
+        "background": [
+          255,
+          255,
+          255
+        ]
+      },
+      {
+        "id": "eyebrow",
+        "ratio": 5.178750122590256,
+        "minimum": 4.5,
+        "color": "rgb(82, 107, 128)",
+        "background": [
+          245,
+          247,
+          248
+        ]
+      },
+      {
+        "id": "H1",
+        "ratio": 13.373849595270057,
+        "minimum": 3,
+        "color": "rgb(20, 43, 69)",
+        "background": [
+          245,
+          247,
+          248
+        ]
+      },
+      {
+        "id": "incident-center-count",
+        "ratio": 5.224592344942932,
+        "minimum": 4.5,
+        "color": "rgb(19, 115, 76)",
+        "background": [
+          232,
+          245,
+          238
+        ]
+      },
+      {
+        "id": "incident-search",
+        "ratio": 15.478352597542928,
+        "minimum": 4.5,
+        "color": "rgb(24, 37, 54)",
+        "background": [
+          255,
+          255,
+          255
+        ]
+      },
+      {
+        "id": "LABEL",
+        "ratio": 7.686950396641675,
+        "minimum": 4.5,
+        "color": "rgb(71, 84, 103)",
+        "background": [
+          255,
+          255,
+          255
+        ]
+      },
+      {
+        "id": "clear-incident-filters",
+        "ratio": 7.587731693249858,
+        "minimum": 4.5,
+        "color": "rgb(63, 86, 110)",
+        "background": [
+          255,
+          255,
+          255
+        ]
+      },
+      {
+        "id": "P",
+        "ratio": 6.270862443927925,
+        "minimum": 4.5,
+        "color": "rgb(82, 98, 114)",
+        "background": [
+          255,
+          255,
+          255
+        ]
+      },
+      {
+        "id": "button-anchor",
+        "ratio": 6.374039402608097,
+        "minimum": 4.5,
+        "color": "rgb(255, 255, 255)",
+        "background": [
+          13,
+          105,
+          117
+        ]
+      }
+    ],
+    "borders": [
+      {
+        "id": "incident-search",
+        "ratio": 3.583094020734325
+      },
+      {
+        "id": "incident-status-filter",
+        "ratio": 3.583094020734325
+      },
+      {
+        "id": "incident-severity-filter",
+        "ratio": 3.583094020734325
+      },
+      {
+        "id": "incident-type-filter",
+        "ratio": 3.583094020734325
+      },
+      {
+        "id": "incident-room-filter",
+        "ratio": 3.583094020734325
+      },
+      {
+        "id": "incident-date-from",
+        "ratio": 3.583094020734325
+      },
+      {
+        "id": "incident-date-to",
+        "ratio": 3.583094020734325
+      }
+    ]
+  },
+  "locations": {
+    "issues": [],
+    "samples": [
+      {
+        "id": "skip-navigation",
+        "ratio": 7.19334468854603,
+        "minimum": 4.5,
+        "color": "rgb(11, 98, 93)",
+        "background": [
+          255,
+          255,
+          255
+        ]
+      },
+      {
+        "id": "STRONG",
+        "ratio": 14.371459235562707,
+        "minimum": 4.5,
+        "color": "rgb(255, 255, 255)",
+        "background": [
+          20,
+          43,
+          69
+        ]
+      },
+      {
+        "id": "SMALL",
+        "ratio": 8.41165179227539,
+        "minimum": 4.5,
+        "color": "rgb(184, 200, 216)",
+        "background": [
+          20,
+          43,
+          69
+        ]
+      },
+      {
+        "id": "nav-group-label",
+        "ratio": 5.763353856864244,
+        "minimum": 4.5,
+        "color": "rgb(143, 167, 188)",
+        "background": [
+          20,
+          43,
+          69
+        ]
+      },
+      {
+        "id": "SPAN",
+        "ratio": 11.142885642289345,
+        "minimum": 4.5,
+        "color": "rgb(217, 228, 238)",
+        "background": [
+          20,
+          43,
+          69
+        ]
+      },
+      {
+        "id": "SPAN",
+        "ratio": 9.01055744841425,
+        "minimum": 4.5,
+        "color": "rgb(255, 255, 255)",
+        "background": [
+          11,
+          80,
+          96
+        ]
+      },
+      {
+        "id": "session-role",
+        "ratio": 9.0688397727119,
+        "minimum": 4.5,
+        "color": "rgb(189, 208, 223)",
+        "background": [
+          20,
+          43,
+          69
+        ]
+      },
+      {
+        "id": "logout",
+        "ratio": 12.125953982253533,
+        "minimum": 4.5,
+        "color": "rgb(228, 237, 244)",
+        "background": [
+          20,
+          43,
+          69
+        ]
+      },
+      {
+        "id": "organization-context",
+        "ratio": 5.835564070640177,
+        "minimum": 4.5,
+        "color": "rgb(82, 98, 114)",
+        "background": [
+          245,
+          247,
+          248
+        ]
+      },
+      {
+        "id": "refresh-data",
+        "ratio": 14.371459235562707,
+        "minimum": 4.5,
+        "color": "rgb(20, 43, 69)",
+        "background": [
+          255,
+          255,
+          255
+        ]
+      },
+      {
+        "id": "eyebrow",
+        "ratio": 5.178750122590256,
+        "minimum": 4.5,
+        "color": "rgb(82, 107, 128)",
+        "background": [
+          245,
+          247,
+          248
+        ]
+      },
+      {
+        "id": "H1",
+        "ratio": 13.373849595270057,
+        "minimum": 3,
+        "color": "rgb(20, 43, 69)",
+        "background": [
+          245,
+          247,
+          248
+        ]
+      },
+      {
+        "id": "eyebrow",
+        "ratio": 5.565054081682931,
+        "minimum": 4.5,
+        "color": "rgb(82, 107, 128)",
+        "background": [
+          255,
+          255,
+          255
+        ]
+      },
+      {
+        "id": "empty",
+        "ratio": 6.270862443927925,
+        "minimum": 4.5,
+        "color": "rgb(82, 98, 114)",
+        "background": [
+          255,
+          255,
+          255
+        ]
+      },
+      {
+        "id": "LABEL",
+        "ratio": 7.686950396641675,
+        "minimum": 4.5,
+        "color": "rgb(71, 84, 103)",
+        "background": [
+          255,
+          255,
+          255
+        ]
+      },
+      {
+        "id": "INPUT",
+        "ratio": 15.478352597542928,
+        "minimum": 4.5,
+        "color": "rgb(24, 37, 54)",
+        "background": [
+          255,
+          255,
+          255
+        ]
+      },
+      {
+        "id": "BUTTON",
+        "ratio": 6.374039402608097,
+        "minimum": 4.5,
+        "color": "rgb(255, 255, 255)",
+        "background": [
+          13,
+          105,
+          117
+        ]
+      }
+    ],
+    "borders": [
+      {
+        "id": "name",
+        "ratio": 3.583094020734325
+      },
+      {
+        "id": "responsible_name",
+        "ratio": 3.583094020734325
+      },
+      {
+        "id": "responsible_contact",
+        "ratio": 3.583094020734325
+      }
+    ]
+  },
+  "data-exchange": {
+    "issues": [],
+    "samples": [
+      {
+        "id": "skip-navigation",
+        "ratio": 7.19334468854603,
+        "minimum": 4.5,
+        "color": "rgb(11, 98, 93)",
+        "background": [
+          255,
+          255,
+          255
+        ]
+      },
+      {
+        "id": "STRONG",
+        "ratio": 14.371459235562707,
+        "minimum": 4.5,
+        "color": "rgb(255, 255, 255)",
+        "background": [
+          20,
+          43,
+          69
+        ]
+      },
+      {
+        "id": "SMALL",
+        "ratio": 8.41165179227539,
+        "minimum": 4.5,
+        "color": "rgb(184, 200, 216)",
+        "background": [
+          20,
+          43,
+          69
+        ]
+      },
+      {
+        "id": "nav-group-label",
+        "ratio": 5.763353856864244,
+        "minimum": 4.5,
+        "color": "rgb(143, 167, 188)",
+        "background": [
+          20,
+          43,
+          69
+        ]
+      },
+      {
+        "id": "SPAN",
+        "ratio": 11.142885642289345,
+        "minimum": 4.5,
+        "color": "rgb(217, 228, 238)",
+        "background": [
+          20,
+          43,
+          69
+        ]
+      },
+      {
+        "id": "SPAN",
+        "ratio": 9.01055744841425,
+        "minimum": 4.5,
+        "color": "rgb(255, 255, 255)",
+        "background": [
+          11,
+          80,
+          96
+        ]
+      },
+      {
+        "id": "session-role",
+        "ratio": 9.0688397727119,
+        "minimum": 4.5,
+        "color": "rgb(189, 208, 223)",
+        "background": [
+          20,
+          43,
+          69
+        ]
+      },
+      {
+        "id": "logout",
+        "ratio": 12.125953982253533,
+        "minimum": 4.5,
+        "color": "rgb(228, 237, 244)",
+        "background": [
+          20,
+          43,
+          69
+        ]
+      },
+      {
+        "id": "organization-context",
+        "ratio": 5.835564070640177,
+        "minimum": 4.5,
+        "color": "rgb(82, 98, 114)",
+        "background": [
+          245,
+          247,
+          248
+        ]
+      },
+      {
+        "id": "refresh-data",
+        "ratio": 14.371459235562707,
+        "minimum": 4.5,
+        "color": "rgb(20, 43, 69)",
+        "background": [
+          255,
+          255,
+          255
+        ]
+      },
+      {
+        "id": "eyebrow",
+        "ratio": 5.178750122590256,
+        "minimum": 4.5,
+        "color": "rgb(82, 107, 128)",
+        "background": [
+          245,
+          247,
+          248
+        ]
+      },
+      {
+        "id": "H1",
+        "ratio": 13.373849595270057,
+        "minimum": 3,
+        "color": "rgb(20, 43, 69)",
+        "background": [
+          245,
+          247,
+          248
+        ]
+      },
+      {
+        "id": "eyebrow",
+        "ratio": 5.565054081682931,
+        "minimum": 4.5,
+        "color": "rgb(82, 107, 128)",
+        "background": [
+          255,
+          255,
+          255
+        ]
+      },
+      {
+        "id": "P",
+        "ratio": 6.270862443927925,
+        "minimum": 4.5,
+        "color": "rgb(82, 98, 114)",
+        "background": [
+          255,
+          255,
+          255
+        ]
+      },
+      {
+        "id": "LI",
+        "ratio": 7.686950396641675,
+        "minimum": 4.5,
+        "color": "rgb(71, 84, 103)",
+        "background": [
+          255,
+          255,
+          255
+        ]
+      },
+      {
+        "id": "import-assets",
+        "ratio": 6.374039402608097,
+        "minimum": 4.5,
+        "color": "rgb(255, 255, 255)",
+        "background": [
+          13,
+          105,
+          117
+        ]
+      },
+      {
+        "id": "STRONG",
+        "ratio": 12.654525917228469,
+        "minimum": 4.5,
+        "color": "rgb(20, 43, 69)",
+        "background": [
+          230,
+          243,
+          244
+        ]
+      },
+      {
+        "id": "SPAN",
+        "ratio": 5.521693379868776,
+        "minimum": 4.5,
+        "color": "rgb(82, 98, 114)",
+        "background": [
+          230,
+          243,
+          244
+        ]
+      },
+      {
+        "id": "STRONG",
+        "ratio": 13.727167216811077,
+        "minimum": 4.5,
+        "color": "rgb(20, 43, 69)",
+        "background": [
+          248,
+          250,
+          251
+        ]
+      },
+      {
+        "id": "SPAN",
+        "ratio": 5.989731171376679,
+        "minimum": 4.5,
+        "color": "rgb(82, 98, 114)",
+        "background": [
+          248,
+          250,
+          251
+        ]
+      }
+    ],
+    "borders": []
+  },
+  "agent-credentials": {
+    "issues": [],
+    "samples": [
+      {
+        "id": "skip-navigation",
+        "ratio": 7.19334468854603,
+        "minimum": 4.5,
+        "color": "rgb(11, 98, 93)",
+        "background": [
+          255,
+          255,
+          255
+        ]
+      },
+      {
+        "id": "STRONG",
+        "ratio": 14.371459235562707,
+        "minimum": 4.5,
+        "color": "rgb(255, 255, 255)",
+        "background": [
+          20,
+          43,
+          69
+        ]
+      },
+      {
+        "id": "SMALL",
+        "ratio": 8.41165179227539,
+        "minimum": 4.5,
+        "color": "rgb(184, 200, 216)",
+        "background": [
+          20,
+          43,
+          69
+        ]
+      },
+      {
+        "id": "nav-group-label",
+        "ratio": 5.763353856864244,
+        "minimum": 4.5,
+        "color": "rgb(143, 167, 188)",
+        "background": [
+          20,
+          43,
+          69
+        ]
+      },
+      {
+        "id": "SPAN",
+        "ratio": 11.142885642289345,
+        "minimum": 4.5,
+        "color": "rgb(217, 228, 238)",
+        "background": [
+          20,
+          43,
+          69
+        ]
+      },
+      {
+        "id": "SPAN",
+        "ratio": 9.01055744841425,
+        "minimum": 4.5,
+        "color": "rgb(255, 255, 255)",
+        "background": [
+          11,
+          80,
+          96
+        ]
+      },
+      {
+        "id": "session-role",
+        "ratio": 9.0688397727119,
+        "minimum": 4.5,
+        "color": "rgb(189, 208, 223)",
+        "background": [
+          20,
+          43,
+          69
+        ]
+      },
+      {
+        "id": "logout",
+        "ratio": 12.125953982253533,
+        "minimum": 4.5,
+        "color": "rgb(228, 237, 244)",
+        "background": [
+          20,
+          43,
+          69
+        ]
+      },
+      {
+        "id": "organization-context",
+        "ratio": 5.835564070640177,
+        "minimum": 4.5,
+        "color": "rgb(82, 98, 114)",
+        "background": [
+          245,
+          247,
+          248
+        ]
+      },
+      {
+        "id": "refresh-data",
+        "ratio": 14.371459235562707,
+        "minimum": 4.5,
+        "color": "rgb(20, 43, 69)",
+        "background": [
+          255,
+          255,
+          255
+        ]
+      },
+      {
+        "id": "eyebrow",
+        "ratio": 5.178750122590256,
+        "minimum": 4.5,
+        "color": "rgb(82, 107, 128)",
+        "background": [
+          245,
+          247,
+          248
+        ]
+      },
+      {
+        "id": "H1",
+        "ratio": 13.373849595270057,
+        "minimum": 3,
+        "color": "rgb(20, 43, 69)",
+        "background": [
+          245,
+          247,
+          248
+        ]
+      },
+      {
+        "id": "eyebrow",
+        "ratio": 5.565054081682931,
+        "minimum": 4.5,
+        "color": "rgb(82, 107, 128)",
+        "background": [
+          255,
+          255,
+          255
+        ]
+      },
+      {
+        "id": "H2",
+        "ratio": 14.371459235562707,
+        "minimum": 3,
+        "color": "rgb(20, 43, 69)",
+        "background": [
+          255,
+          255,
+          255
+        ]
+      },
+      {
+        "id": "agent-freshness-help",
+        "ratio": 6.270862443927925,
+        "minimum": 4.5,
+        "color": "rgb(82, 98, 114)",
+        "background": [
+          255,
+          255,
+          255
+        ]
+      },
+      {
+        "id": "LABEL",
+        "ratio": 7.686950396641675,
+        "minimum": 4.5,
+        "color": "rgb(71, 84, 103)",
+        "background": [
+          255,
+          255,
+          255
+        ]
+      },
+      {
+        "id": "agent-search",
+        "ratio": 15.478352597542928,
+        "minimum": 4.5,
+        "color": "rgb(24, 37, 54)",
+        "background": [
+          255,
+          255,
+          255
+        ]
+      },
+      {
+        "id": "BUTTON",
+        "ratio": 6.374039402608097,
+        "minimum": 4.5,
+        "color": "rgb(255, 255, 255)",
+        "background": [
+          13,
+          105,
+          117
+        ]
+      }
+    ],
+    "borders": [
+      {
+        "id": "agent-search",
+        "ratio": 3.583094020734325
+      },
+      {
+        "id": "agent-status-filter",
+        "ratio": 5.565054081682931
+      },
+      {
+        "id": "agent-organization",
+        "ratio": 3.583094020734325
+      },
+      {
+        "id": "notification-status-filter",
+        "ratio": 3.583094020734325
+      }
+    ]
+  },
+  "location-access": {
+    "issues": [],
+    "samples": [
+      {
+        "id": "skip-navigation",
+        "ratio": 7.19334468854603,
+        "minimum": 4.5,
+        "color": "rgb(11, 98, 93)",
+        "background": [
+          255,
+          255,
+          255
+        ]
+      },
+      {
+        "id": "STRONG",
+        "ratio": 14.371459235562707,
+        "minimum": 4.5,
+        "color": "rgb(255, 255, 255)",
+        "background": [
+          20,
+          43,
+          69
+        ]
+      },
+      {
+        "id": "SMALL",
+        "ratio": 8.41165179227539,
+        "minimum": 4.5,
+        "color": "rgb(184, 200, 216)",
+        "background": [
+          20,
+          43,
+          69
+        ]
+      },
+      {
+        "id": "nav-group-label",
+        "ratio": 5.763353856864244,
+        "minimum": 4.5,
+        "color": "rgb(143, 167, 188)",
+        "background": [
+          20,
+          43,
+          69
+        ]
+      },
+      {
+        "id": "SPAN",
+        "ratio": 11.142885642289345,
+        "minimum": 4.5,
+        "color": "rgb(217, 228, 238)",
+        "background": [
+          20,
+          43,
+          69
+        ]
+      },
+      {
+        "id": "SPAN",
+        "ratio": 9.01055744841425,
+        "minimum": 4.5,
+        "color": "rgb(255, 255, 255)",
+        "background": [
+          11,
+          80,
+          96
+        ]
+      },
+      {
+        "id": "session-role",
+        "ratio": 9.0688397727119,
+        "minimum": 4.5,
+        "color": "rgb(189, 208, 223)",
+        "background": [
+          20,
+          43,
+          69
+        ]
+      },
+      {
+        "id": "logout",
+        "ratio": 12.125953982253533,
+        "minimum": 4.5,
+        "color": "rgb(228, 237, 244)",
+        "background": [
+          20,
+          43,
+          69
+        ]
+      },
+      {
+        "id": "organization-context",
+        "ratio": 5.835564070640177,
+        "minimum": 4.5,
+        "color": "rgb(82, 98, 114)",
+        "background": [
+          245,
+          247,
+          248
+        ]
+      },
+      {
+        "id": "refresh-data",
+        "ratio": 14.371459235562707,
+        "minimum": 4.5,
+        "color": "rgb(20, 43, 69)",
+        "background": [
+          255,
+          255,
+          255
+        ]
+      },
+      {
+        "id": "eyebrow",
+        "ratio": 5.178750122590256,
+        "minimum": 4.5,
+        "color": "rgb(82, 107, 128)",
+        "background": [
+          245,
+          247,
+          248
+        ]
+      },
+      {
+        "id": "H1",
+        "ratio": 13.373849595270057,
+        "minimum": 3,
+        "color": "rgb(20, 43, 69)",
+        "background": [
+          245,
+          247,
+          248
+        ]
+      },
+      {
+        "id": "eyebrow",
+        "ratio": 5.565054081682931,
+        "minimum": 4.5,
+        "color": "rgb(82, 107, 128)",
+        "background": [
+          255,
+          255,
+          255
+        ]
+      },
+      {
+        "id": "empty",
+        "ratio": 6.270862443927925,
+        "minimum": 4.5,
+        "color": "rgb(82, 98, 114)",
+        "background": [
+          255,
+          255,
+          255
+        ]
+      },
+      {
+        "id": "LABEL",
+        "ratio": 7.686950396641675,
+        "minimum": 4.5,
+        "color": "rgb(71, 84, 103)",
+        "background": [
+          255,
+          255,
+          255
+        ]
+      },
+      {
+        "id": "INPUT",
+        "ratio": 15.478352597542928,
+        "minimum": 4.5,
+        "color": "rgb(24, 37, 54)",
+        "background": [
+          255,
+          255,
+          255
+        ]
+      }
+    ],
+    "borders": [
+      {
+        "id": "username",
+        "ratio": 3.583094020734325
+      },
+      {
+        "id": "password",
+        "ratio": 3.583094020734325
+      },
+      {
+        "id": "user-organization",
+        "ratio": 3.583094020734325
+      },
+      {
+        "id": "role",
+        "ratio": 3.583094020734325
+      },
+      {
+        "id": "access-user",
+        "ratio": 3.583094020734325
+      },
+      {
+        "id": "access-scope",
+        "ratio": 3.583094020734325
+      },
+      {
+        "id": "permission",
+        "ratio": 3.583094020734325
+      }
+    ]
+  }
+}
