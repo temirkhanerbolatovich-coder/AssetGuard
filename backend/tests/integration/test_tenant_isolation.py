@@ -127,6 +127,7 @@ async def _exercise_tenant_isolation() -> None:
             f"/admin/endpoints/{endpoint_b.id}/baseline", f"/admin/changes/{change_b.id}",
             f"/admin/incidents/{incident_b.id}", f"/admin/endpoints/{endpoint_b.id}/history",
             f"/admin/vision/rooms/{room_b.id}/scans",
+            f"/admin/locations/rooms/{room_location_b.id}/qr.svg",
         ):
             response = await client.get(path, headers=headers)
             assert response.status_code == 404, (path, response.status_code, response.text)

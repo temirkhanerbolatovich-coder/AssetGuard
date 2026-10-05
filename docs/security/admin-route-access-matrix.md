@@ -1,6 +1,6 @@
 # AssetGuard — матрица доступа `/admin`
 
-Дата проверки: 5 октября 2026 года. Матрица покрывает **63 protected operations** на 56 уникальных путях.
+Дата проверки: 5 октября 2026 года. Матрица покрывает **64 protected operations** на 57 уникальных путях.
 
 `GET /admin/notifications` — только ADMIN, граница организации, пагинация и фильтр состояния. Возвращаются только метаданные доставки и проверенная внутренняя ссылка: без текста сообщения, получателя, message id, event key и секретов. Администратор платформы видит все организации; администратор школы — только свою. Неизвестная ошибка заменяется `UNKNOWN_ERROR`. Чтение не запускает отправку или повтор.
 
@@ -37,7 +37,7 @@ Bootstrap/shared credential остаётся отдельным platform bootstr
 
 | Операция | Route-level | Resource scope |
 | --- | --- | --- |
-| Location tree, room report, inspections and workspace reads | Viewer | tenant + granted locations |
+| Location tree, room report, room QR, inspections and workspace reads | Viewer | tenant + granted locations |
 | Room inspection and physical-incident decision | Viewer | write requires `ADMIN` or `EDITOR` grant |
 | Physical-incident list/detail (`GET /admin/locations/physical-incidents[/id]`) | Viewer | tenant + granted original incident location; detail includes inspection evidence |
 | Physical-incident act PDF | Viewer | tenant + granted location |
@@ -58,7 +58,7 @@ Bootstrap/shared credential остаётся отдельным platform bootstr
 
 ## Автоматическое доказательство
 
-`tests/unit/test_admin_route_contract.py` хранит исполняемый реестр всех 62 method/path operations. Тест падает при добавлении, удалении или переносе операции между Admin и Viewer level. Там же автоматизирована allow/deny-матрица для всех четырёх ролей и запроса без token.
+`tests/unit/test_admin_route_contract.py` хранит исполняемый реестр всех 64 method/path operations. Тест падает при добавлении, удалении или переносе операции между Admin и Viewer level. Там же автоматизирована allow/deny-матрица для всех четырёх ролей и запроса без token.
 
 `tests/integration/test_tenant_isolation.py` создаёт две организации с asset, endpoint, raw inventory, snapshot, baseline, change, incident, history, Vision room, user, session, Agent credential и re-enrolment request. Он доказывает фильтрацию списков, `404` для foreign UUID и запрет изменения foreign resources.
 

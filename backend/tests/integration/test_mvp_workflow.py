@@ -216,6 +216,11 @@ async def _complete_mvp_workflow() -> None:
         qr = await client.get(f"/admin/assets/{asset_id}/qr.svg?public_url=https://demo.trycloudflare.com", headers=admin_headers())
         assert qr.status_code == 200
         assert qr.headers["content-type"].startswith("image/svg+xml")
+        room_qr = await client.get(f"/admin/locations/rooms/{room['id']}/qr.svg?public_url=https://demo.trycloudflare.com", headers=admin_headers())
+        assert room_qr.status_code == 200
+        assert room_qr.headers["content-type"].startswith("image/svg+xml")
+        invalid_room_qr = await client.get(f"/admin/locations/rooms/{room['id']}/qr.svg?public_url=http://example.org", headers=admin_headers())
+        assert invalid_room_qr.status_code == 422
         workbook = Workbook()
         worksheet = workbook.active
         worksheet.append(["inventory_number", "name", "asset_type", "organization", "building", "floor", "room"])

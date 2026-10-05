@@ -9,7 +9,7 @@
 - [x] Self-service re-enrolment после переустановки Windows: сопоставление по SMBIOS UUID, одноразовый claim token, подтверждение администратора и автоматический revoke прежнего credential.
 - [ ] Migration от legacy общего inventory secret с датой отключения fallback.
 - [~] Tenant model: school/organisation, tenant-bound users/credentials и job roles `LOCATION_MANAGER`/`INVENTORY_CLERK` есть; отдельная полномочная модель `TENANT_ADMIN`/`OPERATOR` ещё не выделена.
-- [x] Tenant filtering и исполняемая allow/deny-матрица покрывают все 60 защищённых admin operations, включая Agent credentials и re-enrolment.
+- [x] Tenant filtering и исполняемая allow/deny-матрица покрывают все 64 защищённых admin operations, включая Agent credentials, re-enrolment и QR кабинета.
 - [ ] SSO/AD или хотя бы MFA для production admin accounts.
 
 ## Этап 2: надёжная эксплуатация
@@ -45,7 +45,8 @@
 - [ ] Утверждённая data inventory, retention/deletion policy для raw inventory и Vision images.
 - [ ] Согласованный legal/security review для школ и выбранного места хранения данных.
 - [x] Нормализованная hierarchy `organisation → building → floor → room`; основные location grants enforced на сервере.
-- [~] QR-коды карточек, location reports и полный физический обход из карточки кабинета доступны; QR-запуск mobile audit, in-app notifications и 1C/AD/helpdesk integrations ещё нужны.
+- [x] QR-коды имущества и кабинета, прямой запуск mobile audit, сканирование позиций с ручным fallback, восстановление черновика, location reports и полный физический обход доступны.
+- [ ] In-app notifications и 1C/AD/helpdesk integrations ещё нужны.
 - [ ] Vision production track: object storage, quality gate, multi-frame/RTSP, evaluation dataset и human confirmation.
 
 ## Ограничение rollout

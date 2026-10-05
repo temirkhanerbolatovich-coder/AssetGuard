@@ -71,6 +71,7 @@ VIEWER_OPERATIONS: frozenset[Operation] = frozenset(
         ("GET", "/admin/assets/{asset_id}"),
         ("GET", "/admin/locations/tree"),
         ("GET", "/admin/locations/rooms/{room_id}/report"),
+        ("GET", "/admin/locations/rooms/{room_id}/qr.svg"),
         ("GET", "/admin/locations/rooms/{room_id}/inspections"),
         ("POST", "/admin/locations/rooms/{room_id}/inspections"),
         ("POST", "/admin/locations/physical-incidents/{incident_id}/decision"),
@@ -214,6 +215,6 @@ def test_access_matrix_documentation_tracks_the_executable_policy() -> None:
         / "security"
         / "admin-route-access-matrix.md"
     ).read_text(encoding="utf-8")
-    assert "63 protected operations" in matrix
+    assert "64 protected operations" in matrix
     for role in ALLOWED_ROLES["viewer"]:
         assert f"`{role}`" in matrix

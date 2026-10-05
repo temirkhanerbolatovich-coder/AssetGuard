@@ -5,7 +5,7 @@ from io import BytesIO
 from typing import Annotated, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from reportlab.lib import colors
@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 from assetguard.infrastructure.database import get_session
 from assetguard.interfaces.http.authorization import require_admin, require_viewer
 from assetguard.interfaces.http.pdf_support import pdf_font_name
+from assetguard.interfaces.http.qr_support import qr_base_url, qr_svg_response
 from assetguard.modules.baselines.models import BaselineRecord
 from assetguard.modules.incidents.models import (
     AssetHistoryEntryRecord, EndpointHistoryEntryRecord, IncidentRecord,
@@ -717,6 +718,19 @@ def room_workspace(room_id: UUID, session: Annotated[Session, Depends(get_sessio
         "latest_inspection": inspection_views[0] if inspection_views else None,
         "history": history[:50],
     }
+
+
+@router.get("/rooms/{room_id}/qr.svg")
+def room_qr_svg(
+    room_id: UUID,
+    session: Annotated[Session, Depends(get_session)],
+    principal: Annotated[AuthPrincipal, Depends(require_viewer)],
+    public_url: str | None = Query(default=None, max_length=2048),
+):
+    """Generate a printable deep link that starts the room walkthrough."""
+    room = _room(session, room_id, principal)
+    payload = f"{qr_base_url(public_url)}/#room-audit={room.id}"
+    return qr_svg_response(payload, f"AssetGuard room {room.name}")
 
 
 @router.get("/access")

@@ -7,7 +7,6 @@ from io import BytesIO
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Literal
-from urllib.parse import urlsplit
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
@@ -19,7 +18,6 @@ from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
-import segno
 from pydantic import BaseModel, Field
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
@@ -28,6 +26,7 @@ from assetguard.infrastructure.config import get_settings
 from assetguard.infrastructure.database import get_session
 from assetguard.interfaces.http.authorization import require_admin, require_viewer
 from assetguard.interfaces.http.pdf_support import pdf_font_name
+from assetguard.interfaces.http.qr_support import qr_base_url, qr_svg_response
 from assetguard.interfaces.http.resource_scope import scoped_endpoint
 from assetguard.modules.assets.models import AssetRecord, OrganizationRecord, RoomRecord, FloorRecord, BuildingRecord
 from assetguard.modules.baselines.models import BaselineRecord
@@ -882,17 +881,9 @@ def asset_qr_svg(
     public_url: str | None = Query(default=None, max_length=2048),
 ):
     asset = _scoped_asset(session, asset_id, principal)
-    base_url = get_settings().public_url
-    if public_url:
-        parsed = urlsplit(public_url)
-        if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:
-            raise HTTPException(422, "QR public_url must be an HTTPS origin without credentials, query or fragment.")
-        base_url = f"https://{parsed.netloc}{parsed.path.rstrip('/')}"
+    base_url = qr_base_url(public_url)
     payload = f"{base_url}/#asset={asset.id}"
-    qr = segno.make(payload, error="m")
-    output = BytesIO()
-    qr.save(output, kind="svg", scale=4, border=2, title=f"AssetGuard {asset.inventory_number}")
-    return Response(output.getvalue(), media_type="image/svg+xml")
+    return qr_svg_response(payload, f"AssetGuard {asset.inventory_number}")
 
 
 @router.post("/assets", status_code=status.HTTP_201_CREATED)

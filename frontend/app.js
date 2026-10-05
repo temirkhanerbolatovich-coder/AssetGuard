@@ -1,7 +1,7 @@
 const $ = (id) => document.getElementById(id);
 let token = sessionStorage.getItem("assetguard-admin-token") || "";
 function emptyState() {
-  return {assets: [], endpoints: [], devices: [], changes: [], incidents: [], physicalIncidents: [], devicePage: 1, incidentPage: 1, registryScrollY: 0, registryView: "all", guideExpanded: false, operations: null, locations: [], users: [], locationAccess: [], organizations: [], agentCredentials: [], agentReenrolments: [], agentPage: 1, currentUser: null, visionRooms: [], selectedAsset: null, selectedComputer: null, assetTab: "overview", selectedIncident: null, incidentDecisionMode: null, linkingEndpoint: null, visionRoomId: null, visionScan: null, visionImageUrl: null, assetQrUrl: null, roomWorkspace: null, inspectionDraft: null, inspectionReceipt: null, roomTab: "overview", physicalIncidentId: null};
+  return {assets: [], endpoints: [], devices: [], changes: [], incidents: [], physicalIncidents: [], devicePage: 1, incidentPage: 1, registryScrollY: 0, registryView: "all", guideExpanded: false, operations: null, locations: [], users: [], locationAccess: [], organizations: [], agentCredentials: [], agentReenrolments: [], agentPage: 1, currentUser: null, visionRooms: [], selectedAsset: null, selectedComputer: null, assetTab: "overview", selectedIncident: null, incidentDecisionMode: null, linkingEndpoint: null, visionRoomId: null, visionScan: null, visionImageUrl: null, assetQrUrl: null, qrTarget: null, roomWorkspace: null, inspectionDraft: null, inspectionReceipt: null, roomTab: "overview", physicalIncidentId: null};
 }
 let state = emptyState();
 let sessionGeneration = 0;
@@ -16,6 +16,8 @@ let confirmationBusy = false;
 let notificationGeneration = 0;
 let notificationOffset = 0;
 let adminAccessGeneration = 0;
+let inspectionCameraStream = null;
+let inspectionScanFrame = 0;
 const dialogFocusOrigins = new WeakMap();
 const routeDataCache = new Map();
 const routeRequestCache = new Map();
@@ -342,6 +344,14 @@ function endSession(message = "") {
   pendingReadControllers.forEach((controller) => controller.abort());
   pendingReadControllers.clear();
   clearRouteDataCache();
+  stopInspectionScanner();
+  const draftOwner = state.currentUser?.id || state.currentUser?.username;
+  if (draftOwner) {
+    for (let index = sessionStorage.length - 1; index >= 0; index -= 1) {
+      const key = sessionStorage.key(index);
+      if (key?.startsWith(`${inspectionDraftPrefix}${draftOwner}:`)) sessionStorage.removeItem(key);
+    }
+  }
   token = "";
   sessionStorage.removeItem("assetguard-admin-token");
   if (state.visionImageUrl) URL.revokeObjectURL(state.visionImageUrl);
@@ -734,7 +744,7 @@ async function openRoomWorkspace(roomId, scroll = true) {
   $("room-detail").dataset.loadState = "loading";
   $("room-detail-path").textContent = "";
   $("room-detail-state").textContent = "Загрузка…";
-  ["room-inspection-action", "room-edit-action", "room-vision-action"].forEach(id => $(id).hidden = true);
+  ["room-inspection-action", "room-qr-action", "room-edit-action", "room-vision-action"].forEach(id => $(id).hidden = true);
   $("room-tabs").querySelectorAll("button").forEach(button => button.disabled = true);
   document.querySelectorAll("main > .page-section").forEach((section) => { section.hidden = section.id !== "room-detail"; });
   setPageHeading("locations");
@@ -746,7 +756,7 @@ async function openRoomWorkspace(roomId, scroll = true) {
     $("room-detail").dataset.loadState = "ready";
     $("room-tabs").querySelectorAll("button").forEach(button => button.disabled = false);
     $("room-detail-title").textContent=`Кабинет ${workspace.room.name}`; $("room-detail-path").textContent=[workspace.path.building,workspace.path.floor&&`этаж ${workspace.path.floor}`,workspace.room.purpose].filter(Boolean).join(" · ");
-    $("room-edit-action").hidden=state.currentUser?.role!=="ADMIN"; $("room-vision-action").hidden=state.currentUser?.role!=="ADMIN"; $("room-inspection-action").hidden=!canEditRoom(workspace.room.id)||!workspace.inventory.assets.length;
+    $("room-edit-action").hidden=state.currentUser?.role!=="ADMIN"; $("room-vision-action").hidden=state.currentUser?.role!=="ADMIN"; $("room-inspection-action").hidden=!canEditRoom(workspace.room.id)||!workspace.inventory.assets.length; $("room-qr-action").hidden=!canEditRoom(workspace.room.id)||!workspace.inventory.assets.length;
     const attention=workspace.incidents.length||(workspace.physical_incidents||[]).some((item)=>["OPEN","UNDER_REVIEW"].includes(item.status))||workspace.agents.some((item)=>item.status!=="ONLINE")||workspace.vision?.latest_scan?.status==="WARNING"; $("room-detail-state").textContent=attention?"Требует внимания":"В норме"; $("room-detail-state").className=`status-pill ${attention?"warning":"ok"}`;
     renderRoomTab(); if(scroll)window.scrollTo({top:0,behavior:"smooth"});
   } catch(error) {
@@ -765,10 +775,153 @@ function openRoomEditDialog() {
   $("room-edit-purpose").value=room.purpose||"";$("room-edit-responsible").value=room.responsible_name||"";$("room-edit-contact").value=room.responsible_contact||"";$("room-edit-notes").value=room.notes||"";
   openDialog("room-edit-dialog", "room-edit-purpose");
 }
+
+const inspectionDraftPrefix = "assetguard-inspection-draft:";
+function inspectionDraftKey(roomId) {
+  const userId = state.currentUser?.id || state.currentUser?.username || "session";
+  return `${inspectionDraftPrefix}${userId}:${roomId}`;
+}
+function readInspectionDraft(workspace) {
+  try {
+    const key = inspectionDraftKey(workspace.room.id);
+    const saved = JSON.parse(sessionStorage.getItem(key) || "null");
+    const assetIds = workspace.inventory.assets.map(asset => asset.id).sort();
+    if (!saved) return null;
+    if (saved.version !== 1 || !Array.isArray(saved.assetIds) || JSON.stringify([...saved.assetIds].sort()) !== JSON.stringify(assetIds)) {
+      sessionStorage.removeItem(key);
+      return null;
+    }
+    return saved;
+  } catch { return null; }
+}
+function persistInspectionDraft() {
+  const draft = state.inspectionDraft;
+  if (!draft || !$('room-inspection-dialog').open) return;
+  const values = [...$('room-inspection-items').querySelectorAll('.inspection-item')].map(row => ({
+    assetId: row.dataset.asset,
+    result: row.querySelector('.inspection-result-input').value,
+    affectedQuantity: row.querySelector('.inspection-affected-input').value,
+    comment: row.querySelector('.inspection-item-comment').value,
+  }));
+  try {
+    sessionStorage.setItem(inspectionDraftKey(draft.roomId), JSON.stringify({
+      version: 1,
+      assetIds: draft.assets.map(asset => asset.id),
+      comment: $('room-inspection-comment').value,
+      values,
+    }));
+  } catch {
+    $('inspection-scan-status').textContent = 'Браузер не смог сохранить черновик. Не закрывайте вкладку до завершения обхода.';
+    $('inspection-scan-status').classList.add('error-text');
+  }
+}
+function clearInspectionDraft(roomId) {
+  sessionStorage.removeItem(inspectionDraftKey(roomId));
+}
+function restoreInspectionDraft(saved) {
+  if (!saved) return;
+  $('room-inspection-comment').value = saved.comment || '';
+  for (const value of saved.values || []) {
+    const row = $('room-inspection-items').querySelector(`[data-asset="${CSS.escape(value.assetId)}"]`);
+    if (!row) continue;
+    row.querySelector('.inspection-result-input').value = value.result || '';
+    row.querySelector('.inspection-affected-input').value = value.affectedQuantity || '1';
+    row.querySelector('.inspection-item-comment').value = value.comment || '';
+    syncInspectionRow(row);
+  }
+}
+function syncInspectionRow(row) {
+  const result = row.querySelector('.inspection-result-input').value;
+  const affected = ['MISSING', 'DAMAGED'].includes(result);
+  row.querySelector('.inspection-affected').hidden = !affected;
+  row.querySelector('.inspection-affected-input').disabled = !affected;
+}
+function stopInspectionScanner() {
+  if (inspectionScanFrame) cancelAnimationFrame(inspectionScanFrame);
+  inspectionScanFrame = 0;
+  inspectionCameraStream?.getTracks().forEach(track => track.stop());
+  inspectionCameraStream = null;
+  $('inspection-camera-video').srcObject = null;
+  $('inspection-camera').hidden = true;
+  $('inspection-scan-stop').hidden = true;
+  $('inspection-scan-start').hidden = false;
+}
+function findInspectionAsset(code) {
+  const value = code.trim();
+  if (!value) return null;
+  let assetId = '';
+  try {
+    const parsed = new URL(value, location.origin);
+    const match = parsed.hash.match(/^#asset=([0-9a-f-]{36})(?:&|$)/i);
+    if (match) assetId = match[1];
+  } catch { /* Fall back to the inventory number. */ }
+  return state.inspectionDraft?.assets.find(asset =>
+    (assetId && asset.id.toLowerCase() === assetId.toLowerCase()) ||
+    asset.inventory_number.toLocaleLowerCase('ru') === value.toLocaleLowerCase('ru')
+  ) || null;
+}
+function applyInspectionCode(code) {
+  const asset = findInspectionAsset(code);
+  if (!asset) {
+    $('inspection-scan-status').textContent = 'Этот QR или инвентарный номер не относится к имуществу текущего кабинета.';
+    $('inspection-scan-status').classList.add('error-text');
+    return false;
+  }
+  const row = $('room-inspection-items').querySelector(`[data-asset="${CSS.escape(asset.id)}"]`);
+  row.scrollIntoView({behavior: 'smooth', block: 'center'});
+  row.classList.add('inspection-item-found');
+  setTimeout(() => row.classList.remove('inspection-item-found'), 1200);
+  if (asset.tracking_mode === 'INDIVIDUAL' && Number(asset.quantity) === 1) {
+    row.querySelector('.inspection-result-input').value = 'PRESENT';
+    syncInspectionRow(row);
+    $('inspection-scan-status').textContent = `${asset.name}: отмечено «На месте».`;
+  } else {
+    row.querySelector('.inspection-result-input').focus({preventScroll: true});
+    $('inspection-scan-status').textContent = `${asset.name}: позиция найдена. Проверьте фактическое количество и выберите результат.`;
+  }
+  $('inspection-scan-status').classList.remove('error-text');
+  $('inspection-code-input').value = '';
+  updateInspectionProgress();
+  persistInspectionDraft();
+  return true;
+}
+async function startInspectionScanner() {
+  if (!(window.BarcodeDetector && navigator.mediaDevices?.getUserMedia)) {
+    $('inspection-scan-status').textContent = 'Этот браузер не поддерживает сканирование камерой. Введите инвентарный номер или вставьте ссылку из QR.';
+    $('inspection-scan-status').classList.add('error-text');
+    return;
+  }
+  try {
+    const detector = new BarcodeDetector({formats: ['qr_code']});
+    inspectionCameraStream = await navigator.mediaDevices.getUserMedia({video: {facingMode: {ideal: 'environment'}}, audio: false});
+    const video = $('inspection-camera-video');
+    video.srcObject = inspectionCameraStream;
+    await video.play();
+    $('inspection-camera').hidden = false;
+    $('inspection-scan-start').hidden = true;
+    $('inspection-scan-stop').hidden = false;
+    $('inspection-scan-status').classList.remove('error-text');
+    $('inspection-scan-status').textContent = 'Наведите камеру на QR имущества.';
+    const scan = async () => {
+      if (!inspectionCameraStream) return;
+      try {
+        const codes = await detector.detect(video);
+        if (codes[0]?.rawValue && applyInspectionCode(codes[0].rawValue)) { stopInspectionScanner(); return; }
+      } catch { /* A frame may be unreadable while the camera is moving. */ }
+      inspectionScanFrame = requestAnimationFrame(scan);
+    };
+    inspectionScanFrame = requestAnimationFrame(scan);
+  } catch (error) {
+    stopInspectionScanner();
+    $('inspection-scan-status').textContent = error?.name === 'NotAllowedError' ? 'Доступ к камере не разрешён. Разрешите его в браузере или используйте ручной ввод.' : 'Камеру не удалось открыть. Используйте ручной ввод.';
+    $('inspection-scan-status').classList.add('error-text');
+  }
+}
 function openRoomInspectionDialog() {
   const workspace = state.roomWorkspace;
   if (!workspace || !canEditRoom(workspace.room.id)) return;
   if (!workspace.inventory.assets.length) { showToast("Сначала добавьте имущество в кабинет", true); return; }
+  const saved = readInspectionDraft(workspace);
   state.inspectionDraft = {roomId: workspace.room.id, assets: workspace.inventory.assets.map(asset => ({...asset})), review: null};
   $("room-inspection-comment").value = "";
   $("inspection-context").textContent = `Кабинет ${workspace.room.name} · ${workspace.path.building || ""} · ${workspace.inventory.assets.length} позиций · ${state.currentUser.username}`;
@@ -782,12 +935,16 @@ function openRoomInspectionDialog() {
   $("room-inspection-items").onchange = event => {
     const item = event.target.closest(".inspection-item");
     if (!item) return;
-    const result = item.querySelector(".inspection-result-input").value;
-    const affected = ["MISSING", "DAMAGED"].includes(result);
-    item.querySelector(".inspection-affected").hidden = !affected;
-    item.querySelector(".inspection-affected-input").disabled = !affected;
+    syncInspectionRow(item);
     updateInspectionProgress();
+    persistInspectionDraft();
   };
+  $("room-inspection-items").oninput = persistInspectionDraft;
+  $("room-inspection-comment").oninput = persistInspectionDraft;
+  restoreInspectionDraft(saved);
+  $("inspection-scan-status").textContent = saved ? "Черновик этого обхода восстановлен." : "Можно продолжить обход без камеры, отмечая позиции в списке.";
+  $("inspection-scan-status").classList.remove("error-text");
+  stopInspectionScanner();
   setInspectionStep(false);
   updateInspectionProgress();
   openDialog("room-inspection-dialog", "inspection-result-0");
@@ -844,14 +1001,17 @@ async function saveRoomInspection(event) {
   const generation = sessionGeneration;
   button.disabled = true; button.textContent = "Сохраняем…";
   $("room-inspection-form").setAttribute("aria-busy", "true");
-  ["room-inspection-cancel", "inspection-review-back"].forEach(id => $(id).disabled = true);
+  ["room-inspection-cancel", "inspection-draft-reset", "inspection-review-back"].forEach(id => $(id).disabled = true);
   $("inspection-error").hidden = true;
   try {
     const inspection = await api(`/admin/locations/rooms/${draft.roomId}/inspections`, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(draft.review)});
     if (generation !== sessionGeneration) return;
     state.inspectionReceipt = {roomId: draft.roomId, inspection};
+    clearInspectionDraft(draft.roomId);
+    stopInspectionScanner();
     $("room-inspection-dialog").close();
     const refreshed = await load(false);
+    if (location.hash === `#room-audit=${draft.roomId}`) history.replaceState(null, "", `#room=${draft.roomId}`);
     if (refreshed && location.hash === `#room=${draft.roomId}`) {
       await openRoomWorkspace(draft.roomId, false);
       if (generation === sessionGeneration && location.hash === `#room=${draft.roomId}` && state.roomWorkspace?.room.id === draft.roomId) {
@@ -867,7 +1027,7 @@ async function saveRoomInspection(event) {
     button.disabled = false;
     button.textContent = $("room-inspection-form").dataset.step === "review" ? "Сохранить обход" : "Проверить итог";
     $("room-inspection-form").setAttribute("aria-busy", "false");
-    ["room-inspection-cancel", "inspection-review-back"].forEach(id => $(id).disabled = false);
+    ["room-inspection-cancel", "inspection-draft-reset", "inspection-review-back"].forEach(id => $(id).disabled = false);
   }
 }
 function openPhysicalIncidentDialog(incidentId) {
@@ -1322,14 +1482,21 @@ function openAssetEditDialog(asset) {
   const rooms=managedRoomsForAsset(asset); $("asset-edit-room").innerHTML='<option value="">Не назначать кабинет</option>'+rooms.map((room)=>`<option value="${room.id}">${escapeHtml(room.label)}</option>`).join(""); if(asset.room_id && rooms.some((room)=>room.id===asset.room_id))$("asset-edit-room").value=asset.room_id;
   syncAssetEditTrackingMode(); openDialog("asset-edit-dialog", "asset-edit-name");
 }
-async function printAssetQr(asset, publicUrl) {
+async function printQr(target, publicUrl) {
   const popup=window.open("", "assetguard-qr", "width=520,height=620"); if(!popup) throw new Error("Разрешите всплывающее окно для QR-кода и повторите попытку.");
   popup.document.write('<title>AssetGuard QR</title><main style="font-family:system-ui;text-align:center;padding:24px"><p>Готовим QR-код…</p></main>'); popup.document.close();
-  try { const suffix=publicUrl?`?public_url=${encodeURIComponent(publicUrl)}`:""; const blob=await apiBlob(`/admin/assets/${asset.id}/qr.svg${suffix}`); if(state.assetQrUrl)URL.revokeObjectURL(state.assetQrUrl);state.assetQrUrl=URL.createObjectURL(blob); popup.document.body.innerHTML=`<main style="font-family:system-ui;text-align:center;padding:24px"><h1>${escapeHtml(asset.name)}</h1><p>${escapeHtml(asset.inventory_number)}</p><img style="width:320px;height:320px" src="${state.assetQrUrl}" alt="QR"><p>Отсканируйте код, чтобы открыть карточку имущества.</p><button onclick="print()">Печать</button></main>`; }
+  try { const suffix=publicUrl?`?public_url=${encodeURIComponent(publicUrl)}`:""; const endpoint=target.type==="room"?`/admin/locations/rooms/${target.id}/qr.svg`:`/admin/assets/${target.id}/qr.svg`; const blob=await apiBlob(`${endpoint}${suffix}`); if(state.assetQrUrl)URL.revokeObjectURL(state.assetQrUrl);state.assetQrUrl=URL.createObjectURL(blob); const description=target.type==="room"?"Отсканируйте код, чтобы открыть кабинет и начать обход.":"Отсканируйте код в обходе, чтобы отметить имущество."; popup.document.body.innerHTML=`<main style="font-family:system-ui;text-align:center;padding:24px"><h1>${escapeHtml(target.name)}</h1><p>${escapeHtml(target.subtitle||"")}</p><img style="width:320px;height:320px" src="${state.assetQrUrl}" alt="QR"><p>${description}</p><button onclick="print()">Печать</button></main>`; }
   catch(error) { popup.close(); throw error; }
 }
 function openAssetQrDialog(asset) {
-  state.qrAsset=asset; $("asset-qr-title").textContent=`QR · ${asset.name}`; let saved=localStorage.getItem("assetguardPublicUrl") || ""; if(!saved && !["localhost","127.0.0.1"].includes(location.hostname))saved=location.origin; $("asset-qr-public-url").value=saved; $("asset-qr-help").textContent=saved ? "Этот адрес будет записан в QR-код." : "Сейчас вы работаете локально: QR можно напечатать, но телефон его не откроет без публичного HTTPS-адреса."; openDialog("asset-qr-dialog", "asset-qr-public-url");
+  openQrDialog({type:"asset",id:asset.id,name:asset.name,subtitle:asset.inventory_number});
+}
+function openRoomQrDialog() {
+  const workspace=state.roomWorkspace;if(!workspace)return;
+  openQrDialog({type:"room",id:workspace.room.id,name:`Кабинет ${workspace.room.name}`,subtitle:[workspace.path.building,workspace.path.floor&&`этаж ${workspace.path.floor}`].filter(Boolean).join(" · ")});
+}
+function openQrDialog(target) {
+  state.qrTarget=target; $("asset-qr-title").textContent=`QR · ${target.name}`; let saved=localStorage.getItem("assetguardPublicUrl") || ""; if(!saved && !["localhost","127.0.0.1"].includes(location.hostname))saved=location.origin; $("asset-qr-public-url").value=saved; $("asset-qr-help").textContent=saved ? "Этот адрес будет записан в QR-код." : "Сейчас вы работаете локально: QR можно напечатать, но телефон его не откроет без публичного HTTPS-адреса."; openDialog("asset-qr-dialog", "asset-qr-public-url");
 }
 function historyMessage(entry) {
   if(entry.type === "INVENTORY_COMPLETED") return `${entry.metadata?.inventory_type === "FULL" ? "Полная" : "Частичная"} проверка завершена, данные сохранены.`;
@@ -1488,10 +1655,12 @@ async function openRouteFromHash() {
   if (computerMatch) { await openComputerDetail(computerMatch[1]); return; }
   const assetMatch = location.hash.match(/^#asset=([0-9a-f-]{36})(?:&tab=([a-z-]+))?$/i);
   const roomMatch = location.hash.match(/^#room=([0-9a-f-]{36})$/i);
+  const roomAuditMatch = location.hash.match(/^#room-audit=([0-9a-f-]{36})$/i);
   const physicalMatch = location.hash.match(/^#physical-incident=([0-9a-f-]{36})$/i);
   if(physicalMatch){await openIncidentDetail(physicalMatch[1],false,true);return;}
   const incidentMatch = location.hash.match(/^#incident=([0-9a-f-]{36})$/i);
   if(assetMatch){const tab=assetMatch[2]||"overview";if(state.selectedAsset===assetMatch[1]&&!$("detail").hidden)selectAssetTab(tab);else await detail(assetMatch[1],false,tab);return;}
+  if(roomAuditMatch){await openRoomWorkspace(roomAuditMatch[1],false);if(state.roomWorkspace?.room.id===roomAuditMatch[1]){if(canEditRoom(roomAuditMatch[1])&&state.roomWorkspace.inventory.assets.length)openRoomInspectionDialog();else{history.replaceState(null,"",`#room=${roomAuditMatch[1]}`);showToast(state.roomWorkspace.inventory.assets.length?"У вас нет права проводить обход этого кабинета":"В кабинете пока нет имущества для обхода",true);}}return;}
   if(roomMatch){await openRoomWorkspace(roomMatch[1],false);return;}
   if(incidentMatch){await openIncidentDetail(incidentMatch[1],false);return;}
   showPrimaryRoute(location.hash.slice(1)||"overview");
@@ -1574,14 +1743,14 @@ $("asset-edit-cancel").onclick=()=>$("asset-edit-dialog").close();
 $("asset-edit-form").addEventListener("submit",async(event)=>{event.preventDefault();const form=event.currentTarget,asset=state.editingAsset;if(!asset || $("asset-edit-submit").disabled)return;clearFormError(form);const button=$("asset-edit-submit"),trackingMode=$("asset-edit-tracking-mode").value,roomId=$("asset-edit-room").value||null;const body={inventory_number:$("asset-edit-inventory-number").value.trim(),name:$("asset-edit-name").value.trim(),asset_type:$("asset-edit-type").value,category:assetCategoryForType($("asset-edit-type").value),tracking_mode:trackingMode,quantity:trackingMode==="GROUPED"?Number($("asset-edit-quantity").value):1,unit:$("asset-edit-unit").value.trim()||"шт.",room_id:roomId,notes:$("asset-edit-notes").value.trim()||null};button.disabled=true;button.textContent="Сохраняем…";try{await sendAction(`/admin/assets/${asset.id}`,body,"PATCH","Карточка имущества обновлена");$("asset-edit-dialog").close();}catch(error){showFormError(form,error.message);}finally{button.disabled=false;button.textContent="Сохранить изменения";}});
 $("asset-qr-cancel").onclick=()=>$("asset-qr-dialog").close();
 $("asset-qr-form").addEventListener("submit", event => submitFormAction(event,"asset-qr-submit",async () => {
-  const asset=state.qrAsset; if (!asset) return;
+  const target=state.qrTarget; if (!target) return;
   const raw=$("asset-qr-public-url").value.trim(); let publicUrl="";
   if (raw) {
     const normalized=new URL(raw);
     if (normalized.protocol !== "https:") throw new Error("Для печати нужен HTTPS-адрес.");
     publicUrl=normalized.origin; localStorage.setItem("assetguardPublicUrl",publicUrl);
   }
-  await printAssetQr(asset,publicUrl); $("asset-qr-dialog").close();
+  await printQr(target,publicUrl); $("asset-qr-dialog").close();
 }));
 $("clear-device-filters").addEventListener("click",clearDeviceFilters);
 $("logout").onclick = async () => {
@@ -1828,6 +1997,7 @@ $("room-detail-back").onclick=()=>{state.roomWorkspace=null;$("room-detail").hid
 $("room-edit-action").onclick=openRoomEditDialog;
 $("room-vision-action").onclick=()=>launchRoomVision(state.roomWorkspace?.room.id);
 $("room-inspection-action").onclick=openRoomInspectionDialog;
+$("room-qr-action").onclick=openRoomQrDialog;
 $("room-edit-cancel").onclick=()=>$("room-edit-dialog").close();
 $("room-edit-form").addEventListener("submit", event => submitFormAction(event,"room-edit-submit",async () => {
   const roomId=state.roomWorkspace?.room.id; if (!roomId) return;
@@ -1835,10 +2005,15 @@ $("room-edit-form").addEventListener("submit", event => submitFormAction(event,"
   await api(`/admin/locations/rooms/${roomId}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
   await load(false); await openRoomWorkspace(roomId); $("room-edit-dialog").close(); showToast("Данные кабинета сохранены");
 }));
-$("room-inspection-cancel").onclick=()=>$("room-inspection-dialog").close();
+$("room-inspection-cancel").onclick=()=>{persistInspectionDraft();stopInspectionScanner();$("room-inspection-dialog").close();if(location.hash.startsWith("#room-audit="))history.replaceState(null,"",`#room=${state.inspectionDraft?.roomId}`);};
 $("room-inspection-form").addEventListener("submit", saveRoomInspection);
 $("inspection-review-back").onclick = () => { $("inspection-error").hidden = true; setInspectionStep(false); $("inspection-result-0").focus(); };
-$("room-inspection-dialog").addEventListener("cancel", event => { if ($("room-inspection-submit").disabled) event.preventDefault(); });
+$("inspection-scan-start").onclick=startInspectionScanner;
+$("inspection-scan-stop").onclick=stopInspectionScanner;
+$("inspection-code-submit").onclick=()=>applyInspectionCode($("inspection-code-input").value);
+$("inspection-code-input").addEventListener("keydown",event=>{if(event.key==="Enter"){event.preventDefault();applyInspectionCode(event.currentTarget.value);}});
+$("inspection-draft-reset").onclick=()=>{const roomId=state.inspectionDraft?.roomId;if(!roomId)return;clearInspectionDraft(roomId);stopInspectionScanner();$("room-inspection-dialog").close();openRoomInspectionDialog();showToast("Черновик обхода очищен");};
+$("room-inspection-dialog").addEventListener("cancel", event => { if ($("room-inspection-submit").disabled) {event.preventDefault();return;} persistInspectionDraft();stopInspectionScanner();if(location.hash.startsWith("#room-audit="))history.replaceState(null,"",`#room=${state.inspectionDraft?.roomId}`); });
 $("import-preview-dialog").addEventListener("cancel", event => { if ($("import-preview-form").getAttribute("aria-busy") === "true") event.preventDefault(); });
 $("physical-incident-cancel").onclick=()=>$("physical-incident-dialog").close();
 $("physical-incident-action-select").addEventListener("change",syncPhysicalOperationFields);
