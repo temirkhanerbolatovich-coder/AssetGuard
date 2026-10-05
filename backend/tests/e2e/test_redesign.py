@@ -145,11 +145,16 @@ def test_complete_workspace_reflow_fonts_onboarding_and_comparison(live_server, 
             page.evaluate('document.fonts.ready')
             assert not page.evaluate(MEASURE_CONTRAST)['issues'], route
             if motion == 'reduce': capture(page,route+'-desktop.png')
-            for width in (360,390,768,1024,1280,1440,1920):
+            for width in (360,390,768,1024,1120,1199,1200,1280,1440,1920):
                 page.set_viewport_size({'width':width,'height':1000})
                 assert page.locator('body').evaluate('element=>element.scrollWidth<=element.clientWidth'), (route,width)
                 if width >= 1200:
                     assert page.locator('#main-nav').bounding_box()['y'] < page.locator('#collapse-navigation').bounding_box()['y'], (route,width)
+                    assert page.locator('#nav-toggle').is_hidden(), (route,width)
+                else:
+                    assert page.locator('#main-nav').is_hidden(), (route,width)
+                    assert page.locator('#nav-toggle').is_visible(), (route,width)
+                    assert page.locator('#app-header').bounding_box()['height'] < 200, (route,width)
                 if width == 390 and motion == 'reduce': capture(page,route+'-mobile.png')
             page.set_viewport_size({'width':1440,'height':1000})
         page.evaluate('room=>location.hash="room="+room',room_id)

@@ -11,7 +11,7 @@
 onboarding, comparison с нулём/отсутствующими сведениями, responsive и motion.
 
 Новые размеры: 360, 390, 768, 1024, 1280, 1440, 1920 px; 1280 дополнительно
-защищает порядок desktop navigation от старых media rules. Старые проверки
+защищает порядок desktop navigation от старых media rules. Дополнительно проверяются 1120/1199/1200 px: видимость меню/кнопки и высота header на границе переключения. Старые проверки
 малой высоты и 320 px сохранены. **Настоящий zoom 200%** проверен через
 `chrome.tabs.setZoom` во временном тестовом Chromium profile: zoom 2,
 viewport 1440 → `innerWidth=720`, DPR 2. CSS zoom/pinch не подменяют проверку.

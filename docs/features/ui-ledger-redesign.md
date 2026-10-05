@@ -163,3 +163,5 @@ RAM уже допускает MiB от Agent и байты старого JSON t
 за отсутствие видеокарты. [Исходный Win32 collector GLPI](https://github.com/glpi-project/glpi-agent/blob/develop/lib/GLPI/Agent/Task/Inventory/Win32/Videos.pm)
 переводит AdapterRAM в MiB; byte-вариант подтверждён старой JSON fixture
 проекта. Это совместимость существующих источников, не изменение evidence.
+
+Границы навигации 1120/1199/1200 px дополнительно проверяют доступность меню и компактную высоту header; унаследованные важные display/min-height правила устранены.
