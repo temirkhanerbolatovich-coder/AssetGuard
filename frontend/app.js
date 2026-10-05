@@ -79,7 +79,11 @@ document.querySelectorAll('input[required],select[required],textarea[required]')
   const text = [...label.childNodes].find(node => node.nodeType === Node.TEXT_NODE && node.textContent.trim());
   const marker = document.createElement('span'); marker.className = 'required-marker';
   marker.textContent = ' *'; marker.setAttribute('aria-hidden','true'); marker.title = 'Обязательное поле';
-  if (text) { text.textContent = text.textContent.replace(/\s*\*\s*$/,''); text.after(marker); }
+  if (text) {
+    text.textContent = text.textContent.replace(/\s*\*\s*$/,'');
+    const caption = document.createElement('span'); caption.className = 'field-caption';
+    text.before(caption); caption.append(text,marker);
+  }
   else label.querySelector('span')?.append(marker);
 });
 

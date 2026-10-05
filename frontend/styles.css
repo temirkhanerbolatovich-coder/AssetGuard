@@ -1134,7 +1134,7 @@ dialog .actions { margin-top: 24px; justify-content: flex-end; }
 dialog .form-error { grid-column: 1/-1; }
 dialog.drawer { position: fixed; inset: 12px 12px 12px auto; margin: 0; width: min(560px,calc(100vw - 24px)); height: calc(100dvh - 24px); max-height: none; padding: 28px; animation-name: drawer-enter; }
 dialog.drawer .panel { padding: 0; border: 0; }
-dialog.drawer .create-form { display: grid; grid-template-columns: 1fr; }
+#asset-create-dialog #create-asset { display: grid; grid-template-columns: minmax(0,1fr); }
 .drawer .form-heading { display: flex; gap: 16px; }
 .drawer .form-heading h2 { margin-bottom: 8px; }
 .link-choice-details { background: var(--surface-soft); padding: 12px 16px; border-radius: var(--radius-sm); margin-top: 16px; }

@@ -73,6 +73,8 @@ def test_registry_source_views_drawer_retry_and_link_are_real(live_server):
         assert page.locator('[data-registry-view=assets]').get_attribute('aria-pressed') == 'true'
         page.locator('#show-create').click()
         form = page.locator('#create-asset')
+        assert form.locator('[name=name]').bounding_box()['width'] > 300
+        assert form.locator('[name=name]').evaluate("field=>field.labels[0].querySelector('.field-caption .required-marker')!==null")
         form.locator('[name=inventory_number]').fill('IT-001')
         form.locator('[name=name]').fill('Компьютер учительской')
         form.locator('[name=room_id]').select_option(room_id)
