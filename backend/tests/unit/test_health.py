@@ -74,7 +74,7 @@ def test_operations_counts_expired_agents_without_mutating_status_or_leaking_ten
         before = [(e.status, e.last_seen_at, e.updated_at) for e in endpoints]
         principal = AuthPrincipal(user_id=None, username="monitor", role="ADMIN", session_id=None, organization_id=own.id)
         agents = operations_status(session, principal)["agents"]
-        assert agents == {"total": 5, "online": 1, "offline": 1, "stale": 2, "identity_conflicts": 1, "last_inventory_at": None}
+        assert agents == {"total": 5, "online": 1, "offline": 1, "stale": 2, "identity_conflicts": 1, "last_inventory_at": None, "stale_after_hours": get_settings().endpoint_stale_after_hours}
         for endpoint in endpoints:
             session.refresh(endpoint)
         assert [(e.status, e.last_seen_at, e.updated_at) for e in endpoints] == before

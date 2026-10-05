@@ -1,7 +1,7 @@
 const $ = (id) => document.getElementById(id);
 let token = sessionStorage.getItem("assetguard-admin-token") || "";
 function emptyState() {
-  return {assets: [], endpoints: [], devices: [], changes: [], incidents: [], physicalIncidents: [], devicePage: 1, incidentPage: 1, registryScrollY: 0, operations: null, locations: [], users: [], locationAccess: [], organizations: [], agentCredentials: [], currentUser: null, visionRooms: [], selectedAsset: null, assetTab: "overview", selectedIncident: null, incidentDecisionMode: null, linkingEndpoint: null, visionRoomId: null, visionScan: null, visionImageUrl: null, assetQrUrl: null, roomWorkspace: null, inspectionDraft: null, inspectionReceipt: null, roomTab: "overview", physicalIncidentId: null};
+  return {assets: [], endpoints: [], devices: [], changes: [], incidents: [], physicalIncidents: [], devicePage: 1, incidentPage: 1, registryScrollY: 0, operations: null, locations: [], users: [], locationAccess: [], organizations: [], agentCredentials: [], agentReenrolments: [], agentPage: 1, currentUser: null, visionRooms: [], selectedAsset: null, assetTab: "overview", selectedIncident: null, incidentDecisionMode: null, linkingEndpoint: null, visionRoomId: null, visionScan: null, visionImageUrl: null, assetQrUrl: null, roomWorkspace: null, inspectionDraft: null, inspectionReceipt: null, roomTab: "overview", physicalIncidentId: null};
 }
 let state = emptyState();
 let sessionGeneration = 0;
@@ -12,6 +12,10 @@ let loginInProgress = false;
 const pendingReadControllers = new Set();
 const readTimeoutMs = 20_000;
 let confirmationAction = null;
+let confirmationBusy = false;
+let notificationGeneration = 0;
+let notificationOffset = 0;
+let adminAccessGeneration = 0;
 const dialogFocusOrigins = new WeakMap();
 const routeDataCache = new Map();
 const routeRequestCache = new Map();
@@ -217,11 +221,15 @@ function endSession(message = "") {
   if (state.visionImageUrl) URL.revokeObjectURL(state.visionImageUrl);
   if (state.assetQrUrl) URL.revokeObjectURL(state.assetQrUrl);
   state = emptyState();
+  confirmationAction = null;
+  notificationGeneration += 1; notificationOffset = 0;
+  adminAccessGeneration += 1;
+  $("agent-search").value = ""; $("agent-status-filter").value = ""; $("notification-status-filter").value = "";
   ["device-search", "device-status-filter", "device-category-filter", "device-room-filter", "incident-search", "incident-severity-filter", "incident-type-filter", "incident-room-filter", "incident-date-from", "incident-date-to"].forEach(id => $(id).value = "");
   $("device-change-filter").checked = false;
   $("device-sort").value = "recent";
   $("incident-status-filter").value = "ACTIVE";
-  ["assets", "incident-center-list", "incident-detail-facts", "incident-detail-actions", "incident-device-action", "device-pagination", "incident-pagination", "device-selected-filters", "incident-selected-filters", "attention-list", "activity-list", "location-tree", "agent-credentials-list", "agent-reenrolments-list", "current-hardware", "baseline-hardware", "detail-changes", "detail-history", "detail-incidents", "device-general", "device-system", "device-identifiers", "incident-detail-evidence", "incident-detail-comparison", "incident-detail-decisions", "room-tab-content", "room-inspection-items", "inspection-review-items", "import-preview-samples", "import-result", "import-file-errors", "import-preview-error", "import-preview-file", "import-preview-scope", "import-selection-summary", "inspection-context", "inspection-error", "inspection-review-comment", "vision-history", "vision-counts", "vision-comparison"].forEach((id) => $(id)?.replaceChildren());
+  ["assets", "incident-center-list", "incident-detail-facts", "incident-detail-actions", "incident-device-action", "device-pagination", "incident-pagination", "device-selected-filters", "incident-selected-filters", "attention-list", "activity-list", "location-tree", "agent-credentials-list", "agent-reenrolments-list", "agent-fleet-list", "agent-fleet-pagination", "notification-list", "notification-pagination", "notification-summary", "users-list", "current-hardware", "baseline-hardware", "detail-changes", "detail-history", "detail-incidents", "device-general", "device-system", "device-identifiers", "incident-detail-evidence", "incident-detail-comparison", "incident-detail-decisions", "room-tab-content", "room-inspection-items", "inspection-review-items", "import-preview-samples", "import-result", "import-file-errors", "import-preview-error", "import-preview-file", "import-preview-scope", "import-selection-summary", "inspection-context", "inspection-error", "inspection-review-comment", "vision-history", "vision-counts", "vision-comparison"].forEach((id) => $(id)?.replaceChildren());
   ["inspection-review-counts", "import-preview-note", "inspection-progress-text"].forEach(id => $(id).textContent = "");
   $("data-exchange-status").textContent = "PDF-сканы могут использовать OCR. Всегда сверяйте результат с оригиналом.";
   $("import-result").hidden = true;
@@ -515,13 +523,14 @@ function renderOperations(operations) {
   const status = $("operations-status"), summary = $("operations-summary");
   if (!operations) { status.textContent = "Нет данных"; status.className = "status-pill neutral"; summary.innerHTML = '<p class="empty">Операционные данные недоступны.</p>'; return; }
   const failed = Number(operations.ingest?.failed || 0), offline = Number(operations.agents?.offline || 0) + Number(operations.agents?.stale || 0), conflicts = Number(operations.agents?.identity_conflicts || 0);
-  const attention = failed + offline + conflicts;
+  const attention = failed + offline + conflicts + Number(operations.notifications?.retrying || 0);
   status.textContent = attention ? "Требует внимания" : "В норме"; status.className = `status-pill ${attention ? "warning" : "ok"}`;
   summary.innerHTML = [
     ["Agent на связи", `${operations.agents?.online || 0} из ${operations.agents?.total || 0}`],
     ["Нет связи / устарели", offline],
     ["Ошибки приёма данных", failed],
     ["Конфликты идентификации", conflicts],
+    ["Уведомления в очереди / повтор", `${operations.notifications?.pending || 0} / ${operations.notifications?.retrying || 0}`],
     ["Последний отчёт Agent", operations.agents?.last_inventory_at ? relativeTime(operations.agents.last_inventory_at) : "—"],
     ["Свободно для Vision", bytes(operations.storage?.free_bytes)],
     ["Размер базы", bytes(operations.database?.bytes)],
@@ -811,6 +820,7 @@ function userRoleLabel(role) { return ({ADMIN:"Администратор шко
 function renderAdminAccessVisibility() {
   const signedIn=Boolean(state.currentUser), isAdmin=state.currentUser?.role==="ADMIN";
   $("location-access-nav").hidden=!signedIn; $("location-access-shortcut").hidden=!signedIn; $("location-access").hidden=!signedIn;
+  $("agent-operations-action").hidden=!isAdmin;
   $("agent-credentials-nav").hidden=!isAdmin; $("agent-credentials").hidden=!isAdmin;
   $("access-admin-content").hidden=!isAdmin; $("access-role-notice").hidden=!signedIn||isAdmin;
   if(signedIn&&!isAdmin)$("access-role-notice").textContent=`Вы вошли как «${userRoleLabel(state.currentUser.role)}». Создавать учётные записи и назначать доступы может администратор школы.`;
@@ -824,26 +834,27 @@ function renderAgentCredentials() {
   const rows=state.agentCredentials.map((item)=>{
     const bound=Boolean(item.endpoint_id), revoked=item.status==="REVOKED";
     const connection=revoked?"Отозван":bound?"Подключён к компьютеру":"Ожидает установку";
-    const status=revoked?"REVOKED":bound?"ONLINE":"ACTIVE";
-    return `<div class="credential-row"><div><strong>${escapeHtml(item.username)}</strong><small>${connection} · создан ${escapeHtml(dateTime(item.issued_at))}${item.revoked_at?` · отозван ${escapeHtml(dateTime(item.revoked_at))}`:""}</small></div>${pill(status)}${!revoked?`<button type="button" class="button-secondary revoke-agent-credential" data-id="${item.id}">Отозвать ключ</button>`:""}</div>`;
+    const status=revoked?"REVOKED":"ACTIVE";
+    const endpoint=state.endpoints.find((endpoint)=>endpoint.id===item.endpoint_id);
+    return `<div class="credential-row"><div><strong>${escapeHtml(item.username)}</strong><small>${connection}${endpoint?` · ${escapeHtml(endpoint.hostname)}`:""} · создан ${escapeHtml(dateTime(item.issued_at))}${item.revoked_at?` · отозван ${escapeHtml(dateTime(item.revoked_at))}`:""}</small></div>${pill(status)}${!revoked?`<button type="button" class="button-secondary revoke-agent-credential" data-id="${item.id}">Отозвать ключ</button>`:""}</div>`;
   }).join("");
   $("agent-credentials-list").innerHTML=rows||'<p class="empty">Ключей пока нет. Создайте первый перед установкой Agent.</p>';
   // A bootstrap administrator may legitimately create a platform-scoped key before
   // the first school is configured; tenant administrators are scoped automatically.
-  $("create-agent-credential").querySelector("button[type=submit]").disabled=false;
-  document.querySelectorAll(".revoke-agent-credential").forEach((button)=>button.onclick=()=>openConfirmation({title:"Отозвать ключ Agent?",description:"Этот компьютер больше не сможет отправлять инвентаризацию. Для возобновления работы понадобится новый ключ.",confirmLabel:"Отозвать ключ",onConfirm:async()=>{await api(`/admin/agent-credentials/${button.dataset.id}/revoke`,{method:"POST"});showToast("Ключ Agent отозван");await loadAdminAccess();}}));
+  $("create-agent-credential").querySelector("button[type=submit]").disabled=$("create-agent-credential").dataset.busy==="true";
+  document.querySelectorAll(".revoke-agent-credential").forEach((button)=>button.onclick=()=>openConfirmation({title:"Отозвать ключ Agent?",description:`Ключ ${state.agentCredentials.find((item)=>item.id===button.dataset.id)?.username}. Компьютер больше не сможет отправлять инвентаризацию с этим ключом. Для возобновления работы понадобится новый ключ.`,confirmLabel:"Отозвать ключ",onConfirm:async()=>{await api(`/admin/agent-credentials/${button.dataset.id}/revoke`,{method:"POST"});showToast("Ключ Agent отозван");await loadAdminAccess();}}));
 }
 function renderAgentReenrolments() {
   if(state.currentUser?.role!=="ADMIN") return;
   const rows=(state.agentReenrolments||[]).map((item)=>{
-    const pending=item.status==="PENDING", matched=Boolean(item.endpoint_id);
+    const pending=item.status==="PENDING"&&new Date(item.expires_at)>new Date(), matched=Boolean(item.endpoint_id);
     const target=matched?`${item.endpoint_hostname||item.computer_name} · ${item.identifier_value}`:`${item.computer_name} · совпадение не найдено`;
     const actions=pending?`<div class="actions">${matched?`<button type="button" class="approve-agent-reenrolment" data-id="${item.id}">Подтвердить</button>`:""}<button type="button" class="button-secondary reject-agent-reenrolment" data-id="${item.id}">Отклонить</button></div>`:"";
-    return `<div class="credential-row"><div><strong>${escapeHtml(target)}</strong><small>Installer ${escapeHtml(item.installer_version)} · ${escapeHtml(dateTime(item.requested_at))}${item.decided_by?` · решил ${escapeHtml(item.decided_by)}`:""}</small></div>${pill(item.status)}${actions}</div>`;
+    return `<div class="credential-row"><div><strong>${escapeHtml(target)}</strong><small>Installer ${escapeHtml(item.installer_version)} · ${escapeHtml(dateTime(item.requested_at))} · срок до ${escapeHtml(dateTime(item.expires_at))}${item.decided_by?` · решил ${escapeHtml(item.decided_by)}`:""}</small></div>${pill(item.status==="PENDING"&&!pending?"EXPIRED":item.status)}${actions}</div>`;
   }).join("");
   $("agent-reenrolments-list").innerHTML=rows||'<p class="empty">Запросов на восстановление пока нет.</p>';
-  document.querySelectorAll(".approve-agent-reenrolment").forEach((button)=>button.onclick=()=>openConfirmation({title:"Восстановить Agent?",description:"Прежний ключ этого компьютера будет сразу отозван. Сверьте hostname и UUID с известным PC.",confirmLabel:"Отозвать старый ключ и восстановить",onConfirm:async()=>{await api(`/admin/agent-re-enrolments/${button.dataset.id}/approve`,{method:"POST"});showToast("Agent подтверждён и получил новый ключ");await loadAdminAccess();}}));
-  document.querySelectorAll(".reject-agent-reenrolment").forEach((button)=>button.onclick=()=>openConfirmation({title:"Отклонить запрос?",description:"Установка на этом PC завершится ошибкой. Действующие ключи не изменятся.",confirmLabel:"Отклонить",onConfirm:async()=>{await api(`/admin/agent-re-enrolments/${button.dataset.id}/reject`,{method:"POST"});showToast("Запрос отклонён");await loadAdminAccess();}}));
+  document.querySelectorAll(".approve-agent-reenrolment").forEach((button)=>button.onclick=()=>openConfirmation({title:"Восстановить Agent?",description:`${state.agentReenrolments.find((item)=>item.id===button.dataset.id)?.endpoint_hostname || "Компьютер"} · ${state.agentReenrolments.find((item)=>item.id===button.dataset.id)?.identifier_value}. Сверьте имя и UUID. Прежний ключ будет сразу отозван.`,confirmLabel:"Отозвать старый ключ и восстановить",onConfirm:async()=>{await api(`/admin/agent-re-enrolments/${button.dataset.id}/approve`,{method:"POST"});showToast("Agent подтверждён и получил новый ключ");await loadAdminAccess();}}));
+  document.querySelectorAll(".reject-agent-reenrolment").forEach((button)=>button.onclick=()=>openConfirmation({title:"Отклонить запрос?",description:`Запрос компьютера ${state.agentReenrolments.find((item)=>item.id===button.dataset.id)?.computer_name} будет отклонён. Установка завершится ошибкой. Действующие ключи не изменятся.`,confirmLabel:"Отклонить",onConfirm:async()=>{await api(`/admin/agent-re-enrolments/${button.dataset.id}/reject`,{method:"POST"});showToast("Запрос отклонён");await loadAdminAccess();}}));
 }
 function syncRoleControls() {
   const user=state.currentUser, isAdmin=user?.role==="ADMIN", editableRooms=new Set(user?.editable_room_ids||[]), canEditAssets=isAdmin||editableRooms.size>0;
@@ -867,32 +878,105 @@ function syncRoleControls() {
 function canEditAsset(asset) { return state.currentUser?.role==="ADMIN"||Boolean(asset?.room_id&&state.currentUser?.editable_room_ids?.includes(asset.room_id)); }
 function renderAdminAccess() {
   const allScopes=locationScopes(), scopeLabels=new Map(allScopes.map((item)=>[`${item.type}:${item.id}`,item.label]));
+  const selectedOrganization=$("user-organization").value, selectedScope=$("access-scope").value;
+  $("users-list").innerHTML=state.users.map((user)=>`<div class="access-row"><div><strong>${escapeHtml(user.username)}</strong><small>${escapeHtml(userRoleLabel(user.role))}</small></div><span class="status-pill ${user.active?"ok":"neutral"}">${user.active?"Активен":"Вход отключён"}</span></div>`).join("")||'<p class="empty">Сотрудников пока нет.</p>';
   $("user-organization").innerHTML=state.organizations.map((item)=>`<option value="${item.id}">${escapeHtml(item.name)}</option>`).join("")||'<option value="">Сначала создайте организацию</option>';
+  if(state.organizations.some((item)=>item.id===selectedOrganization))$("user-organization").value=selectedOrganization;
   const currentUserId=$("access-user").value;
-  $("access-user").innerHTML=state.users.filter((item)=>item.role!=="ADMIN").map((item)=>`<option value="${item.id}">${escapeHtml(item.username)} · ${escapeHtml(userRoleLabel(item.role))}</option>`).join("")||'<option value="">Создайте пользователя</option>';
-  if(state.users.some((item)=>item.id===currentUserId))$("access-user").value=currentUserId;
+  $("access-user").innerHTML=state.users.filter((item)=>item.role!=="ADMIN"&&item.active).map((item)=>`<option value="${item.id}">${escapeHtml(item.username)} · ${escapeHtml(userRoleLabel(item.role))}</option>`).join("")||'<option value="">Создайте пользователя</option>';
+  if(state.users.some((item)=>item.id===currentUserId&&item.active&&item.role!=="ADMIN"))$("access-user").value=currentUserId;
   const grantUser=state.users.find((item)=>item.id===$("access-user").value), allowedScopes=allScopes.filter((item)=>!grantUser?.organization_id||item.organization_id===grantUser.organization_id);
   $("access-scope").innerHTML=allowedScopes.map((item)=>`<option value="${item.type}:${item.id}">${escapeHtml(item.label)}</option>`).join("")||'<option value="">Для сотрудника пока нет доступных локаций</option>';
+  if(allowedScopes.some((item)=>`${item.type}:${item.id}`===selectedScope))$("access-scope").value=selectedScope;
   const accessRows=state.locationAccess.map((item)=>`<div class="access-row"><div><strong>${escapeHtml(item.username)}</strong><small>${escapeHtml(userRoleLabel(state.users.find((user)=>user.id===item.user_id)?.role||"Сотрудник"))} · ${escapeHtml(scopeLabels.get(`${item.scope_type}:${item.scope_id}`)||"Локация удалена")}</small></div><span class="status-pill ${item.permission==="EDITOR"?"warning":"neutral"}">${item.permission==="EDITOR"?"Редактирование":"Только просмотр"}</span><button type="button" class="button-secondary revoke-location-access" data-id="${item.id}">Отозвать</button></div>`).join("");
   const withoutAccess=state.users.filter((user)=>user.role!=="ADMIN"&&!state.locationAccess.some((item)=>item.user_id===user.id));
   $("location-access-list").innerHTML=accessRows+(withoutAccess.length?`<p class="access-unassigned"><strong>Пока нет назначения:</strong> ${withoutAccess.map((user)=>escapeHtml(user.username)).join(", ")} — эти пользователи не видят реестр.</p>`:"")||'<p class="empty">Назначений пока нет. Сотрудники без назначения не имеют доступа к локациям.</p>';
-  document.querySelectorAll(".revoke-location-access").forEach((button)=>button.onclick=()=>openConfirmation({title:"Отозвать доступ?",description:"Сотрудник больше не увидит эту локацию и её имущество. Позже доступ можно назначить заново.",confirmLabel:"Отозвать доступ",onConfirm:async()=>{await api(`/admin/locations/access/${button.dataset.id}`,{method:"DELETE"});showToast("Доступ отозван");await loadAdminAccess();}}));
+  document.querySelectorAll(".revoke-location-access").forEach((button)=>button.onclick=()=>openConfirmation({title:"Отозвать доступ?",description:`${state.locationAccess.find((item)=>item.id===button.dataset.id)?.username} · ${scopeLabels.get(`${state.locationAccess.find((item)=>item.id===button.dataset.id)?.scope_type}:${state.locationAccess.find((item)=>item.id===button.dataset.id)?.scope_id}`)}. Доступ к этой области будет отозван; другие назначения сохранятся.`,confirmLabel:"Отозвать доступ",onConfirm:async()=>{await api(`/admin/locations/access/${button.dataset.id}`,{method:"DELETE"});showToast("Доступ отозван");await loadAdminAccess();}}));
   const grantButton=$("grant-location-access").querySelector("button[type=submit]"), createButton=$("create-user").querySelector("button[type=submit]");
-  if(grantButton)grantButton.disabled=!state.users.some((user)=>user.role!=="ADMIN")||!allowedScopes.length;
-  if(createButton)createButton.disabled=!state.organizations.length;
+  if(grantButton)grantButton.disabled=!state.users.some((user)=>user.role!=="ADMIN"&&user.active)||!allowedScopes.length||$("grant-location-access").dataset.busy==="true";
+  if(createButton)createButton.disabled=!state.organizations.length||$("create-user").dataset.busy==="true";
   $("user-organization-hint").hidden=Boolean(state.organizations.length);
 }
 async function loadAdminAccess() {
   renderAdminAccessVisibility();
-  if(state.currentUser?.role!=="ADMIN")return;
-  $("access-load-error").hidden=true;
-  try { const [users,locationAccess,organizations,agentCredentials,agentReenrolments]=await Promise.all([api("/admin/users"),api("/admin/locations/access"),api("/admin/locations/organizations"),api("/admin/agent-credentials"),api("/admin/agent-re-enrolments")]);state={...state,users,locationAccess,organizations,agentCredentials,agentReenrolments};renderAdminAccess();renderAgentCredentials();renderAgentReenrolments();syncRoleControls(); }
-  catch(error) { if(error.stale)return; $("access-load-error").hidden=false;$("access-load-error").textContent=`Не удалось загрузить управление пользователями: ${error.message}. Проверьте вход именно под администратором школы.`; }
+  if(state.currentUser?.role!=="ADMIN")return false;
+  const request=++adminAccessGeneration, generation=sessionGeneration;
+  $("access-load-error").hidden=true; $("agent-load-error").hidden=true;
+  try {
+    const [users,locationAccess,organizations,agentCredentials,agentReenrolments]=await Promise.all([
+      api("/admin/users"),api("/admin/locations/access"),api("/admin/locations/organizations"),api("/admin/agent-credentials"),api("/admin/agent-re-enrolments"),
+    ]);
+    if(request!==adminAccessGeneration||generation!==sessionGeneration)return false;
+    state={...state,users,locationAccess,organizations,agentCredentials,agentReenrolments};
+    renderAdminAccess();renderAgentCredentials();renderAgentReenrolments();renderAgentFleet();syncRoleControls();
+    return true;
+  } catch(error) {
+    if(error.stale||request!==adminAccessGeneration||generation!==sessionGeneration)return false;
+    $("agent-load-error").hidden=false;$("agent-load-error").textContent=`Не удалось обновить ключи и запросы: ${error.message}. Нажмите «Обновить».`;
+    $("access-load-error").hidden=false;$("access-load-error").textContent=`Не удалось обновить сотрудников и назначения: ${error.message}. Нажмите «Обновить».`;
+    return false;
+  }
 }
 function hardwareBrief(endpoint) {
   const summary = endpoint?.hardware_summary; if (!summary) return "Нет данных";
   return [summary.ram_bytes ? `${bytes(summary.ram_bytes)} RAM` : null, summary.storage_devices ? `${summary.storage_devices} накоп.` : null, summary.cpu].filter(Boolean).join(" · ") || "Состав не определён";
 }
+
+function agentConnection(endpoint) {
+  if(["IDENTITY_CONFLICT","OFFLINE"].includes(endpoint.status))return endpoint.status;
+  const hours=state.operations?.agents?.stale_after_hours;
+  if(hours && endpoint.last_seen_at && Date.now()-new Date(endpoint.last_seen_at).getTime()>hours*3600000)return "STALE";
+  return endpoint.status;
+}
+const agentConnectionLabels={ONLINE:"На связи",STALE:"Давно нет данных",OFFLINE:"Не в сети",IDENTITY_CONFLICT:"Конфликт идентификации",REQUIRES_VERIFICATION:"Требует проверки"};
+function renderAgentFleet() {
+  if(state.currentUser?.role!=="ADMIN")return;
+  const hours=state.operations?.agents?.stale_after_hours;
+  $("agent-freshness-help").textContent=hours?`Данные устаревают через ${hours} ч. без отчёта. Это не подтверждает пропажу компьютера. Привязка ключа не означает, что Agent сейчас на связи.`:"Порог устаревания недоступен: обновите данные.";
+  const query=$("agent-search").value.trim().toLocaleLowerCase("ru"), status=$("agent-status-filter").value;
+  const endpoints=state.endpoints.filter((item)=>(!status||agentConnection(item)===status)&&[item.hostname,item.asset?.name,item.asset?.inventory_number].filter(Boolean).join(" ").toLocaleLowerCase("ru").includes(query));
+  const pages=Math.max(1,Math.ceil(endpoints.length/20));state.agentPage=Math.min(state.agentPage,pages);
+  $("agent-fleet-summary").textContent=`Найдено ${endpoints.length} из ${state.endpoints.length} · страница ${state.agentPage} из ${pages}`;
+  $("agent-fleet-list").innerHTML=endpoints.slice((state.agentPage-1)*20,state.agentPage*20).map((item)=>{
+    const status=agentConnection(item), label=agentConnectionLabels[status]||status;
+    const reason=status==="STALE"?"Нет свежей инвентаризации: проверьте компьютер, сеть и службу Agent.":status==="IDENTITY_CONFLICT"?"Сверьте аппаратные идентификаторы; не восстанавливайте ключ до проверки.":status==="OFFLINE"?"Компьютер отмечен как недоступный.":status==="REQUIRES_VERIFICATION"?"Нужна проверка идентификации компьютера.":"Свежий отчёт получен.";
+    return `<div class="admin-record"><div><strong>${escapeHtml(item.hostname||"Без имени")}</strong><small>Последняя связь: ${escapeHtml(dateTime(item.last_seen_at))} · ${escapeHtml(relativeTime(item.last_seen_at))}</small><small>${escapeHtml(reason)}</small><small>${escapeHtml(hardwareBrief(item))}</small></div><span class="status-pill ${status==="ONLINE"?"ok":status==="IDENTITY_CONFLICT"?"danger":"warning"}">${escapeHtml(label)}</span>${item.asset_id?`<a class="button-anchor button-secondary" href="#asset=${item.asset_id}">Карточка имущества</a>`:'<span class="meta">Не связан с имуществом</span>'}</div>`;
+  }).join("")||'<p class="empty">Компьютеры с такими условиями не найдены.</p>';
+  $("agent-fleet-pagination").innerHTML=pages>1?`<button type="button" id="agent-page-prev" class="button-secondary" ${state.agentPage===1?"disabled":""}>Назад</button><span>${state.agentPage} / ${pages}</span><button type="button" id="agent-page-next" class="button-secondary" ${state.agentPage===pages?"disabled":""}>Далее</button>`:"";
+  if($("agent-page-prev"))$("agent-page-prev").onclick=()=>{state.agentPage--;renderAgentFleet();};
+  if($("agent-page-next"))$("agent-page-next").onclick=()=>{state.agentPage++;renderAgentFleet();};
+}
+const deliveryLabels={PENDING:"Ожидает отправки",RETRYING:"Повтор",SENT:"Принято Telegram"};
+function renderNotifications(data) {
+  $("notification-summary").textContent=`Ожидают: ${data.summary.pending} · повтор: ${data.summary.retrying} · принято Telegram: ${data.summary.sent}`;
+  $("notification-list").innerHTML=data.items.map((item)=>`<div class="admin-record"><div><strong>${escapeHtml(dateTime(item.created_at))}</strong><small>Попыток: ${item.attempts}${item.sent_at?` · принято ${escapeHtml(dateTime(item.sent_at))}`:` · следующая попытка ${escapeHtml(dateTime(item.next_attempt_at))}`}</small>${item.last_error_code?`<small>Причина: ${escapeHtml(item.last_error_code)}</small>`:""}</div><span class="status-pill ${item.status==="SENT"?"ok":item.status==="RETRYING"?"warning":"neutral"}">${deliveryLabels[item.status]}</span>${item.route?`<a href="${escapeHtml(item.route)}" class="button-anchor button-secondary">Открыть источник</a>`:'<span class="meta">Служебное событие</span>'}</div>`).join("")||'<p class="empty">Уведомлений с таким состоянием пока нет. Новые события появятся после создания инцидента имущества.</p>';
+  $("notification-pagination").innerHTML=data.total?`<button id="notification-prev" type="button" class="button-secondary" ${data.offset===0?"disabled":""}>Назад</button><span>${Math.min(data.offset+1,data.total)}–${Math.min(data.offset+data.limit,data.total)} из ${data.total}</span><button id="notification-next" type="button" class="button-secondary" ${data.offset+data.limit>=data.total?"disabled":""}>Далее</button>`:"";
+  if($("notification-prev"))$("notification-prev").onclick=()=>{notificationOffset=Math.max(0,notificationOffset-20);loadNotifications();};
+  if($("notification-next"))$("notification-next").onclick=()=>{notificationOffset+=20;loadNotifications();};
+}
+async function loadNotifications() {
+  if(state.currentUser?.role!=="ADMIN")return;
+  const request=++notificationGeneration, generation=sessionGeneration, status=$("notification-status-filter").value;
+  $("notification-load-error").hidden=true;$("notification-list").innerHTML='<p class="empty">Загрузка доставки…</p>';$("notification-pagination").replaceChildren();
+  $("refresh-notifications").disabled=true;
+  try {
+    const data=await api(`/admin/notifications?limit=20&offset=${notificationOffset}${status?`&status=${status}`:""}`);
+    if(request!==notificationGeneration||generation!==sessionGeneration)return;
+    renderNotifications(data);
+  } catch(error) {
+    if(request!==notificationGeneration||generation!==sessionGeneration||error.stale)return;
+    $("notification-list").replaceChildren();$("notification-summary").textContent="Данные доставки недоступны";
+    $("notification-load-error").textContent=`${error.message}. Нажмите «Обновить доставку».`;$("notification-load-error").hidden=false;
+  } finally { if(request===notificationGeneration)$("refresh-notifications").disabled=false; }
+}
+document.querySelectorAll("[data-admin-panel]").forEach((button)=>button.onclick=()=>{
+  const panel=$(button.dataset.adminPanel);panel.tabIndex=-1;panel.scrollIntoView({block:"start",behavior:"instant"});panel.focus({preventScroll:true});
+});
+$("agent-search").addEventListener("input",()=>{state.agentPage=1;renderAgentFleet();});
+$("agent-status-filter").addEventListener("change",()=>{state.agentPage=1;renderAgentFleet();});
+$("refresh-agent-fleet").onclick=async()=>{if(await load(false)){renderAgentFleet();await openRouteFromHash();}};
+$("notification-status-filter").addEventListener("change",()=>{notificationOffset=0;loadNotifications();});
+$("refresh-notifications").onclick=()=>loadNotifications();
 function filteredDevices() {
   const query = $("device-search").value.trim().toLocaleLowerCase("ru"); const status = $("device-status-filter").value; const category = $("device-category-filter").value; const room = $("device-room-filter").value; const changed = $("device-change-filter").checked;
   const result = state.devices.filter((item) => {
@@ -1238,6 +1322,7 @@ async function openRouteFromHash() {
   if(roomMatch){await openRoomWorkspace(roomMatch[1],false);return;}
   if(incidentMatch){await openIncidentDetail(incidentMatch[1],false);return;}
   showPrimaryRoute(location.hash.slice(1)||"overview");
+  if(!$("agent-credentials").hidden) { renderAgentFleet(); await loadNotifications(); }
 }
 
 $("token-form").addEventListener("submit", async (event) => {
@@ -1334,11 +1419,41 @@ $("cancel-create").onclick=()=>{$("create-asset").hidden=true;};
 $("create-building").addEventListener("submit",async(event)=>{event.preventDefault();const form=event.currentTarget;try{await api("/admin/locations/buildings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(Object.fromEntries(new FormData(form).entries()))});form.reset();showToast("Корпус создан");await load(false);}catch(error){showToast(error.message,true);}});
 $("location-create-form").addEventListener("submit",async(event)=>{event.preventDefault();if(!locationDialogTarget)return;const button=$("location-create-submit"),{kind,parentId}=locationDialogTarget;const isRoom=kind==="room",body={name:$("location-create-name").value.trim()};if(isRoom){body.responsible_name=$("location-create-responsible").value.trim()||null;body.responsible_contact=$("location-create-contact").value.trim()||null;}button.disabled=true;try{const path=isRoom?`/admin/locations/floors/${parentId}/rooms`:`/admin/locations/buildings/${parentId}/floors`;await api(path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});$("location-create-dialog").close();showToast(isRoom?"Кабинет добавлен":"Этаж добавлен");await load(false);}catch(error){showToast(error.message,true);}finally{button.disabled=false;}});
 $("location-create-cancel").onclick=()=>$("location-create-dialog").close();
-$("create-user").addEventListener("submit",async(event)=>{event.preventDefault();const form=event.currentTarget;try{const body=Object.fromEntries(new FormData(form).entries());body.organization_id=body.organization_id||null;const created=await api("/admin/users",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});form.reset();await loadAdminAccess();if(created.role!=="ADMIN"){$("access-user").value=created.id;renderAdminAccess();showToast("Пользователь создан. Теперь назначьте ему кабинет и права.");$("assign-user-panel").scrollIntoView({behavior:"smooth",block:"center"});$("access-scope").focus({preventScroll:true});}else showToast("Учётная запись администратора создана.");}catch(error){showToast(error.message,true);}});
-$("grant-location-access").addEventListener("submit",async(event)=>{event.preventDefault();const form=event.currentTarget;try{const body=Object.fromEntries(new FormData(form).entries());const [scope_type,scope_id]=body.scope.split(":");await api("/admin/locations/access",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({user_id:body.user_id,scope_type,scope_id,permission:body.permission})});showToast("Назначение сохранено");await loadAdminAccess();}catch(error){showToast(error.message,true);}});
+async function submitAdminForm(event, action) {
+  event.preventDefault();
+  const form=event.currentTarget;
+  if(form.dataset.busy==="true")return;
+  const button=form.querySelector("button[type=submit]"), label=button.textContent;
+  const error=form.querySelector(".form-error"), generation=sessionGeneration;
+  form.dataset.busy="true"; button.disabled=true; button.textContent="Сохраняем…"; error.hidden=true;
+  try { await action(form); }
+  catch(failure) { if(generation!==sessionGeneration||failure.stale)return; error.textContent=failure.message;error.hidden=false;error.focus(); }
+  finally { form.dataset.busy="false";button.disabled=false;button.textContent=label; if(generation===sessionGeneration)renderAdminAccess(); }
+}
+$("create-user").addEventListener("submit",(event)=>submitAdminForm(event,async(form)=>{
+  const generation=sessionGeneration;
+  const body=Object.fromEntries(new FormData(form).entries());body.organization_id=body.organization_id||null;
+  const created=await api("/admin/users",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+  form.reset();const loaded=await loadAdminAccess();
+  if(generation!==sessionGeneration)return;
+  if(!loaded){showToast("Учётная запись создана. Список недоступен: обновите его перед назначением прав.");return;}
+  if(created.role!=="ADMIN"){$("access-user").value=created.id;renderAdminAccess();showToast("Пользователь создан. Теперь назначьте ему кабинет и права.");$("assign-user-panel").scrollIntoView({behavior:"smooth",block:"center"});$("access-scope").focus({preventScroll:true});}
+  else showToast("Учётная запись администратора создана.");
+}));
+$("grant-location-access").addEventListener("submit",(event)=>submitAdminForm(event,async(form)=>{
+  const body=Object.fromEntries(new FormData(form).entries());const [scope_type,scope_id]=body.scope.split(":");
+  await api("/admin/locations/access",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({user_id:body.user_id,scope_type,scope_id,permission:body.permission})});
+  showToast("Назначение сохранено");await loadAdminAccess();
+}));
 $("access-user").addEventListener("change",renderAdminAccess);
 $("refresh-access").onclick=loadAdminAccess;
-$("create-agent-credential").addEventListener("submit",async(event)=>{event.preventDefault();try{const organizationId=state.currentUser?.organization_id||$("agent-organization").value||null;const credential=await api("/admin/agent-credentials",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({organization_id:organizationId})});await loadAdminAccess();$("agent-credential-username").value=credential.username;$("agent-credential-secret").value=credential.secret;openDialog("agent-credential-dialog", "agent-credential-username");showToast("Ключ для компьютера создан. Скопируйте его сейчас.");}catch(error){showToast(error.message,true);}});
+$("create-agent-credential").addEventListener("submit",(event)=>submitAdminForm(event,async()=>{
+  const organizationId=state.currentUser?.organization_id||$("agent-organization").value||null;
+  const credential=await api("/admin/agent-credentials",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({organization_id:organizationId})});
+  $("agent-credential-username").value=credential.username;$("agent-credential-secret").value=credential.secret;
+  openDialog("agent-credential-dialog", "agent-credential-username");showToast("Ключ для компьютера создан. Скопируйте его сейчас.");
+  await loadAdminAccess();
+}));
 $("refresh-agent-credentials").onclick=loadAdminAccess;
 $("refresh-agent-reenrolments").onclick=loadAdminAccess;
 document.querySelectorAll(".copy-agent-credential").forEach((button)=>button.onclick=async()=>{try{await copyAgentCredential(button.dataset.field);}catch(error){showToast(error.message,true);}});
@@ -1481,7 +1596,15 @@ $("incident-detail-back").onclick=()=>{state.selectedIncident=null;$("incident-d
 $("incident-decision-cancel").onclick=()=>$("incident-decision-dialog").close();
 $("incident-decision-form").addEventListener("submit",async(event)=>{event.preventDefault();const id=state.selectedIncident,resolve=state.incidentDecisionMode==="resolve";if(!id)return;const button=$("incident-decision-submit"),comment=$("incident-decision-comment").value.trim(),classification=resolve?$("incident-decision-classification").value:"REQUIRES_INVESTIGATION";if(button.disabled)return;button.disabled=true;button.textContent="Сохраняем…";try{await api(`/admin/incidents/${id}/${resolve?"resolve":"decision"}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({classification,comment})});await load(false);$("incident-decision-dialog").close();showToast(resolve?"Решение сохранено":"Инцидент взят на проверку");if(location.hash===`#incident=${id}`)await openIncidentDetail(id,false);}catch(error){showToast(error.message,true);}finally{button.disabled=false;button.textContent=resolve?"Сохранить решение":"Взять на проверку";}});
 $("confirmation-cancel").onclick=()=>$("confirmation-dialog").close();
-$("confirmation-form").addEventListener("submit",async(event)=>{event.preventDefault();if(!confirmationAction)return;const button=$("confirmation-submit"),originalLabel=button.textContent,reason=$("confirmation-reason").value.trim();button.disabled=true;button.textContent="Выполняем…";$("confirmation-error").hidden=true;try{await confirmationAction(reason);$("confirmation-dialog").close();confirmationAction=null;}catch(error){$("confirmation-error").textContent=error.message;$("confirmation-error").hidden=false;showToast(error.message,true);}finally{button.disabled=false;button.textContent=originalLabel;}});
+$("confirmation-dialog").addEventListener("cancel",(event)=>{if(confirmationBusy)event.preventDefault();});
+$("confirmation-form").addEventListener("submit",async(event)=>{
+  event.preventDefault();if(!confirmationAction||confirmationBusy)return;
+  const action=confirmationAction, generation=sessionGeneration, button=$("confirmation-submit"), label=button.textContent;
+  confirmationBusy=true;button.disabled=true;$("confirmation-cancel").disabled=true;button.textContent="Выполняем…";$("confirmation-error").hidden=true;
+  try{await action($("confirmation-reason").value.trim());if(generation===sessionGeneration){$("confirmation-dialog").close();confirmationAction=null;}}
+  catch(error){if(generation!==sessionGeneration||error.stale)return;$("confirmation-error").textContent=error.message;$("confirmation-error").hidden=false;showToast(error.message,true);}
+  finally{confirmationBusy=false;button.disabled=false;$("confirmation-cancel").disabled=false;if(generation===sessionGeneration)button.textContent=label;}
+});
 $("room-tabs").addEventListener("click",(event)=>{const button=event.target.closest("[data-room-tab]");if(!button)return;state.roomTab=button.dataset.roomTab;renderRoomTab();});
 $("room-detail-back").onclick=()=>{state.roomWorkspace=null;$("room-detail").hidden=true;location.hash="locations";};
 $("room-edit-action").onclick=openRoomEditDialog;

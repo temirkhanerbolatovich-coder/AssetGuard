@@ -1,11 +1,13 @@
 """Non-sensitive operational health endpoints."""
 
 import shutil
+import re
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
+from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
 from sqlalchemy import case, func, select, text
 from sqlalchemy.exc import SQLAlchemyError
@@ -13,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from assetguard.infrastructure.database import get_session
 from assetguard.infrastructure.config import get_settings
-from assetguard.interfaces.http.authorization import require_viewer
+from assetguard.interfaces.http.authorization import require_admin, require_viewer
 from assetguard.modules.assets.models import AssetRecord
 from assetguard.modules.identity.auth import AuthPrincipal
 from assetguard.modules.identity.location_access import permitted_room_ids
@@ -115,7 +117,62 @@ def operations_status(
             "stale": endpoint_counts.get("STALE", 0),
             "identity_conflicts": endpoint_counts.get("IDENTITY_CONFLICT", 0),
             "last_inventory_at": latest_inventory_at,
+            "stale_after_hours": get_settings().endpoint_stale_after_hours,
         },
         "ingest": {"failed": failed_count, "last_failed_at": last_failed_at},
         "notifications": {"pending": pending_notifications, "retrying": retrying_notifications},
     }
+
+
+def _notification_view(item: TelegramNotificationRecord) -> dict:
+    """Expose delivery metadata only; never return recipient, body or transport secrets."""
+    route = item.payload.get("route") if isinstance(item.payload, dict) else None
+    safe_route = None
+    if isinstance(route, str) and "=" in route:
+        prefix, identifier = route.split("=", 1)
+        if prefix in {"#incident", "#physical-incident", "#room"}:
+            try:
+                safe_route = f"{prefix}={UUID(identifier)}"
+            except ValueError:
+                pass
+    error = item.last_error_code
+    known_errors = {"NETWORK_ERROR", "INVALID_RESPONSE", "NOT_ACCEPTED", "NO_MESSAGE_ID", "WRONG_DESTINATION", "INVALID_PAYLOAD", "INVALID_ROUTE"}
+    if error and error not in known_errors and not re.fullmatch(r"HTTP_\d{3}", error):
+        error = "UNKNOWN_ERROR"
+    return {
+        "id": str(item.id),
+        "status": "RETRYING" if item.status == "PENDING" and item.attempts else item.status,
+        "attempts": item.attempts, "created_at": item.created_at,
+        "next_attempt_at": item.next_attempt_at if item.status == "PENDING" else None,
+        "sent_at": item.sent_at, "last_error_code": error, "route": safe_route,
+    }
+
+
+@router.get("/admin/notifications")
+def notifications(
+    session: Annotated[Session, Depends(get_session)],
+    principal: Annotated[AuthPrincipal, Depends(require_admin)],
+    status: Literal["PENDING", "RETRYING", "SENT"] | None = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    offset: Annotated[int, Query(ge=0, le=10000)] = 0,
+):
+    """Read a tenant-scoped queue page. SENT confirms Telegram acceptance, not reading."""
+    query = select(TelegramNotificationRecord)
+    if principal.organization_id:
+        query = query.where(TelegramNotificationRecord.organization_id == principal.organization_id)
+    pending = (TelegramNotificationRecord.status == "PENDING") & (TelegramNotificationRecord.attempts == 0)
+    retrying = (TelegramNotificationRecord.status == "PENDING") & (TelegramNotificationRecord.attempts > 0)
+    sent = TelegramNotificationRecord.status == "SENT"
+    scoped = query.subquery()
+    summary_row = session.execute(select(
+        func.count(case(((scoped.c.status == "PENDING") & (scoped.c.attempts == 0), 1))),
+        func.count(case(((scoped.c.status == "PENDING") & (scoped.c.attempts > 0), 1))),
+        func.count(case((scoped.c.status == "SENT", 1))),
+    )).one()
+    if status:
+        query = query.where({"PENDING": pending, "RETRYING": retrying, "SENT": sent}[status])
+    total = session.scalar(select(func.count()).select_from(query.subquery()))
+    rows = session.scalars(query.order_by(TelegramNotificationRecord.created_at.desc(), TelegramNotificationRecord.id.desc()).offset(offset).limit(limit))
+    return {"summary": dict(zip(("pending", "retrying", "sent"), summary_row)),
+            "total": total, "limit": limit, "offset": offset,
+            "items": [_notification_view(item) for item in rows]}

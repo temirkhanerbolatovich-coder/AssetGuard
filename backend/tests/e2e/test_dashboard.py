@@ -5,7 +5,7 @@ import json
 import socket
 import threading
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from io import BytesIO
 from pathlib import Path
 from uuid import uuid4
@@ -18,6 +18,8 @@ from assetguard.app import app
 from assetguard.infrastructure.config import get_settings
 from assetguard.infrastructure.database import get_session_factory
 from assetguard.modules.assets.models import OrganizationRecord
+from assetguard.modules.notifications.models import TelegramNotificationRecord
+from assetguard.modules.snapshots.models import ManagedEndpointRecord
 
 
 FIXTURES = Path(__file__).parents[1] / "fixtures"
@@ -27,6 +29,147 @@ pytestmark = pytest.mark.skipif(
     os.environ.get("ASSETGUARD_RUN_BROWSER_E2E") != "1",
     reason="Set ASSETGUARD_RUN_BROWSER_E2E=1 to run browser tests.",
 )
+
+
+def test_agent_fleet_delivery_and_admin_forms_recover_safely(live_server):
+    """Exercise real local writes, queue reads, retries, one-time keys and re-enrolment."""
+    import base64
+    playwright = pytest.importorskip("playwright.sync_api")
+    now = datetime.now(UTC)
+    with get_session_factory()() as session:
+        organization = OrganizationRecord(name="Browser school", created_at=now)
+        session.add(organization)
+        session.flush()
+        for index in range(23):
+            session.add(ManagedEndpointRecord(source="TEST", organization_id=organization.id,
+                hostname=f"Browser-PC-{index:02d}", status="ONLINE",
+                last_seen_at=now-timedelta(hours=30) if index else now,
+                created_at=now, updated_at=now))
+        for index in range(26):
+            session.add(TelegramNotificationRecord(event_key=f"browser-event-{index}",
+                organization_id=organization.id, room_id=None, payload={"subject":"never-show-private-body"},
+                status="SENT" if index==0 else "PENDING", attempts=1 if index<2 else 0,
+                created_at=now, next_attempt_at=now, sent_at=now if index==0 else None,
+                last_error_code="HTTP_429" if index==1 else None))
+        session.commit()
+    with playwright.sync_playwright() as runtime:
+        browser=runtime.chromium.launch()
+        context=browser.new_context(viewport={"width":1366,"height":900}, permissions=["clipboard-read","clipboard-write"])
+        page=context.new_page()
+        page.set_default_timeout(10_000)
+        errors=[]
+        page.on("pageerror",lambda error:errors.append(str(error)))
+        page.goto(live_server)
+        page.locator("#login-mode").click()
+        page.locator("#token").fill(os.environ["ASSETGUARD_ADMIN_SHARED_SECRET"])
+        page.get_by_role("button",name="Войти",exact=True).click()
+        page.locator("#status").filter(has_text="Данные актуальны").wait_for()
+        page.evaluate("location.hash='agent-credentials'")
+        page.locator("#notification-summary").filter(has_text="принято Telegram: 1").wait_for()
+        assert "24 ч." in page.locator("#agent-freshness-help").inner_text()
+        assert page.locator("#agent-fleet-list .admin-record").count()==20
+        page.locator("#agent-status-filter").select_option("STALE")
+        assert "Найдено 22 из 23" in page.locator("#agent-fleet-summary").inner_text()
+        page.locator("#agent-page-next").click()
+        assert page.locator("#agent-fleet-list .admin-record").count()==2
+        page.locator("#agent-search").fill("PC-01")
+        assert page.locator("#agent-fleet-list .admin-record").count()==1
+        assert "Нет свежей инвентаризации" in page.locator("#agent-fleet-list").inner_text()
+        page.locator("#agent-search").fill("")
+        page.locator("#agent-status-filter").select_option("")
+        assert page.locator("#notification-list .admin-record").count()==20
+        page.locator("#notification-next").click()
+        playwright.expect(page.locator("#notification-list .admin-record")).to_have_count(6)
+        page.locator("#notification-status-filter").select_option("RETRYING")
+        page.locator("#notification-list").get_by_text("Причина: HTTP_429",exact=True).wait_for()
+        assert "never-show-private-body" not in page.content()
+        page.route("**/admin/notifications?*",lambda route:route.fulfill(status=503,json={"detail":"Delivery temporarily unavailable"}))
+        page.locator("#refresh-notifications").click()
+        page.locator("#notification-load-error").wait_for(state="visible")
+        assert page.locator("#notification-list .admin-record").count()==0
+        page.unroute("**/admin/notifications?*")
+        page.locator("#refresh-notifications").click()
+        page.locator("#notification-list .admin-record").wait_for()
+
+        def capture(name):
+            if os.environ.get("ASSETGUARD_CAPTURE_UI_PREVIEWS")=="1":
+                output=Path(__file__).resolve().parents[3]/"outputs/ui-stage4-preview-2026-10-05"
+                output.mkdir(parents=True,exist_ok=True)
+                page.screenshot(path=str(output/name))
+        for width in (1366,1024,768,390,320):
+            page.set_viewport_size({"width":width,"height":900})
+            assert page.locator("body").evaluate("element=>element.scrollWidth<=element.clientWidth"),width
+            page.evaluate("window.scrollTo(0,0)")
+            if width in (1366,390): capture(f"agent-{'desktop' if width==1366 else 'mobile'}.png")
+        for width in (1366,390):
+            page.set_viewport_size({"width":width,"height":900})
+            page.locator('[data-admin-panel="notification-panel"]').click()
+            capture(f"delivery-{'desktop' if width==1366 else 'mobile'}.png")
+        page.set_viewport_size({"width":1366,"height":900})
+        writes=[]
+        page.on("request",lambda request:writes.append(request.url) if request.method=="POST" and request.url.endswith("/admin/agent-credentials") else None)
+        page.locator("#create-agent-credential").evaluate("form=>{form.requestSubmit();form.requestSubmit();}")
+        page.locator("#agent-credential-dialog").wait_for(state="visible")
+        assert len(writes)==1
+        username=page.locator("#agent-credential-username").input_value()
+        secret=page.locator("#agent-credential-secret").input_value()
+        page.locator('[data-field="agent-credential-username"]').click()
+        assert page.evaluate("navigator.clipboard.readText()") == username
+        page.keyboard.press("Escape")
+        playwright.expect(page.locator("#agent-credential-dialog")).not_to_be_visible()
+        playwright.expect(page.locator("#agent-credential-secret")).to_have_value("")
+        playwright.expect(page.locator("#agent-credential-username")).to_have_value("")
+        xml=b"<REQUEST><CONTENT><HARDWARE><UUID>BROWSER-KNOWN-UUID</UUID><NAME>Browser-Known</NAME></HARDWARE><VERSIONCLIENT>1.20</VERSIONCLIENT></CONTENT><DEVICEID>Browser-Known</DEVICEID><QUERY>INVENTORY</QUERY></REQUEST>"
+        basic=base64.b64encode(f"{username}:{secret}".encode()).decode()
+        assert page.request.post(live_server+"/glpi-agent",headers={"Authorization":f"Basic {basic}","Content-Type":"application/xml"},data=xml).status==200
+        claim=page.request.post(live_server+"/agent/re-enrolments",data={"identifier_type":"SMBIOS_UUID","identifier_value":"BROWSER-KNOWN-UUID","computer_name":"Browser-Known","installer_version":"0.1.7"})
+        assert claim.status==202
+        page.locator("#refresh-agent-reenrolments").click()
+        row=page.locator("#agent-reenrolments-list .credential-row",has_text="Browser-Known")
+        row.wait_for()
+        assert "срок до" in row.inner_text()
+        row.get_by_role("button",name="Подтвердить",exact=True).click()
+        assert "BROWSER-KNOWN-UUID" in page.locator("#confirmation-description").inner_text()
+        page.locator("#confirmation-form").evaluate("form=>{form.requestSubmit();form.requestSubmit();}")
+        page.locator("#confirmation-dialog").wait_for(state="hidden")
+        page.locator("#agent-reenrolments-list .credential-row",has_text="Browser-Known").get_by_text("Подтверждён",exact=True).wait_for()
+        assert page.locator("#agent-credentials-list .credential-row",has_text=username).get_by_text("Отозван",exact=True).is_visible()
+
+        page.evaluate("location.hash='location-access'")
+        form=page.locator("#create-user")
+        form.locator('[name="username"]').fill("browser-worker")
+        form.locator('[name="password"]').fill("test-password")
+        form.get_by_role("button",name="Создать пользователя").click()
+        page.locator("#users-list").get_by_text("browser-worker",exact=True).wait_for()
+        form.locator('[name="username"]').fill("browser-worker")
+        form.locator('[name="password"]').fill("test-password")
+        form.get_by_role("button",name="Создать пользователя").click()
+        form.locator(".form-error").wait_for(state="visible")
+        assert form.locator('[name="username"]').input_value()=="browser-worker"
+        assert form.locator('[name="password"]').input_value()=="test-password"
+        assert form.get_by_role("button",name="Создать пользователя").is_enabled()
+        form.locator('[name="username"]').fill("browser-other")
+        page.route("**/admin/users",lambda route:route.fulfill(status=503,json={"detail":"Users temporarily unavailable"}) if route.request.method=="GET" else route.continue_())
+        form.get_by_role("button",name="Создать пользователя").click()
+        page.locator("#access-load-error").wait_for(state="visible")
+        assert "список недоступен" in page.locator("#toast").inner_text().lower()
+        assert page.locator("#access-user option:checked").inner_text().startswith("browser-worker")
+        page.unroute("**/admin/users")
+        page.locator("#refresh-access").click()
+        page.locator("#users-list").get_by_text("browser-other",exact=True).wait_for()
+        other_id=page.locator("#access-user option",has_text="browser-other").get_attribute("value")
+        page.locator("#access-user").select_option(other_id)
+        assert page.request.patch(live_server+f"/admin/users/{other_id}",headers={"X-AssetGuard-Admin-Token":os.environ["ASSETGUARD_ADMIN_SHARED_SECRET"]},data={"active":False}).status==200
+        page.locator("#refresh-access").click()
+        page.locator("#users-list .access-row",has_text="browser-other").get_by_text("Вход отключён",exact=True).wait_for()
+        assert page.locator("#access-user option:checked").inner_text().startswith("browser-worker")
+        for width in (1366,768,390,320):
+            page.set_viewport_size({"width":width,"height":900})
+            assert page.locator("body").evaluate("element=>element.scrollWidth<=element.clientWidth"),width
+            page.evaluate("window.scrollTo(0,0)")
+            if width in (1366,390):capture(f"access-{'desktop' if width==1366 else 'mobile'}.png")
+        assert not errors,errors
+        context.close();browser.close()
 
 
 @pytest.fixture

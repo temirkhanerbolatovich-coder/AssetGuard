@@ -20,7 +20,7 @@ AssetGuard — система учёта и контролируемой инв�
 - отдельные Agent credentials, отзыв ключа и подтверждаемое re-enrolment после переустановки Windows;
 - физический обход кабинета, перемещение, списание и PDF-акты;
 - Excel/PDF import/export, локальный OCR и QR карточки;
-- tenant/location authorization matrix для 62 защищённых admin operations;
+- tenant/location authorization matrix для 63 защищённых admin operations;
 - production HTTPS deployment, encrypted PostgreSQL backup в Cloudflare R2 и isolated restore rehearsal;
 - CI, dependency audit, secret scanning и browser E2E.
 
@@ -35,6 +35,8 @@ AssetGuard — система учёта и контролируемой инв�
 Telegram принят на production 2026-10-05: application commit `0b90607`, schema `0026`, 96 backend tests и 2 browser E2E, GitHub CI, pre/post R2 restore и изолированный rollback прошли. Пользователь получил тест; повторный и минутный запуск не создали дубль. [Протокол](outputs/assetguard-telegram-2026-10-05.md).
 
 Порядок работы по интерфейсу изложен в [ТЗ UI/UX](docs/product/ui-ux-modernization-spec.md); **этапы 1–3 внедрены на production**. Текущий application commit `2ae4b01`: кабинеты, явная проверка каждой позиции, итог до сохранения обхода, строковые ошибки Excel/PDF, выбор/исключения и результат импорта. Импортированное имущество связывается с canonical кабинетом; повторный файл обновляет существующие карточки. **101 backend + 8 browser E2E**, GitHub CI и production UI/API прошли; рабочие записи при browser acceptance не менялись. [Приёмка этапа 3](outputs/assetguard-ui-stage3-2026-10-05.md), [контракт и ограничения](docs/features/rooms-inspection-and-import.md), [этап 2](outputs/assetguard-ui-stage2-2026-10-05.md), [этап 1](outputs/assetguard-ui-stage1-2026-10-05.md). Следующий UI-этап — Agent и администрирование; полная WCAG/performance/usability приёмка ещё впереди.
+
+Кандидат UI/UX 4 реализован: конкретные ПК Agent и STALE, безопасные формы сотрудников/доступов, восстановление и ADMIN-only панель доставки. [Контракт](docs/features/agent-administration-and-delivery.md), [результаты приёмки](outputs/assetguard-ui-stage4-2026-10-05.md). Production публикация отмечается после фактической проверки.
 
 Новые технические и физические инциденты помещаются в транзакционную Telegram-очередь; отдельный worker отправляет их в явно назначенный чат организации с retry и проверкой acceptance. Проблемы Agent и сервера отслеживает существующий monitor. [Настройка и гарантии доставки](docs/features/telegram-notifications.md), [план UI/UX](docs/product/ui-ux-modernization-spec.md).
 

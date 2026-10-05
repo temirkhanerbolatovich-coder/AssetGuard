@@ -390,3 +390,14 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   #import-preview-samples td small { grid-column: 2; }
 }
 @media (max-width: 460px) { .inspection-item, .import-preview-toolbar { grid-template-columns: minmax(0, 1fr); } .inspection-item-title, .inspection-item > label:last-of-type { grid-column: auto; } .import-preview-toolbar > label:first-child { grid-column: auto; } }
+.admin-filters { display: grid; grid-template-columns: minmax(0, 1fr) minmax(180px, .5fr); gap: 16px; margin: 16px 0; }
+.admin-filters label { min-width: 0; }
+.admin-record { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 16px; padding: 16px 0; border-bottom: 1px solid var(--line); }
+.admin-record strong, .admin-record small { display: block; overflow-wrap: anywhere; }
+.admin-record small { margin-top: 6px; color: #526272; line-height: 1.5; }
+#notification-list, #agent-fleet-list, #users-list { min-width: 0; }
+@media (max-width: 700px) { .admin-filters, .admin-record { grid-template-columns: minmax(0, 1fr); } .admin-record > .status-pill, .admin-record > .button-anchor { justify-self: start; } .access-row, .credential-row { overflow-wrap: anywhere; } }
+
+.admin-shortcuts { flex-wrap: wrap; margin-bottom: 20px; }
+#agent-fleet-panel, #agent-install-panel, #agent-reenrolment-panel, #notification-panel { scroll-margin-top: 20px; }
+@media (max-width: 1199px) { #agent-fleet-panel, #agent-install-panel, #agent-reenrolment-panel, #notification-panel { scroll-margin-top: 190px; } }

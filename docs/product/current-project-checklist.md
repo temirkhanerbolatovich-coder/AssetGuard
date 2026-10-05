@@ -13,6 +13,8 @@ Production: **https://assetguard-temirkhan.duckdns.org**
 
 Telegram ранее принят на `0b90607`, schema `0026`; после UI-релиза очередь и штатное подавление повтора проверены вновь, таймеры активны. [Приёмка Telegram](../../outputs/assetguard-telegram-2026-10-05.md), [функция и настройка](../features/telegram-notifications.md). Fleet acceptance остаётся самостоятельной задачей.
 
+UI/UX 4 реализован и проходит публикацию/production приёмку: конкретные ПК/STALE, credentials/re-enrolment, формы сотрудников/назначений и ADMIN-only очередь доставки. В репозитории 63 защищённые операции; schema прежняя. [Контракт](../features/agent-administration-and-delivery.md), [запись приёмки](../../outputs/assetguard-ui-stage4-2026-10-05.md). Доступность, производительность и usability — этап 5; его полная приёмка пока не выполнена.
+
 
 Последняя проверенная production/R2 restore revision: **`0026_telegram_notifications`**, 2026-10-05 по времени клиента, **216 assets / 11 endpoints**.
 
@@ -88,7 +90,7 @@ Production read-only counts: **216 assets, 11 endpoints, 51 raw inventories, 51 
 
 | Область | Что уже есть | Чего не хватает до полного production |
 | --- | --- | --- |
-| Multi-tenant | Organization scope и scoped ADMIN; матрица 62 admin operations; negative tests для native Agent ingestion и Excel/PDF import | Явные platform/onboarding полномочия, отказ от legacy global fallback и приёмка двух реальных школ |
+| Multi-tenant | Organization scope и scoped ADMIN; матрица 63 admin operations; negative tests для native Agent ingestion и Excel/PDF import | Явные platform/onboarding полномочия, отказ от legacy global fallback и приёмка двух реальных школ |
 | Мониторинг | Постоянный systemd monitor проверяет API, Compose services, диск, возраст/ошибки backup, ingest и Agent last-seen; доставка, дедупликация и четырёхчасовой repeat Telegram-alert приняты | Dashboard наблюдаемости и формальная on-call escalation |
 | Backup | Зашифрованные копии, Cloudflare R2, 14 дней локально / 30 дней off-site; Windows и Linux timers; свежий restore `0026` прошёл 2026-10-05 по времени клиента | Backup пока охватывает PostgreSQL, но не Vision volume; длительное наблюдение за регулярными циклами |
 | Vision production | Полный локальный photo workflow и настоящий model smoke в CI | Oracle Free VM не тянет ML runtime; нужны отдельный inference host/GPU либо более мощный сервер, object storage и accuracy evaluation |
@@ -179,7 +181,7 @@ Publication/CI/server/backup/migration/controlled alert для application `93ff
 
 Результат: пользователь одной организации не может получить данные другой ни одним API-запросом.
 
-- [x] составить исполняемую route/access matrix для всех 62 защищённых admin operations;
+- [x] составить исполняемую route/access matrix для всех 63 защищённых admin operations;
 - [x] добавить negative tests для foreign tenant/локации, native ingestion и Excel/PDF imports;
 - уточнить platform/onboarding полномочия с учётом существующего tenant-scoped ADMIN;
 - внедрить полный admin audit;
