@@ -149,12 +149,6 @@ def _ensure_room_for_legacy_location(asset: AssetRecord, session: Session) -> No
     asset.room_id = room.id
 
 
-def _latest_snapshot(session: Session, endpoint_id: UUID) -> HardwareSnapshotRecord | None:
-    return session.scalar(select(HardwareSnapshotRecord).where(
-        HardwareSnapshotRecord.managed_endpoint_id == endpoint_id,
-    ).order_by(HardwareSnapshotRecord.captured_at.desc()))
-
-
 def _latest_observed_snapshot(session: Session, endpoint_id: UUID) -> HardwareSnapshotRecord | None:
     snapshots = session.scalars(select(HardwareSnapshotRecord).where(
         HardwareSnapshotRecord.managed_endpoint_id == endpoint_id,
@@ -199,17 +193,68 @@ def _component_view(item: ComponentObservationRecord) -> dict:
     }
 
 
+def _endpoint_summaries(session: Session, endpoints: list[ManagedEndpointRecord]) -> dict[UUID, dict]:
+    """Read only scoped endpoints; retain each component type's latest observed state.
+
+    Limit history to 50 snapshots per endpoint before joining observations, so an
+    empty or partial inventory keeps known hardware without loading all history.
+    """
+    if not endpoints:
+        return {}
+    endpoint_ids = [endpoint.id for endpoint in endpoints]
+    ranked_snapshots = select(
+        HardwareSnapshotRecord.id,
+        func.row_number().over(
+            partition_by=HardwareSnapshotRecord.managed_endpoint_id,
+            order_by=HardwareSnapshotRecord.captured_at.desc(),
+        ).label("position"),
+    ).where(HardwareSnapshotRecord.managed_endpoint_id.in_(endpoint_ids)).subquery()
+    snapshot_rows = session.execute(
+        select(HardwareSnapshotRecord, ComponentObservationRecord)
+        .join(ranked_snapshots, ranked_snapshots.c.id == HardwareSnapshotRecord.id)
+        .outerjoin(ComponentObservationRecord, ComponentObservationRecord.hardware_snapshot_id == HardwareSnapshotRecord.id)
+        .where(ranked_snapshots.c.position <= 50)
+        .order_by(HardwareSnapshotRecord.managed_endpoint_id, ranked_snapshots.c.position)
+    )
+    latest_snapshots: dict[UUID, HardwareSnapshotRecord] = {}
+    components: dict[UUID, list[ComponentObservationRecord]] = {}
+    observed_snapshots: dict[UUID, dict[str, UUID]] = {}
+    for snapshot, observation in snapshot_rows:
+        endpoint_id = snapshot.managed_endpoint_id
+        latest_snapshots.setdefault(endpoint_id, snapshot)
+        if observation is None:
+            continue
+        observed_types = observed_snapshots.setdefault(endpoint_id, {})
+        selected_snapshot = observed_types.setdefault(observation.component_type, snapshot.id)
+        if selected_snapshot == snapshot.id:
+            components.setdefault(endpoint_id, []).append(observation)
+    open_changes = dict(session.execute(select(
+        ChangeEventRecord.managed_endpoint_id, func.count(),
+    ).where(
+        ChangeEventRecord.managed_endpoint_id.in_(endpoint_ids), ChangeEventRecord.status == "OPEN",
+    ).group_by(ChangeEventRecord.managed_endpoint_id)).all())
+    open_incidents = dict(session.execute(select(
+        IncidentRecord.managed_endpoint_id, func.count(),
+    ).where(
+        IncidentRecord.managed_endpoint_id.in_(endpoint_ids), IncidentRecord.status.in_(("OPEN", "UNDER_REVIEW")),
+    ).group_by(IncidentRecord.managed_endpoint_id)).all())
+    return {
+        endpoint.id: _endpoint_summary_view(
+            endpoint, latest_snapshots.get(endpoint.id), components.get(endpoint.id, []),
+            open_changes.get(endpoint.id, 0), open_incidents.get(endpoint.id, 0),
+        )
+        for endpoint in endpoints
+    }
+
+
 def _endpoint_summary(session: Session, endpoint: ManagedEndpointRecord) -> dict:
-    snapshot = _latest_snapshot(session, endpoint.id)
-    observations = _latest_components(session, endpoint.id)
-    open_changes = session.scalar(select(func.count()).select_from(ChangeEventRecord).where(
-        ChangeEventRecord.managed_endpoint_id == endpoint.id,
-        ChangeEventRecord.status == "OPEN",
-    )) or 0
-    open_incidents = session.scalar(select(func.count()).select_from(IncidentRecord).where(
-        IncidentRecord.managed_endpoint_id == endpoint.id,
-        IncidentRecord.status.in_(("OPEN", "UNDER_REVIEW")),
-    )) or 0
+    return _endpoint_summaries(session, [endpoint])[endpoint.id]
+
+
+def _endpoint_summary_view(
+    endpoint: ManagedEndpointRecord, snapshot: HardwareSnapshotRecord | None,
+    observations: list[ComponentObservationRecord], open_changes: int, open_incidents: int,
+) -> dict:
     ram = [item for item in observations if item.component_type == "RAM"]
     storage = [item for item in observations if item.component_type == "STORAGE"]
     cpu = next((item for item in observations if item.component_type == "CPU"), None)
@@ -245,9 +290,11 @@ def list_assets(session: Annotated[Session, Depends(get_session)], principal: An
     allowed_rooms = permitted_room_ids(session, principal)
     if allowed_rooms is not None:
         statement = statement.where(AssetRecord.room_id.in_(allowed_rooms))
-    for asset, endpoint, organization_name in session.execute(statement):
+    rows = session.execute(statement).all()
+    summaries = _endpoint_summaries(session, [endpoint for _, endpoint, _ in rows if endpoint])
+    for asset, endpoint, organization_name in rows:
         view = _asset_view(asset, endpoint.id if endpoint else None, organization_name)
-        view["endpoint"] = _endpoint_summary(session, endpoint) if endpoint else None
+        view["endpoint"] = summaries[endpoint.id] if endpoint else None
         result.append(view)
     return result
 
@@ -918,21 +965,22 @@ def update_asset(asset_id: UUID, body: AssetUpdate, session: Annotated[Session, 
 @router.get("/endpoints")
 def list_endpoints(session: Annotated[Session, Depends(get_session)], principal: Annotated[AuthPrincipal, Depends(require_viewer)]):
     result = []
-    statement = select(ManagedEndpointRecord).order_by(ManagedEndpointRecord.last_seen_at.desc())
+    statement = (
+        select(ManagedEndpointRecord, AssetRecord, OrganizationRecord.name)
+        .outerjoin(AssetRecord, AssetRecord.id == ManagedEndpointRecord.asset_id)
+        .outerjoin(OrganizationRecord, OrganizationRecord.id == AssetRecord.organization_id)
+        .order_by(ManagedEndpointRecord.last_seen_at.desc())
+    )
     if principal.organization_id:
         statement = statement.where(ManagedEndpointRecord.organization_id == principal.organization_id)
-    for endpoint in session.scalars(statement):
-        if endpoint.asset_id:
-            asset = session.get(AssetRecord, endpoint.asset_id)
-            if asset:
-                try: require_room_access(session, asset.room_id, principal)
-                except HTTPException: continue
-        elif permitted_room_ids(session, principal) is not None:
-            continue
-        item = _endpoint_summary(session, endpoint)
-        asset = session.get(AssetRecord, endpoint.asset_id) if endpoint.asset_id else None
-        organization = session.get(OrganizationRecord, asset.organization_id) if asset else None
-        item["asset"] = None if not asset else _asset_view(asset, endpoint.id, organization.name if organization else None)
+    allowed_rooms = permitted_room_ids(session, principal)
+    if allowed_rooms is not None:
+        statement = statement.where(AssetRecord.room_id.in_(allowed_rooms))
+    rows = session.execute(statement).all()
+    summaries = _endpoint_summaries(session, [endpoint for endpoint, _, _ in rows])
+    for endpoint, asset, organization_name in rows:
+        item = summaries[endpoint.id]
+        item["asset"] = None if not asset else _asset_view(asset, endpoint.id, organization_name)
         result.append(item)
     return result
 

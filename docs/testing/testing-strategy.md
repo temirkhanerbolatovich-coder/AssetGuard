@@ -15,7 +15,7 @@
 | Static/config checks | JavaScript, PowerShell, shell, Python scripts и Compose config | `.github/workflows/ci.yml` |
 | Security checks | Gitleaks, `pip check`, `pip-audit` | `.github/workflows/ci.yml` |
 
-В текущем наборе **103 unit/integration и 16 browser E2E tests** (UI/UX 5 technical, 2026-10-05). Число является снимком состояния репозитория и должно обновляться вместе с изменением набора. Browser сценарии включают login/session/read races, совместные фильтры и возврат в реестр, физический инцидент/акт, импорт → canonical кабинет → обход с итогом, ошибки сохранения и защиту от двойного submit. [Контракт проверки обхода и импорта](../features/rooms-inspection-and-import.md). Дополнительно проверяются Agent/admin forms и доставка, измеренный контраст, reflow/keyboard, четыре роли с двумя tenant и реестр на 216/1000 synthetic assets. [Методика UI-приёмки и её ограничения](ui-acceptance.md).
+В текущем наборе **109 unit/integration и 16 browser E2E tests** (UI/UX 5 technical и пакетные аппаратные сводки, 2026-10-05). Число является снимком состояния репозитория и должно обновляться вместе с изменением набора. Browser сценарии включают login/session/read races, совместные фильтры и возврат в реестр, физический инцидент/акт, импорт → canonical кабинет → обход с итогом, ошибки сохранения и защиту от двойного submit. [Контракт проверки обхода и импорта](../features/rooms-inspection-and-import.md). Дополнительно проверяются Agent/admin forms и доставка, измеренный контраст, reflow/keyboard, четыре роли с двумя tenant и реестр на 216/1000 synthetic assets. [Методика UI-приёмки и её ограничения](ui-acceptance.md).
 
 ## Тестовое окружение
 
