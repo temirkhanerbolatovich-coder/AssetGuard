@@ -1,6 +1,6 @@
 # Production deployment and recovery
 
-> **Сверено 2026-10-06.** Текущий статус и границы проверки: [checklist](../product/current-project-checklist.md), [аудит](../quality/project-audit-2026-10-06.md). Датированные результаты отдельных этапов сохранены с исходными датами.
+> **Сверено 2026-10-07.** Текущий статус и границы проверки: [checklist](../product/current-project-checklist.md), [аудит](../quality/project-audit-2026-10-06.md). Датированные результаты отдельных этапов сохранены с исходными датами.
 
 ## HTTPS deployment
 
@@ -46,7 +46,7 @@ Configure `ASSETGUARD_VISION_MODEL_ID`, `ASSETGUARD_VISION_CONFIDENCE_THRESHOLD`
 
 ## Current production checkpoint
 
-Rechecked 2026-10-06: server checkout `dca5a86`, application `f4f56e7`, Alembic `0026`; public frontend hashes match the accepted image, health/ready return 200, four timers are active and their last jobs succeeded. The accepted R2 object `assetguard-production-20261006-075950.sql.agbackup` restored schema `0026`, 220 assets and 11 endpoints. No backup/restore or test notification was triggered by this documentation audit. [Evidence and limitations](../quality/project-audit-2026-10-06.md). The dated release sections below are historical checkpoints.
+Rechecked 2026-10-06 19:07:22 UTC: accepted application `7c45435`, image `sha256:1a98957a3ef6829a3281d32c5e9130157a4e73feff730e2e4a165da7902beda1`, Alembic `0026`; public/frontend/API freshness and supported-version checks passed. Fresh R2 object `assetguard-production-20261006-183238.sql.agbackup` restored in isolation: assets=220, endpoints=11. PostgreSQL and Caddy containers/volumes were preserved; monitor/notifications timers resumed. [Release evidence](../../outputs/assetguard-agent-status-publication-2026-10-07.md). Documentation acceptance can advance checkout HEAD without changing application image; the dated records below remain historical.
 
 ## Native GLPI Agent target
 

@@ -23,7 +23,7 @@
 
 ## Свежая сверка 6 октября 2026
 
-Полный локальный набор с `ASSETGUARD_RUN_BROWSER_E2E=1`: **170 passed in 125.79s** — 148 backend cases и 22 browser E2E. Изолированный PostgreSQL 17 доступен на loopback; fixture применяет все 26 migrations до `0026_telegram_notifications`. Parametrization увеличивает число cases: оно отличается от числа `test_*` functions. Application/docs CI опубликованного `f4f56e7`/`dca5a86` также success. Подробности окружения и проверок: [аудит](../quality/project-audit-2026-10-06.md).
+Полный локальный набор с `ASSETGUARD_RUN_BROWSER_E2E=1`: **170 passed in 125.79s** — 148 backend cases и 22 browser E2E. Изолированный PostgreSQL 17 доступен на loopback; fixture применяет все 26 migrations до `0026_telegram_notifications`. Parametrization увеличивает число cases: оно отличается от числа `test_*` functions. [CI application `7c45435`](https://github.com/temirkhanerbolatovich-coder/AssetGuard/actions/runs/37512336108) также success; прежние `f4f56e7`/`dca5a86` сохраняются как исторические проверки. Подробности окружения и проверок: [аудит](../quality/project-audit-2026-10-06.md).
 
 Первый audit-запуск был остановлен без результата при недоступной штатной локальной test DB; успешный результат получен только после запуска отдельной disposable PostgreSQL. Production и локальный Vision для этого не переключались.
 

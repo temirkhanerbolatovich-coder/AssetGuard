@@ -1,25 +1,25 @@
 # AssetGuard — актуальный статус и чек-лист
 
-> **Сверено 2026-10-06.** Текущий статус и границы проверки: [checklist](current-project-checklist.md), [аудит](../quality/project-audit-2026-10-06.md). Датированные результаты отдельных этапов сохранены с исходными датами.
+> **Сверено 2026-10-07.** Текущий статус и границы проверки: [checklist](current-project-checklist.md), [аудит](../quality/project-audit-2026-10-06.md). Датированные результаты отдельных этапов сохранены с исходными датами.
 
-Дата сверки: **6 октября 2026 года**, Asia/Qyzylorda (UTC+5). Основание: текущий код, migrations, тесты, GitHub API, read-only production и история связанных чатов. [Полный аудит и границы проверки](../quality/project-audit-2026-10-06.md).
+Дата сверки: **7 октября 2026 года**, Asia/Qyzylorda (UTC+5). Основание: текущий код, migrations, тесты, GitHub API, read-only production и история связанных чатов. [Полный аудит и границы проверки](../quality/project-audit-2026-10-06.md).
 
 ## Проверенная точка продолжения
 
 | Показатель | Подтверждённый результат |
 | --- | --- |
-| Репозиторий до правок документации | Local `main`, GitHub `main`, server checkout: `dca5a8672b21762d786e25054665c8eccbab9a53` |
-| Application в production | `f4f56e7816035e01703305808dd0862a37de402e`; Oracle Cloud, Docker Compose + Caddy |
-| API image | `sha256:29062bad2c906e1b80afea322d20ee0ef3fb10a1778a0cdf7b60e9a6082a1fd3` |
+| Application commit | `7c45435971329cabd6382466eadca8a1540ade7d` опубликован в `main`; документация приёмки зафиксирована отдельным docs commit |
+| Application в production | `7c45435971329cabd6382466eadca8a1540ade7d`; Oracle Cloud, принят 2026-10-06 19:07:22 UTC |
+| API image | `sha256:1a98957a3ef6829a3281d32c5e9130157a4e73feff730e2e4a165da7902beda1`; rollback tag `assetguard-api:rollback-pre7c45435-20261006` |
 | Схема | 26 migrations; `0026_telegram_notifications (head)` локально и на сервере |
 | Автоматические тесты | Свежий полный локальный прогон: **148 backend + 22 browser E2E = 170 passed**, 125.79s |
 | Публичный сервер | UI `/`, `/health`, `/health/ready`: 200; admin без token: 401; browser GET `/glpi-agent`: ожидаемый 404 |
-| CI опубликованного состояния | [Application CI](https://github.com/temirkhanerbolatovich-coder/AssetGuard/actions/runs/37433147495) и [docs CI](https://github.com/temirkhanerbolatovich-coder/AssetGuard/actions/runs/37435743838): success |
+| CI опубликованного состояния | [Application CI](https://github.com/temirkhanerbolatovich-coder/AssetGuard/actions/runs/37512336108): success; результаты production acceptance зафиксированы отдельным docs commit |
 | Admin API | **64 защищённые операции**, 57 путей; 29 ADMIN-only и 35 Viewer-level с resource scope |
 | Installer | Опубликованный prerelease `0.1.6`; `0.1.8` собран и проверен ограниченно, **NotSigned**, не опубликован как новый release |
-| Backup/restore | Объект `assetguard-production-20261006-075950.sql.agbackup`, isolated restore: schema `0026`, assets=220, endpoints=11; server jobs success |
+| Backup/restore | `assetguard-production-20261006-183238.sql.agbackup`, isolated restore PASS: schema `0026`, assets=220, endpoints=11; server jobs success |
 
-Документационный аудит дополнен локальными исправлениями свежести Agent, состояний подключения и XML-представления версии 1.20. Полный прогон прошёл: 170 cases. Код/документация ещё не опубликованы; application image на сервере не обновлялся. [Протокол и снимки](../../outputs/assetguard-agent-status-fixes-2026-10-06/report.md). Package/API version `0.1.0` и installer version `0.1.8` — разные значения.
+Документационный аудит и исправления свежести Agent, состояний подключения и XML-представления версии 1.20 опубликованы; application `7c45435` принят на сервере. Полный локальный прогон — 170 cases, GitHub CI — success. [Протокол публикации](../../outputs/assetguard-agent-status-publication-2026-10-07.md). [Протокол и снимки](../../outputs/assetguard-agent-status-fixes-2026-10-06/report.md). Package/API version `0.1.0` и installer version `0.1.8` — разные значения.
 
 Read-only срез **2026-10-06 17:29:16 UTC+5 / 12:29:16 UTC**: **220 assets, 11 endpoints, 389 raw inventories, 389 snapshots; 6 ONLINE / 5 STALE, 0 identity conflicts, 0 failed ingest**. Telegram: 3 SENT, ожидающих записей на этом срезе нет. Все четыре timers (monitor, notifications, backup, restore rehearsal) активны; последние jobs — success/0. Inventory counts продолжают расти. Это состояние сервера, а не fleet acceptance пяти stale PC.
 

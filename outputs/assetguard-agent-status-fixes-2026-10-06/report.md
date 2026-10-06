@@ -1,6 +1,6 @@
 # AssetGuard: согласованная свежесть и состояния подключения Agent
 
-Дата: 2026-10-06. Локальная реализация после просмотра действующего сайта. Основа checkout — `dca5a86`; последнее подтверждённое production application — `f4f56e7`. Эти изменения пока не опубликованы и не выложены на сервер.
+Дата: 2026-10-06. Реализация после просмотра действующего сайта. Основа checkout — `dca5a86`, предыдущая production application — `f4f56e7`. Исправление опубликовано и принято на production в application `7c45435` 2026-10-06 19:07:22 UTC. [Приёмка публикации](../assetguard-agent-status-publication-2026-10-07.md).
 
 ## Подтверждённые проблемы
 
@@ -31,4 +31,4 @@ Frontend использует серверный результат в обзо�
 
 Контракты: [Agent](../../docs/features/agent-administration-and-delivery.md), [реестр](../../docs/features/registry-and-incident-center.md), [кабинеты](../../docs/features/rooms-inspection-and-import.md), [API](../../docs/api/README.md), [version lock](../../docs/integration/glpi-agent-version-lock.md). Точка продолжения — [checklist](../../docs/product/current-project-checklist.md).
 
-Следующая эксплуатационная проверка требует публикации и просмотра исправления на production. Локальный E2E использует disposable PostgreSQL 17, применяет все 26 migrations и не изменяет production данные. Список приоритетных задач сохраняет ограничение в шесть строк. Расчёт общего индикатора эталонов Agent/Vision, качество импортированных типов имущества, реальный fleet test и подписанный release остаются отдельными задачами.
+Production приёмка выполнена: все 11 endpoint, 2 кабинета и 11 карточек проверенных версий согласованы; публичные файлы совпали с image, health/auth checks прошли. Локальный E2E использует disposable PostgreSQL 17, применяет все 26 migrations и не изменяет production данные. Список приоритетных задач сохраняет ограничение в шесть строк. Расчёт общего индикатора эталонов Agent/Vision, качество импортированных типов имущества, реальный fleet test и подписанный release остаются отдельными задачами.

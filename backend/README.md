@@ -1,6 +1,6 @@
 # AssetGuard backend
 
-> **Сверено 2026-10-06.** Текущий статус и границы проверки: [checklist](../docs/product/current-project-checklist.md), [аудит](../docs/quality/project-audit-2026-10-06.md). Датированные результаты отдельных этапов сохранены с исходными датами.
+> **Сверено 2026-10-07.** Текущий статус и границы проверки: [checklist](../docs/product/current-project-checklist.md), [аудит](../docs/quality/project-audit-2026-10-06.md). Датированные результаты отдельных этапов сохранены с исходными датами.
 
 Backend реализован как Python 3.12 modular monolith на FastAPI. Он объединяет защищённый inventory gateway, нормализацию hardware, baseline/change/incident workflow, административный API и изолированный AssetGuard Vision module. Gateway сохраняет payload в immutable `RawInventory` до любой нормализации.
 
@@ -8,7 +8,7 @@ Backend package/API version остаётся `0.1.0`; schema head — `0026_tele
 
 ## Локальный запуск
 
-Локальное исправление от 2026-10-06 добавляет отдельный read-only `connection_status` для согласованной свежести Agent в API и кабинете. XML-версия `GLPI-Agent_v1.20` распознаётся как проверенная `1.20` без изменения исходного evidence. [Контракт](../docs/features/agent-administration-and-delivery.md) и [проверка](../outputs/assetguard-agent-status-fixes-2026-10-06/report.md). Миграции и зависимости не добавлены. Публикация и выкладка отражаются в checklist отдельно.
+Опубликованное в application `7c45435` исправление от 2026-10-06 добавляет отдельный read-only `connection_status` для согласованной свежести Agent в API и кабинете. XML-версия `GLPI-Agent_v1.20` распознаётся как проверенная `1.20` без изменения исходного evidence. [Контракт](../docs/features/agent-administration-and-delivery.md) и [проверка](../outputs/assetguard-agent-status-fixes-2026-10-06/report.md). Миграции и зависимости не добавлены. Публикация и выкладка отражаются в checklist отдельно.
 
 ```powershell
 cd backend

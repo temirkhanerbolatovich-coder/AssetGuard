@@ -1,6 +1,6 @@
 # Границы API
 
-> **Сверено 2026-10-06.** Текущий статус и границы проверки: [checklist](../product/current-project-checklist.md), [аудит](../quality/project-audit-2026-10-06.md). Датированные результаты отдельных этапов сохранены с исходными датами.
+> **Сверено 2026-10-07.** Текущий статус и границы проверки: [checklist](../product/current-project-checklist.md), [аудит](../quality/project-audit-2026-10-06.md). Датированные результаты отдельных этапов сохранены с исходными датами.
 
 Доступны две transport boundaries. `POST /internal/inventories` принимает JSON от доверенного bridge по rotating shared secret и idempotency key. `POST /glpi-agent` реализует наблюдаемый GLPI Agent 1.19/1.20 XML flow `PROLOG → SEND → INVENTORY` с HTTP Basic authentication. `TrustedJsonBridgeAdapter` и `DirectGlpiAgentAdapter` преобразуют transport payload в общий canonical envelope, сохраняют immutable RawInventory и запускают один snapshot/change/incident workflow.
 
@@ -8,7 +8,7 @@
 
 Реализованные resource boundaries:
 
-В локальном исправлении 2026-10-06 добавлено read-only поле `connection_status` в endpoint summaries (`GET /admin/endpoints`, `GET /admin/assets` и `GET /admin/assets/{id}`), `GET /admin/endpoints/{id}` и `agents[]` в `GET /admin/locations/rooms/{id}/workspace`. Оно вычисляется по `last_seen_at` и серверному порогу; `IDENTITY_CONFLICT`/`OFFLINE` имеют приоритет, затем `STALE`, иначе сохранённый статус. Исходное поле `status` сохраняется, GET не меняет БД/историю. Контракты доступа и число маршрутов не меняются. [Политика и обратная совместимость](../features/agent-administration-and-delivery.md), [регрессия](../../outputs/assetguard-agent-status-fixes-2026-10-06/report.md).
+В опубликованном application `7c45435` от 2026-10-06 добавлено read-only поле `connection_status` в endpoint summaries (`GET /admin/endpoints`, `GET /admin/assets` и `GET /admin/assets/{id}`), `GET /admin/endpoints/{id}` и `agents[]` в `GET /admin/locations/rooms/{id}/workspace`. Оно вычисляется по `last_seen_at` и серверному порогу; `IDENTITY_CONFLICT`/`OFFLINE` имеют приоритет, затем `STALE`, иначе сохранённый статус. Исходное поле `status` сохраняется, GET не меняет БД/историю. Контракты доступа и число маршрутов не меняются. [Политика и обратная совместимость](../features/agent-administration-and-delivery.md), [регрессия](../../outputs/assetguard-agent-status-fixes-2026-10-06/report.md).
 
 | Resource | Операции MVP |
 | --- | --- |

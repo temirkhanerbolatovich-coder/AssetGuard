@@ -1,6 +1,6 @@
 # AssetGuard
 
-> **Сверено 2026-10-06.** Текущий статус и границы проверки: [checklist](docs/product/current-project-checklist.md), [аудит](docs/quality/project-audit-2026-10-06.md). Датированные результаты отдельных этапов сохранены с исходными датами.
+> **Сверено 2026-10-07.** Текущий статус и границы проверки: [checklist](docs/product/current-project-checklist.md), [аудит](docs/quality/project-audit-2026-10-06.md). Датированные результаты отдельных этапов сохранены с исходными датами.
 
 [![CI](https://github.com/temirkhanerbolatovich-coder/AssetGuard/actions/workflows/ci.yml/badge.svg)](https://github.com/temirkhanerbolatovich-coder/AssetGuard/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/temirkhanerbolatovich-coder/AssetGuard?include_prereleases)](https://github.com/temirkhanerbolatovich-coder/AssetGuard/releases)
@@ -11,16 +11,16 @@ GLPI Agent 1.19/1.20 остаётся внешним неизменённым с
 
 ## Текущее состояние
 
-На **6 октября 2026 года** это **рабочий pilot MVP**. Массовое внедрение в нескольких школах требует дополнительных проверок.
+На **7 октября 2026 года** это **рабочий pilot MVP**. Массовое внедрение в нескольких школах требует дополнительных проверок.
 
 | Область | Подтверждённое состояние |
 | --- | --- |
-| Git | До этой актуализации local `main`, GitHub `main` и server checkout совпадали на `dca5a86` |
-| Production | Oracle Cloud VM, Docker Compose + Caddy; application `f4f56e7`, HTTPS [публичный сервер](https://assetguard-temirkhan.duckdns.org/) |
+| Git | Исправления и актуализация документации опубликованы в `main`; application commit `7c45435`, приёмка — отдельный docs commit |
+| Production | Oracle Cloud VM, Docker Compose + Caddy; application `7c45435`, HTTPS [публичный сервер](https://assetguard-temirkhan.duckdns.org/) |
 | БД | PostgreSQL 17; 26 Alembic migrations, head `0026_telegram_notifications` |
 | API | 73 HTTP operations на 66 путях; 64 защищённые admin operations на 57 путях |
 | Проверки | Свежий локальный прогон: **170 passed** — 148 backend + 22 browser E2E; JS, scripts и Compose проверены |
-| CI | Application и documentation CI на опубликованных SHA — success; изменения этого аудита пока локальные |
+| CI | [Application CI](https://github.com/temirkhanerbolatovich-coder/AssetGuard/actions/runs/37512336108): success; тесты, dependency audit, secret scan и static checks |
 | Agent | Последний опубликованный prerelease installer — `v0.1.6`; собранный `0.1.8` — неподписанный pilot candidate |
 | Восстановление | R2 backup и isolated restore на schema `0026` подтверждены протоколом 6 октября и текущим состоянием server jobs |
 
@@ -37,7 +37,7 @@ GLPI Agent 1.19/1.20 остаётся внешним неизменённым с
 - encrypted PostgreSQL backup в Cloudflare R2, isolated restore и systemd timers;
 - локальный Vision photo workflow; тяжёлый inference на Oracle Free выключен.
 
-После просмотра сайта локально исправлены свежесть Agent во всех экранах, состояния без Agent/до первого отчёта и ложное предупреждение о `GLPI-Agent_v1.20`. Код и документация проверены; эти правки ещё не опубликованы и не выложены на production. [Протокол и снимки](outputs/assetguard-agent-status-fixes-2026-10-06/report.md).
+После просмотра сайта исправлены свежесть Agent во всех экранах, состояния без Agent/до первого отчёта и ложное предупреждение о `GLPI-Agent_v1.20`. Код и документация опубликованы; application `7c45435` принят на production после backup/restore, health/schema/API, проверки публичных файлов и браузерной приёмки. [Регрессия и снимки](outputs/assetguard-agent-status-fixes-2026-10-06/report.md), [приёмка публикации](outputs/assetguard-agent-status-publication-2026-10-07.md).
 
 Главные открытые задачи: Agent 0.1.8 на 3–5 реальных ПК, code signing и проверенный update/rollback, data governance/retention, onboarding и эксплуатационная изоляция двух организаций, отказ от legacy shared credentials, staging/failover и ручная UI-приёмка.
 
