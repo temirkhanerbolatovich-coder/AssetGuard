@@ -5,7 +5,8 @@
 Общая система заменена во всём приложении: [изменения и референсы](../features/ui-ledger-redesign.md),
 [дизайн-система](../product/ui-design-system.md), [протокол со снимками](../../outputs/assetguard-redesign-2026-10-05/report.md).
 Существующие 16 browser E2E дополнены пятью проверками в `test_redesign.py`;
-полный набор — 122 backend + 21 browser E2E. Проверяются реальные операции
+финальная локальная приёмка 2026-10-06 — 124 backend + 21 browser E2E,
+всего 145 passed. Проверяются реальные операции
 в isolated PostgreSQL, отказ/повтор сохранения и чтения, источники и возврат,
 карточка компьютера до связи, фактически отрисованный Golos Text, завершённый
 onboarding, comparison с нулём/отсутствующими сведениями, responsive и motion.

@@ -150,6 +150,17 @@ def test_named_role_keyboard_workflow_keeps_tenant_boundary(live_server, role):
         assert page.locator('#assets tr').count() == 1
         assert 'Foreign' not in page.locator('#assets').inner_text()
         assert page.locator('#show-create').is_visible() == (role != 'VIEWER')
+        assert page.locator('#administration-nav').evaluate('(node) => !node.hidden') == (role == 'ADMIN')
+        assert page.locator('#registry-tools').evaluate('(node) => !node.hidden') == (role == 'ADMIN')
+        assert page.locator("#main-nav a[href='#vision']").count() == 0
+        assert page.locator("#main-nav a[href='#agent-workflow']").count() == 0
+        if role != 'ADMIN':
+            page.evaluate("location.hash='location-access'")
+            page.locator('#overview').wait_for(state='visible')
+            page.evaluate("location.hash='vision'")
+            page.locator('#locations').wait_for(state='visible')
+            page.evaluate("location.hash='devices'")
+            page.locator('#devices').wait_for(state='visible')
         link = page.locator('#assets .device-open-link').first
         link.focus()
         page.keyboard.press('Enter')
@@ -261,6 +272,7 @@ def test_workspace_contrast_names_reflow_and_keyboard(live_server):
         page.evaluate("location.hash='agent-credentials'")
         page.locator('#agent-credentials').wait_for(state='visible')
         page.request.post(live_server + '/admin/agent-credentials', headers={'X-AssetGuard-Admin-Token': os.environ['ASSETGUARD_ADMIN_SHARED_SECRET']}, data={})
+        page.locator('[data-admin-view="connect"]').click()
         page.locator('#refresh-agent-credentials').click()
         origin = page.locator('.revoke-agent-credential').first
         origin.wait_for()

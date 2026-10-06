@@ -30,6 +30,7 @@ def capture_redesign_preview(page, name):
     if output:
         directory = Path(output)
         directory.mkdir(parents=True, exist_ok=True)
+        page.locator("#toast").evaluate("element => { element.hidden = true; }")
         page.evaluate("Promise.all(document.getAnimations().filter(animation=>animation.effect.getComputedTiming().iterations!==Infinity).map(animation=>animation.finished.catch(()=>{})))")
         page.screenshot(path=str(directory / name))
 
@@ -74,7 +75,9 @@ def test_agent_fleet_delivery_and_admin_forms_recover_safely(live_server):
         page.get_by_role("button",name="Войти",exact=True).click()
         page.locator("#status").filter(has_text="Данные актуальны").wait_for()
         page.evaluate("location.hash='agent-credentials'")
+        page.locator('[data-admin-view="notifications"]').click()
         page.locator("#notification-summary").filter(has_text="принято Telegram: 1").wait_for()
+        page.locator('[data-admin-view="fleet"]').click()
         assert "24 ч." in page.locator("#agent-freshness-help").inner_text()
         assert page.locator("#agent-fleet-list .admin-record").count()==20
         page.locator("#agent-status-filter").select_option("STALE")
@@ -86,6 +89,14 @@ def test_agent_fleet_delivery_and_admin_forms_recover_safely(live_server):
         assert "Нет свежей инвентаризации" in page.locator("#agent-fleet-list").inner_text()
         page.locator("#agent-search").fill("")
         page.locator("#agent-status-filter").select_option("")
+        page.locator("#agent-search").fill("NO-SUCH-COMPUTER")
+        page.locator("#agent-fleet-list").get_by_text("Компьютеры не найдены", exact=True).wait_for()
+        page.locator("#agent-fleet-list").get_by_role("button", name="Сбросить фильтры").click()
+        assert page.locator("#agent-fleet-list .admin-record").count()==20
+        assert page.locator('[data-admin-view="fleet"]').get_attribute("aria-selected") == "true"
+        page.locator('[data-admin-view="fleet"]').press("ArrowRight")
+        assert page.locator('[data-admin-view="connect"]').get_attribute("aria-selected") == "true"
+        page.locator('[data-admin-view="notifications"]').click()
         assert page.locator("#notification-list .admin-record").count()==20
         page.locator("#notification-next").click()
         playwright.expect(page.locator("#notification-list .admin-record")).to_have_count(6)
@@ -99,12 +110,16 @@ def test_agent_fleet_delivery_and_admin_forms_recover_safely(live_server):
         page.unroute("**/admin/notifications?*")
         page.locator("#refresh-notifications").click()
         page.locator("#notification-list .admin-record").wait_for()
+        page.route("**/admin/notifications?*status=SENT",lambda route:route.fulfill(json={"summary":{"pending":24,"retrying":1,"sent":1},"total":0,"limit":20,"offset":0,"items":[]}))
+        page.locator("#notification-status-filter").select_option("SENT")
+        page.locator("#notification-list").get_by_text("Уведомления не найдены",exact=True).wait_for()
+        page.unroute("**/admin/notifications?*status=SENT")
+        page.locator("#notification-list").get_by_role("button",name="Показать все").click()
+        playwright.expect(page.locator("#notification-list .admin-record")).to_have_count(20)
 
         def capture(name):
-            if os.environ.get("ASSETGUARD_CAPTURE_UI_PREVIEWS")=="1":
-                output=Path(__file__).resolve().parents[3]/"outputs/ui-stage4-preview-2026-10-05"
-                output.mkdir(parents=True,exist_ok=True)
-                page.screenshot(path=str(output/name))
+            capture_redesign_preview(page, name)
+        page.locator('[data-admin-view="fleet"]').click()
         for width in (1366,1024,768,390,320):
             page.set_viewport_size({"width":width,"height":900})
             assert page.locator("body").evaluate("element=>element.scrollWidth<=element.clientWidth"),width
@@ -112,9 +127,10 @@ def test_agent_fleet_delivery_and_admin_forms_recover_safely(live_server):
             if width in (1366,390): capture(f"agent-{'desktop' if width==1366 else 'mobile'}.png")
         for width in (1366,390):
             page.set_viewport_size({"width":width,"height":900})
-            page.locator('[data-admin-panel="notification-panel"]').click()
+            page.locator('[data-admin-view="notifications"]').click()
             capture(f"delivery-{'desktop' if width==1366 else 'mobile'}.png")
         page.set_viewport_size({"width":1366,"height":900})
+        page.locator('[data-admin-view="connect"]').click()
         writes=[]
         page.on("request",lambda request:writes.append(request.url) if request.method=="POST" and request.url.endswith("/admin/agent-credentials") else None)
         page.locator("#create-agent-credential").evaluate("form=>{form.requestSubmit();form.requestSubmit();}")
@@ -133,6 +149,7 @@ def test_agent_fleet_delivery_and_admin_forms_recover_safely(live_server):
         assert page.request.post(live_server+"/glpi-agent",headers={"Authorization":f"Basic {basic}","Content-Type":"application/xml"},data=xml).status==200
         claim=page.request.post(live_server+"/agent/re-enrolments",data={"identifier_type":"SMBIOS_UUID","identifier_value":"BROWSER-KNOWN-UUID","computer_name":"Browser-Known","installer_version":"0.1.7"})
         assert claim.status==202
+        page.locator('[data-admin-view="recovery"]').click()
         page.locator("#refresh-agent-reenrolments").click()
         row=page.locator("#agent-reenrolments-list .credential-row",has_text="Browser-Known")
         row.wait_for()
@@ -142,6 +159,7 @@ def test_agent_fleet_delivery_and_admin_forms_recover_safely(live_server):
         page.locator("#confirmation-form").evaluate("form=>{form.requestSubmit();form.requestSubmit();}")
         page.locator("#confirmation-dialog").wait_for(state="hidden")
         page.locator("#agent-reenrolments-list .credential-row",has_text="Browser-Known").get_by_text("Подтверждён",exact=True).wait_for()
+        page.locator('[data-admin-view="connect"]').click()
         assert page.locator("#agent-credentials-list .credential-row",has_text=username).get_by_text("Отозван",exact=True).is_visible()
 
         page.evaluate("location.hash='location-access'")
@@ -241,11 +259,16 @@ def test_admin_can_open_dashboard_and_create_asset(live_server):
         page.locator("#status").filter(has_text="Данные актуальны").wait_for()
         assert page.get_by_role("heading", name="Обзор", exact=True).is_visible()
         assert page.get_by_role("heading", name="Что требует внимания").is_visible()
+        assert page.locator("#overview .metric-card").count() == 4
+        assert page.locator("#overview .overview-focus-grid").is_visible()
         assert page.locator("#setup-guide").is_visible()
 
-        for viewport in ({"width": 1920, "height": 1080}, {"width": 1366, "height": 768}, {"width": 768, "height": 900}):
+        for viewport in ({"width": 1920, "height": 1080}, {"width": 1366, "height": 768}, {"width": 768, "height": 900}, {"width": 390, "height": 900}):
             page.set_viewport_size(viewport)
             assert page.locator("body").evaluate("element => element.scrollWidth <= element.clientWidth")
+            if viewport["width"] == 390:
+                page.locator("#toast").evaluate("node => { node.hidden = true; }")
+                capture_redesign_preview(page, "overview-mobile.png")
         assert page.locator("#nav-toggle").is_visible()
 
         # Desktop uses a persistent application sidebar and one visible route.
@@ -254,14 +277,25 @@ def test_admin_can_open_dashboard_and_create_asset(live_server):
         assert 240 <= sidebar_width <= 280
         assert page.locator("#overview").is_visible()
         assert page.locator("#devices").is_hidden()
+        page.locator("#toast").evaluate("node => { node.hidden = true; }")
+        capture_redesign_preview(page, "overview-desktop.png")
         page.locator("#main-nav a[href='#incidents']").click()
         page.locator("#incidents").wait_for(state="visible")
         assert page.locator(".page-intro").get_by_role("heading", name="Инциденты", exact=True).is_visible()
         page.go_back()
         page.locator("#overview").wait_for(state="visible")
 
-        page.locator("#agent-credentials-nav").click()
+        assert page.locator("#main-nav > a:visible").count() == 5
+        page.locator("#administration-nav").click()
         page.locator("#agent-credentials").wait_for(state="visible")
+        assert page.locator("#administration-nav").get_attribute("aria-current") == "page"
+        assert page.locator("#agent-fleet-panel").is_visible()
+        assert page.locator("#agent-install-panel").is_hidden()
+        page.locator("#agent-fleet-list").get_by_text("Компьютеры Agent ещё не подключены", exact=True).wait_for()
+        page.locator("#agent-fleet-list").get_by_role("button", name="Подключить компьютер").click()
+        assert page.locator("#agent-fleet-panel").is_hidden()
+        assert page.locator("#agent-install-panel").is_visible()
+        assert page.locator("#agent-keys-panel").is_visible()
         page.get_by_role("button", name="Создать ключ для компьютера").click()
         credential_dialog = page.locator("#agent-credential-dialog")
         credential_dialog.wait_for(state="visible")
@@ -292,6 +326,7 @@ def test_admin_can_open_dashboard_and_create_asset(live_server):
             },
         )
         assert reenrolment_response.status == 202
+        page.locator('[data-admin-view="recovery"]').click()
         page.locator("#refresh-agent-reenrolments").click()
         reenrolment_row = page.locator("#agent-reenrolments-list .credential-row", has_text=reenrolment_computer)
         reenrolment_row.wait_for()
@@ -307,6 +342,16 @@ def test_admin_can_open_dashboard_and_create_asset(live_server):
         page.locator("#main-nav a[href='#devices']").click()
         page.locator("#devices").wait_for(state="visible")
         assert page.locator("#show-create").is_visible()
+        assert page.locator("#show-create").inner_text() == "Добавить имущество"
+        assert page.locator("#assets a[href='#data-exchange']").count() == 0
+        page.locator("#registry-tools summary").click()
+        assert page.locator("#data-exchange-shortcut").is_visible()
+        page.locator("#registry-tools summary").click()
+        page.locator("#toast").evaluate("node => { node.hidden = true; }")
+        capture_redesign_preview(page, "registry-desktop.png")
+        page.set_viewport_size({"width": 390, "height": 900})
+        assert page.locator("body").evaluate("element => element.scrollWidth <= element.clientWidth")
+        capture_redesign_preview(page, "registry-mobile.png")
 
         page.set_viewport_size({"width": 900, "height": 900})
         page.locator("#nav-toggle").click()
@@ -317,6 +362,11 @@ def test_admin_can_open_dashboard_and_create_asset(live_server):
         form = page.locator("#create-asset")
         form.locator('[name="inventory_number"]').fill(inventory_number)
         form.locator('[name="name"]').fill("Browser E2E workstation")
+        page.set_viewport_size({"width": 1280, "height": 900})
+        capture_redesign_preview(page, "asset-create-desktop.png")
+        page.set_viewport_size({"width": 390, "height": 844})
+        capture_redesign_preview(page, "asset-create-mobile.png")
+        page.set_viewport_size({"width": 900, "height": 900})
         form.get_by_role("button", name="Сохранить имущество").click()
 
         furniture_number = f"E2E-{uuid4().hex[:10]}"
@@ -331,11 +381,18 @@ def test_admin_can_open_dashboard_and_create_asset(live_server):
         furniture_row.wait_for()
         assert furniture_row.get_by_text("Ручной учёт").is_visible()
 
+        page.locator("#registry-tools summary").click()
         page.locator("#data-exchange-shortcut").click()
         page.locator("#data-exchange").wait_for(state="visible")
         assert page.url.endswith("#data-exchange")
         assert page.locator("#devices").is_hidden()
         assert page.locator(".page-intro").get_by_role("heading", name="Импорт и экспорт", exact=True).is_visible()
+        page.set_viewport_size({"width": 1280, "height": 900})
+        capture_redesign_preview(page, "data-exchange-desktop.png")
+        page.set_viewport_size({"width": 390, "height": 900})
+        assert page.locator("body").evaluate("element => element.scrollWidth <= element.clientWidth")
+        capture_redesign_preview(page, "data-exchange-mobile.png")
+        page.set_viewport_size({"width": 900, "height": 900})
 
         import_workbook = Workbook()
         import_sheet = import_workbook.active
@@ -370,11 +427,14 @@ def test_admin_can_open_dashboard_and_create_asset(live_server):
         page.locator("#nav-toggle").click()
         page.locator("#main-nav a[href='#locations']").click()
         page.locator("#locations").wait_for(state="visible")
+        page.locator("#show-building-create").click()
+        page.locator("#building-create-dialog").wait_for(state="visible")
         page.locator("#create-building [name='name']").fill(ui_building_name)
         page.locator("#create-building").get_by_role("button", name="Добавить корпус").click()
-        ui_building = page.locator("#location-tree .attention-item", has_text=ui_building_name).first
+        page.locator("#building-create-dialog").wait_for(state="hidden")
+        ui_building = page.locator("#location-tree .location-building", has_text=ui_building_name).first
         ui_building.wait_for()
-        ui_building.get_by_role("button", name="+ этаж").click()
+        ui_building.get_by_role("button", name="Добавить этаж").click()
         location_dialog = page.locator("#location-create-dialog")
         location_dialog.wait_for(state="visible")
         assert location_dialog.get_by_role("heading", name="Добавить этаж").is_visible()
@@ -382,12 +442,16 @@ def test_admin_can_open_dashboard_and_create_asset(live_server):
         page.locator("#location-create-submit").click()
         location_dialog.wait_for(state="hidden")
         ui_building.get_by_text(f"Этаж {ui_floor_name}", exact=True).wait_for()
-        ui_building.get_by_role("button", name="+ кабинет").click()
+        ui_building.get_by_role("button", name="Добавить кабинет").click()
         location_dialog.wait_for(state="visible")
         page.locator("#location-create-name").fill(ui_room_name)
         page.locator("#location-create-submit").click()
         location_dialog.wait_for(state="hidden")
-        ui_building.get_by_text(f"каб. {ui_room_name}", exact=False).wait_for()
+        ui_building.get_by_text(f"Кабинет {ui_room_name}", exact=False).wait_for()
+        assert page.locator("main > .page-section:visible").count() == 1
+        page.set_viewport_size({"width": 1280, "height": 900})
+        capture_redesign_preview(page, "locations-desktop.png")
+        page.set_viewport_size({"width": 900, "height": 900})
 
         page.locator("#nav-toggle").click()
         page.locator("#main-nav a[href='#devices']").click()
@@ -399,6 +463,11 @@ def test_admin_can_open_dashboard_and_create_asset(live_server):
         open_button.click()
         assert page.url.endswith(f"#asset={row.get_attribute('data-asset-id')}")
         page.locator("#detail-title").filter(has_text="Browser E2E workstation").wait_for()
+        page.set_viewport_size({"width": 1280, "height": 900})
+        capture_redesign_preview(page, "asset-detail-desktop.png")
+        page.set_viewport_size({"width": 390, "height": 844})
+        capture_redesign_preview(page, "asset-detail-mobile.png")
+        page.set_viewport_size({"width": 900, "height": 900})
         assert page.get_by_text("Компьютер пока не связан с Agent").is_visible()
         assert page.get_by_role("heading", name="Состав компьютера").is_hidden()
         assert page.get_by_role("tab", name="Оборудование").is_hidden()
@@ -449,10 +518,21 @@ def test_admin_can_open_dashboard_and_create_asset(live_server):
         assert page.locator("#nav-toggle").get_attribute("aria-label") == "Открыть меню"
         page.locator("#nav-toggle").click()
         page.locator("#main-nav a[href='#locations']").click()
-        room_row = page.locator(".location-room", has_text=f"каб. {room_name}")
+        capture_redesign_preview(page, "locations-mobile.png")
+        room_row = page.locator(".location-room", has_text=f"Кабинет {room_name}")
         room_row.get_by_role("button", name="Открыть кабинет").click()
         page.locator("#room-detail-title").filter(has_text=f"Кабинет {room_name}").wait_for()
+        capture_redesign_preview(page, "room-mobile.png")
+        page.set_viewport_size({"width": 1280, "height": 900})
+        capture_redesign_preview(page, "room-desktop.png")
+        page.set_viewport_size({"width": 390, "height": 844})
+        assert page.locator("#room-tabs [role='tab']").count() == 6
         assert page.locator("#room-tab-content").get_by_text("E2E ответственный").is_visible()
+        page.locator('[data-room-tab="checks"]').click()
+        assert page.locator("#room-tab-content").get_by_role("heading", name="Компьютеры и эталоны").is_visible()
+        assert page.locator("#room-tab-content").get_by_role("heading", name="Проверка по фото").is_visible()
+        page.locator('[data-room-tab="overview"]').click()
+        page.locator("#room-tools summary").click()
         page.locator("#room-edit-action").click()
         page.locator("#room-edit-dialog").wait_for(state="visible")
         page.locator("#room-edit-contact").fill("e2e@example.org")
@@ -482,6 +562,7 @@ def test_admin_can_open_dashboard_and_create_asset(live_server):
         page.locator("#physical-incident-submit").click()
         page.locator("#physical-incident-dialog").wait_for(state="hidden")
         page.locator("#room-tab-content").get_by_text("Ремонт").wait_for()
+        page.locator("#room-tools summary").click()
         page.locator("#room-vision-action").click()
         assert page.locator("#vision-location-room").input_value() == room["id"]
         assert page.locator("#vision-asset-id option").count() == 2
@@ -898,10 +979,7 @@ def test_registry_pages_and_unified_physical_incident_workflow(live_server):
         page.locator("#login").click()
         page.locator("#status").filter(has_text="Данные актуальны").wait_for()
         def capture(name):
-            if os.environ.get("ASSETGUARD_CAPTURE_UI_PREVIEWS") == "1":
-                output = Path(__file__).resolve().parents[3] / "outputs/ui-stage2-preview-2026-10-05"
-                output.mkdir(parents=True, exist_ok=True)
-                page.screenshot(path=str(output / name))
+            capture_redesign_preview(page, name)
         capture("registry-desktop.png")
         for width in (320, 390, 768, 1366):
             page.set_viewport_size({"width": width, "height": 900})
@@ -1093,6 +1171,7 @@ def test_import_to_room_inspection_preserves_selection_and_reviews_before_save(l
         page.locator("#import-result a[href='#locations']").click()
         page.locator(f'.room-report[data-room="{room_id}"]').click()
         page.locator("#room-detail-title").filter(has_text="101").wait_for()
+        page.locator("#room-tools summary").click()
         page.locator("#room-qr-action").click()
         page.locator("#asset-qr-dialog").wait_for(state="visible")
         assert "Кабинет 101" in page.locator("#asset-qr-title").inner_text()

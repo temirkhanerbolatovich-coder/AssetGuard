@@ -16,6 +16,7 @@ let confirmationBusy = false;
 let notificationGeneration = 0;
 let notificationOffset = 0;
 let adminAccessGeneration = 0;
+let adminView = "fleet";
 let inspectionCameraStream = null;
 let inspectionScanFrame = 0;
 const dialogFocusOrigins = new WeakMap();
@@ -139,12 +140,17 @@ const routeMeta = {
   "data-exchange": ["Данные реестра", "Импорт и экспорт"],
   incidents: ["Контроль изменений", "Инциденты"],
   locations: ["Размещение", "Кабинеты"],
-  vision: ["Физическая инвентаризация", "Проверка по фото"],
+  vision: ["Экспериментальная функция", "Проверка по фото"],
   "location-access": ["Администрирование", "Сотрудники и доступ"],
-  "agent-credentials": ["Администрирование", "Подключение Agent"],
+  "agent-credentials": ["Управление", "Администрирование"],
   "agent-workflow": ["Справка", "Как работает Agent"],
 };
 const primaryRoutes = new Set(Object.keys(routeMeta));
+const administrationRoutes = new Set(["data-exchange", "location-access", "agent-credentials"]);
+
+function navigationRoute(route) {
+  return administrationRoutes.has(route) ? "agent-credentials" : route;
+}
 
 function setPageHeading(route) {
   const meta = routeMeta[route] || routeMeta.overview;
@@ -152,16 +158,17 @@ function setPageHeading(route) {
   document.querySelector(".page-intro h1").textContent = meta[1];
   document.title = `${meta[1]} — AssetGuard`;
   document.querySelectorAll("#main-nav a").forEach((link) => link.removeAttribute("aria-current"));
-  document.querySelector(`#main-nav a[href="#${CSS.escape(route)}"]`)?.setAttribute("aria-current", "page");
+  document.querySelector(`#main-nav a[href="#${CSS.escape(navigationRoute(route))}"]`)?.setAttribute("aria-current", "page");
   closeNavigation();
 }
 
 function showPrimaryRoute(route) {
   viewGeneration += 1;
   let target = primaryRoutes.has(route) ? route : "overview";
-  if(target === "location-access" && !state.currentUser) target = "overview";
+  if(target === "location-access" && state.currentUser?.role !== "ADMIN") target = "overview";
   if(target === "agent-credentials" && state.currentUser?.role !== "ADMIN") target = "overview";
   if(target === "data-exchange" && state.currentUser?.role !== "ADMIN") target = "devices";
+  if(target === "vision" && state.currentUser?.role !== "ADMIN") target = "locations";
   document.querySelectorAll("main > .page-section").forEach((section) => { section.hidden = section.id !== target; });
   const returningToRegistry = target === "devices" && Boolean(state.selectedAsset || state.selectedComputer);
   state.selectedAsset = null;
@@ -170,7 +177,7 @@ function showPrimaryRoute(route) {
   state.selectedIncident = null;
   state.roomWorkspace = null;
   document.querySelectorAll("#main-nav a").forEach((link) => link.removeAttribute("aria-current"));
-  document.querySelector(`#main-nav a[href="#${CSS.escape(target)}"]`)?.setAttribute("aria-current", "page");
+  document.querySelector(`#main-nav a[href="#${CSS.escape(navigationRoute(target))}"]`)?.setAttribute("aria-current", "page");
   setPageHeading(target);
   document.querySelector(".app-header").classList.remove("nav-open");
   $("nav-toggle").setAttribute("aria-expanded", "false");
@@ -360,6 +367,7 @@ function endSession(message = "") {
   confirmationAction = null;
   notificationGeneration += 1; notificationOffset = 0;
   adminAccessGeneration += 1;
+  setAdminView("fleet");
   $("agent-search").value = ""; $("agent-status-filter").value = ""; $("notification-status-filter").value = "";
   ["device-search", "device-status-filter", "device-category-filter", "device-room-filter", "incident-search", "incident-severity-filter", "incident-type-filter", "incident-room-filter", "incident-date-from", "incident-date-to"].forEach(id => $(id).value = "");
   $("device-change-filter").checked = false;
@@ -504,11 +512,10 @@ function incidentLabel(incident, change = null) {
 function renderDashboard() {
   const devices = state.devices;
   renderSetupGuide();
-  const online = devices.filter((item) => item.status === "OK").length;
   const attention = devices.filter((item) => ["ATTENTION","ANOMALY"].includes(item.status));
   const unchecked = devices.filter((item) => item.status === "UNCHECKED");
   const openIncidents = incidentItems().filter((item) => ["OPEN","UNDER_REVIEW"].includes(item.status));
-  $("devices-count").textContent = state.assets.length; $("online-count").textContent = online; $("attention-count").textContent = attention.length; $("unchecked-count").textContent = unchecked.length; $("open-incidents-count").textContent = openIncidents.length;
+  $("devices-count").textContent = state.assets.length; $("attention-count").textContent = attention.length; $("unchecked-count").textContent = unchecked.length; $("open-incidents-count").textContent = openIncidents.length;
   $("nav-incident-count").textContent = openIncidents.length; $("nav-incident-count").hidden = !openIncidents.length;
   const banner = $("attention-banner");
   if (!devices.length) {
@@ -598,7 +605,7 @@ function renderIncidentCenter() {
   $("incident-active-filter-count").hidden = !activeFilters;
   $("incident-active-filter-count").textContent = activeFilters || "";
   const openCount = incidentItems().filter((item) => ["OPEN","UNDER_REVIEW"].includes(item.status)).length;
-  $("incident-center-count").textContent = `${incidents.length} из ${incidentItems().length}`;
+  $("incident-center-count").textContent = `Найдено: ${incidents.length}`;
   $("incident-center-count").className = `status-pill ${openCount ? "warning" : "ok"}`;
   state.incidentPage = Math.min(state.incidentPage, Math.max(1, Math.ceil(incidents.length / listPageSize)));
   renderListPagination("incident-pagination", state.incidentPage, incidents.length, page => {state.incidentPage = page; renderIncidentCenter();});
@@ -610,19 +617,15 @@ function renderIncidentCenter() {
     return;
   }
   list.innerHTML = incidents.slice((state.incidentPage-1)*listPageSize, state.incidentPage*listPageSize).map((incident) => {
-    if (incident.kind === "PHYSICAL") return `<article class="panel incident-card"><div class="incident-card-head"><div><span class="eyebrow">Обход · физический · ${escapeHtml(incident.severity === "HIGH" ? "Высокий" : incident.severity === "LOW" ? "Низкий" : "Средний")} приоритет</span><h3>${escapeHtml(incident.asset_name)}</h3><p>${escapeHtml(incident.inventory_number)} · каб. ${escapeHtml(incident.room)} · ${dateTime(incident.created_at)}</p></div>${pill(incident.status)}</div><p><strong>${escapeHtml(inspectionLabels[incident.issue_type])}</strong> · проблемных единиц: ${incident.affected_quantity}</p><div class="incident-card-actions"><button type="button" class="open-physical-incident" data-id="${incident.id}">Открыть инцидент</button></div></article>`;
+    const priority = incident.severity === "HIGH" ? "Высокий приоритет" : incident.severity === "LOW" ? "Низкий приоритет" : "Средний приоритет";
+    if (incident.kind === "PHYSICAL") return `<article class="panel incident-card"><div class="incident-card-head"><div><span class="incident-source">Обход · физический · ${escapeHtml(priority)}</span><h3>${escapeHtml(incident.asset_name)}: ${escapeHtml(inspectionLabels[incident.issue_type] || "Расхождение")}</h3><p>${escapeHtml(incident.inventory_number)} · каб. ${escapeHtml(incident.room)} · ${dateTime(incident.created_at)}</p></div>${pill(incident.status)}</div><p class="incident-summary">Проблемных единиц: <strong>${incident.affected_quantity}</strong></p><div class="incident-card-actions"><button type="button" class="open-physical-incident" data-id="${incident.id}">Открыть</button></div></article>`;
     const change = state.changes.find((item) => item.id === incident.change_event_id);
     const device = deviceForEndpoint(incident.endpoint_id);
     const location = device ? locationLabel(device) : "Расположение не указано";
-    const comparison = change ? `<div class="incident-comparison"><div><span>Было</span><strong>${escapeHtml(componentSummary(change.component_type, change.evidence?.previous))}</strong></div><b aria-hidden="true">→</b><div><span>Стало</span><strong>${escapeHtml(componentSummary(change.component_type, change.evidence?.current))}</strong></div></div>` : '<p class="meta">Подробное доказательство доступно в карточке устройства.</p>';
-    const deviceAction = `<button type="button" class="open-incident" data-id="${incident.id}">Открыть инцидент</button>`;
-    const decisions = state.currentUser?.role === "ADMIN" && ["OPEN","UNDER_REVIEW"].includes(incident.status) ? `<button type="button" class="incident-review button-secondary" data-id="${incident.id}">Взять на проверку</button><button type="button" class="incident-resolve" data-id="${incident.id}">Зафиксировать решение</button>` : "";
-    return `<article class="panel incident-card"><div class="incident-card-head"><div><span class="eyebrow">Agent · технический · ${escapeHtml(incident.severity === "HIGH" ? "Высокий приоритет" : incident.severity === "LOW" ? "Низкий приоритет" : "Средний приоритет")}</span><h3>${escapeHtml(device?.name || device?.hostname || "Устройство")}</h3><p>${escapeHtml(location)} · ${dateTime(incident.created_at)}</p></div>${pill(incident.status)}</div><div class="incident-card-body"><div><strong>${escapeHtml(incidentLabel(incident, change))}</strong><p>AssetGuard обнаружил расхождение с подтверждённым эталоном. Окончательное решение принимает ответственный сотрудник.</p></div>${comparison}</div><div class="incident-card-actions">${deviceAction}${decisions}</div></article>`;
+    return `<article class="panel incident-card"><div class="incident-card-head"><div><span class="incident-source">Agent · технический · ${escapeHtml(priority)}</span><h3>${escapeHtml(incidentLabel(incident, change))}</h3><p>${escapeHtml(device?.name || device?.hostname || "Компьютер")} · ${escapeHtml(location)} · ${dateTime(incident.created_at)}</p></div>${pill(incident.status)}</div><div class="incident-card-actions"><button type="button" class="open-incident" data-id="${incident.id}">Открыть</button></div></article>`;
   }).join("");
   bindDynamicActions();
   list.querySelectorAll(".open-physical-incident").forEach(button => button.onclick = () => {location.hash = `physical-incident=${button.dataset.id}`;});
-  document.querySelectorAll(".incident-review").forEach((button) => button.onclick = () => openIncidentDecisionDialog(button.dataset.id, false));
-  document.querySelectorAll(".incident-resolve").forEach((button) => button.onclick = () => openIncidentDecisionDialog(button.dataset.id, true));
 }
 
 function clearIncidentFilters() {
@@ -643,7 +646,7 @@ function renderSetupGuide() {
   const steps = [
     {done:hasRooms, title:"Создайте кабинеты", text:hasRooms ? "Структура школы готова для размещения имущества." : "Добавьте корпус, этаж и хотя бы один кабинет.", href:"#locations", action:hasRooms ? "Открыть кабинеты" : "Создать кабинеты"},
     {done:hasAssets, title:"Добавьте имущество", text:hasAssets ? `В реестре уже ${state.assets.length} ${state.assets.length === 1 ? "запись" : "записей"}.` : "Загрузите школьную ведомость или добавьте первую запись вручную.", href:"#devices", action:hasAssets ? "Открыть реестр" : "Добавить имущество"},
-    {done:hasAgent, optional:true, title:"Подключите компьютеры (по желанию)", text:hasAgent ? `AssetGuard получает данные от ${state.endpoints.length} компьютеров.` : "Установите Agent на компьютеры, чтобы видеть их состояние и изменения.", href:"#agent-workflow", action:hasAgent ? "Посмотреть компьютеры" : "Как подключить Agent"},
+    {done:hasAgent, optional:true, title:"Подключите компьютеры (по желанию)", text:hasAgent ? `AssetGuard получает данные от ${state.endpoints.length} компьютеров.` : "Установите Agent на компьютеры, чтобы видеть их состояние и изменения.", href:"#agent-credentials", action:hasAgent ? "Посмотреть компьютеры" : "Настроить Agent"},
   ];
   $("setup-progress").textContent = `${complete} из 2 основных шагов`;
   $("setup-progress").className = `status-pill ${complete === 2 ? "ok" : "neutral"}`;
@@ -713,16 +716,14 @@ function renderRoomTab() {
   if(tab==="overview") {
     const ready=workspace.baseline.agent_ready+(workspace.baseline.vision_ready?1:0), total=workspace.baseline.agent_total+1;
     html=`<div class="metrics room-metrics">${roomMetric("Позиций",inventory.positions,"записей в реестре")}${roomMetric("Количество",inventory.quantity,"единиц имущества")}${roomMetric("Agent",`${agents.filter((item)=>item.status==="ONLINE").length} из ${agents.length}`,"компьютеров на связи")}${roomMetric("Эталоны",`${ready} из ${total}`,"Agent и фото помещения")}</div><div class="room-overview-grid"><section><span class="eyebrow">Ответственный</span><h3>${escapeHtml(workspace.room.responsible_name||"Не назначен")}</h3><p class="meta">${escapeHtml(workspace.room.responsible_contact||"Контакт не указан")}</p><p>${escapeHtml(workspace.room.purpose||"Назначение кабинета не указано")}</p></section><section><span class="eyebrow">Состав</span><div class="summary-lines">${inventory.categories.map((item)=>`<div class="summary-line"><span>${escapeHtml(categoryLabels[item.category]||item.category)}</span><strong>${item.quantity}</strong></div>`).join("")||'<p class="empty">Имущество ещё не добавлено.</p>'}</div></section></div>`;
-  } else if(tab==="baseline") {
-    html=`<div class="room-two-columns"><section><span class="eyebrow">Компьютеры Agent</span><h3>Подтверждённый состав</h3>${agents.length?agents.map((item)=>`<div class="room-status-row"><div><strong>${escapeHtml(item.hostname||"Компьютер")}</strong><small>${item.has_baseline?"Эталон оборудования подтверждён":"Нужно открыть компьютер и подтвердить эталон"}</small></div>${pill(item.has_baseline?"OK":"NOT_CHECKED")}</div>`).join(""):'<p class="empty">В кабинете нет связанных компьютеров Agent.</p>'}</section><section><span class="eyebrow">Vision</span><h3>Эталон помещения</h3>${workspace.baseline.vision_ready?`<div class="attention-banner ok"><span class="attention-icon">✓</span><div><strong>Фото-эталон подтверждён</strong><p>Следующая проверка будет сравнена с этим составом.</p></div></div><div class="summary-lines">${roomCountRows(vision?.baseline_counts)}</div>`:'<div class="empty-state"><strong>Фото-эталона ещё нет</strong><p>Откройте Vision, загрузите исходное фото кабинета и подтвердите результат.</p><button type="button" class="button-anchor room-vision-launch">Создать эталон</button></div>'}</section></div>`;
-  } else if(tab==="current") {
-    html=`<div class="room-two-columns"><section><span class="eyebrow">Последние сигналы Agent</span><h3>Компьютеры</h3>${agents.length?agents.map((item)=>`<div class="room-status-row"><div><strong>${escapeHtml(item.hostname||"Компьютер")}</strong><small>Последний отчёт: ${escapeHtml(relativeTime(item.last_seen_at))}</small></div>${pill(item.status)}</div>`).join(""):'<p class="empty">Agent-компьютеры не привязаны к имуществу этого кабинета.</p>'}</section><section><span class="eyebrow">Последнее фото</span><h3>Vision</h3>${vision?.latest_scan?`${pill(vision.latest_scan.status)}<p class="meta">${dateTime(vision.latest_scan.created_at)}</p><div class="summary-lines">${roomCountRows(vision.latest_scan.counts)}</div>`:'<p class="empty">Фотопроверок этого кабинета пока нет.</p>'}</section></div>`;
+  } else if(tab==="checks") {
+    const agentRows=agents.length?agents.map((item)=>`<div class="room-status-row"><div><strong>${escapeHtml(item.hostname||"Компьютер")}</strong><small>${item.has_baseline?"Эталон подтверждён":"Эталон не подтверждён"} · отчёт ${escapeHtml(relativeTime(item.last_seen_at))}</small></div>${pill(item.status)}</div>`).join(""):'<p class="empty">В кабинете нет связанных компьютеров Agent.</p>';
+    const visionState=vision?.latest_scan?`<div class="room-check-summary">${pill(vision.latest_scan.status)}<p class="meta">Последняя проверка: ${dateTime(vision.latest_scan.created_at)}</p><div class="summary-lines">${roomCountRows(vision.latest_scan.counts)}</div></div>`:'<p class="empty">Проверок по фото пока нет.</p>';
+    html=`<div class="room-two-columns"><section><span class="eyebrow">Agent</span><h3>Компьютеры и эталоны</h3>${agentRows}</section><section><span class="eyebrow">Эксперимент</span><h3>Проверка по фото</h3><p class="form-intro">Распознавание может быть неполным. Результат нужно сверить вручную.</p><p class="meta">Фото-эталон: ${workspace.baseline.vision_ready?"подтверждён":"не создан"}</p>${visionState}${state.currentUser?.role==="ADMIN"?'<button type="button" class="button-secondary room-vision-launch">Открыть проверку по фото</button>':""}</section></div>`;
   } else if(tab==="inventory") {
     html=inventory.assets.length?`<div class="table-wrap"><table><thead><tr><th>Имущество</th><th>Категория</th><th>Учёт</th><th>Количество</th><th></th></tr></thead><tbody>${inventory.assets.map((asset)=>`<tr><td data-label="Имущество"><strong>${escapeHtml(asset.name)}</strong><small>${escapeHtml(asset.inventory_number)}</small></td><td data-label="Категория">${escapeHtml(categoryLabels[asset.category]||asset.category)}</td><td data-label="Учёт">${asset.tracking_mode==="GROUPED"?"Групповой":"Поштучный"}</td><td data-label="Количество">${asset.quantity} ${escapeHtml(asset.unit)}</td><td><button class="button-secondary open-room-asset" data-id="${asset.id}">Открыть</button></td></tr>`).join("")}</tbody></table></div>`:'<div class="empty-state"><strong>В кабинете пока нет имущества</strong><p>Добавьте запись вручную или импортируйте школьную ведомость.</p><a class="button-anchor" href="#devices">Открыть реестр</a></div>';
   } else if(tab==="inspection") {
     html=renderInspectionTab(workspace);
-  } else if(tab==="vision") {
-    html=vision?`<div class="room-two-columns"><section><span class="eyebrow">Эталон</span><h3>${vision.has_baseline?"Подтверждён":"Не создан"}</h3><div class="summary-lines">${roomCountRows(vision.baseline_counts)}</div></section><section><span class="eyebrow">Текущая проверка</span><h3>${vision.latest_scan?dateTime(vision.latest_scan.created_at):"Проверок нет"}</h3>${vision.latest_scan?`${pill(vision.latest_scan.status)}<div class="summary-lines">${roomCountRows(vision.latest_scan.counts)}</div>`:""}<button type="button" class="button-anchor room-vision-launch">Открыть Vision</button></section></div>`:'<div class="empty-state"><strong>Кабинет ещё не проверялся по фото</strong><p>Vision найдёт объекты, сохранит доказательство и сравнит следующий кадр с эталоном.</p><button type="button" class="button-anchor room-vision-launch">Провести проверку</button></div>';
   } else if(tab==="incidents") {
     const physical=workspace.physical_incidents||[], hasActive=workspace.incidents.length||physical.some((item)=>["OPEN","UNDER_REVIEW"].includes(item.status));
     html=`${hasActive?'':'<div class="attention-banner ok"><span class="attention-icon">✓</span><div><strong>Открытых инцидентов нет</strong><p>Текущие данные не требуют решения ответственного.</p></div></div>'}<div class="room-two-columns"><section><span class="eyebrow">Физическая проверка</span><h3>Расхождения обходов</h3>${physical.length?`<div class="stack-list">${physical.map((item)=>renderPhysicalIncident(item,workspace.room.id)).join("")}</div>`:'<p class="empty">Физических расхождений не зафиксировано.</p>'}</section><section><span class="eyebrow">Agent</span><h3>Изменения компьютеров</h3>${workspace.incidents.length?`<div class="stack-list">${workspace.incidents.map((item)=>`<article class="room-incident"><div><strong>${escapeHtml(item.title)}</strong><small>${dateTime(item.created_at)}</small></div>${pill(item.status)}</article>`).join("")}</div>`:'<p class="empty">Открытых технических инцидентов нет.</p>'}</section></div>`;
@@ -745,6 +746,7 @@ async function openRoomWorkspace(roomId, scroll = true) {
   $("room-detail-path").textContent = "";
   $("room-detail-state").textContent = "Загрузка…";
   ["room-inspection-action", "room-qr-action", "room-edit-action", "room-vision-action"].forEach(id => $(id).hidden = true);
+  $("room-tools").hidden=true; $("room-tools").open=false;
   $("room-tabs").querySelectorAll("button").forEach(button => button.disabled = true);
   document.querySelectorAll("main > .page-section").forEach((section) => { section.hidden = section.id !== "room-detail"; });
   setPageHeading("locations");
@@ -757,6 +759,7 @@ async function openRoomWorkspace(roomId, scroll = true) {
     $("room-tabs").querySelectorAll("button").forEach(button => button.disabled = false);
     $("room-detail-title").textContent=`Кабинет ${workspace.room.name}`; $("room-detail-path").textContent=[workspace.path.building,workspace.path.floor&&`этаж ${workspace.path.floor}`,workspace.room.purpose].filter(Boolean).join(" · ");
     $("room-edit-action").hidden=state.currentUser?.role!=="ADMIN"; $("room-vision-action").hidden=state.currentUser?.role!=="ADMIN"; $("room-inspection-action").hidden=!canEditRoom(workspace.room.id)||!workspace.inventory.assets.length; $("room-qr-action").hidden=!canEditRoom(workspace.room.id)||!workspace.inventory.assets.length;
+    $("room-tools").hidden=["room-qr-action","room-vision-action","room-edit-action"].every(id=>$(id).hidden); $("room-tools").open=false;
     const attention=workspace.incidents.length||(workspace.physical_incidents||[]).some((item)=>["OPEN","UNDER_REVIEW"].includes(item.status))||workspace.agents.some((item)=>item.status!=="ONLINE")||workspace.vision?.latest_scan?.status==="WARNING"; $("room-detail-state").textContent=attention?"Требует внимания":"В норме"; $("room-detail-state").className=`status-pill ${attention?"warning":"ok"}`;
     renderRoomTab(); if(scroll)window.scrollTo({top:0,behavior:"smooth"});
   } catch(error) {
@@ -1076,7 +1079,9 @@ function launchRoomVision(roomId) {
 function renderLocations(locations) {
   state.locations=locations;
   const canManage=state.currentUser?.role==="ADMIN";
-  $("location-tree").innerHTML=locations.length ? locations.map((building)=>`<div class="attention-item"><span class="attention-dot"></span><div><strong>${escapeHtml(building.name)}</strong><small>${escapeHtml(locationContact(building)||"Ответственный не назначен")}</small>${building.floors.length ? building.floors.map((floor)=>`<div class="location-floor"><b>Этаж ${escapeHtml(floor.name)}</b> ${canManage?`<button class="button-link add-room" data-floor="${floor.id}">+ кабинет</button>`:""}${floor.rooms.length ? floor.rooms.map((room)=>`<div class="location-room"><span>каб. ${escapeHtml(room.name)}${room.purpose?` · ${escapeHtml(room.purpose)}`:""}</span><small>${room.asset_count} позиций · ${escapeHtml(locationContact(room)||"ответственный не назначен")}</small><button class="button-link room-report" data-room="${room.id}">Открыть кабинет</button></div>`).join("") : '<p class="empty">Кабинетов пока нет.</p>'}</div>`).join("") : '<p class="empty">Этажей пока нет.</p>'}${canManage?`<button class="button-link add-floor" data-building="${building.id}">+ этаж</button>`:""}</div></div>`).join("") : '<p class="empty">Структура пока не создана. Добавьте корпус справа, затем создайте для него этажи и кабинеты.</p>';
+  const roomCount=locations.reduce((total,building)=>total+building.floors.reduce((floorTotal,floor)=>floorTotal+floor.rooms.length,0),0);
+  $("location-count").textContent=`Корпусов: ${locations.length} · кабинетов: ${roomCount}`;
+  $("location-tree").innerHTML=locations.length ? locations.map((building)=>`<article class="location-building"><header><div><strong>${escapeHtml(building.name)}</strong><small>${escapeHtml(locationContact(building)||"Ответственный не назначен")}</small></div>${canManage?`<button class="button-link add-floor" data-building="${building.id}">Добавить этаж</button>`:""}</header>${building.floors.length ? building.floors.map((floor)=>`<section class="location-floor"><div class="location-floor-heading"><b>Этаж ${escapeHtml(floor.name)}</b>${canManage?`<button class="button-link add-room" data-floor="${floor.id}">Добавить кабинет</button>`:""}</div>${floor.rooms.length ? floor.rooms.map((room)=>`<div class="location-room"><span>Кабинет ${escapeHtml(room.name)}${room.purpose?` · ${escapeHtml(room.purpose)}`:""}</span><small>${room.asset_count} позиций · ${escapeHtml(locationContact(room)||"ответственный не назначен")}</small><button class="button-link room-report" data-room="${room.id}">Открыть кабинет</button></div>`).join("") : '<p class="empty">На этаже пока нет кабинетов.</p>'}</section>`).join("") : '<p class="empty">В корпусе пока нет этажей.</p>'}</article>`).join("") : `<div class="empty-state"><strong>Структура школы пока не создана</strong><p>${canManage?"Добавьте первый корпус, затем этажи и кабинеты.":"Администратор школы ещё не добавил корпуса и кабинеты."}</p></div>`;
   document.querySelectorAll(".add-floor").forEach((button)=>button.onclick=()=>openLocationDialog("floor",button.dataset.building));
   document.querySelectorAll(".add-room").forEach((button)=>button.onclick=()=>openLocationDialog("room",button.dataset.floor));
   document.querySelectorAll(".room-report").forEach((button)=>button.onclick=()=>navigateToRoom(button.dataset.room));
@@ -1102,9 +1107,14 @@ function locationScopes() {
 function userRoleLabel(role) { return ({ADMIN:"Администратор школы",LOCATION_MANAGER:"Менеджер локации",INVENTORY_CLERK:"Ответственный за инвентаризацию",VIEWER:"Наблюдатель"})[role]||role; }
 function renderAdminAccessVisibility() {
   const signedIn=Boolean(state.currentUser), isAdmin=state.currentUser?.role==="ADMIN";
-  $("location-access-nav").hidden=!signedIn; $("location-access").hidden=!signedIn;
   $("agent-operations-action").hidden=!isAdmin;
-  $("agent-credentials-nav").hidden=!isAdmin; $("agent-credentials").hidden=!isAdmin;
+  $("administration-nav").hidden=!isAdmin; $("administration-nav-label").hidden=!isAdmin;
+  // Routing owns page-section visibility. Role synchronization may only close
+  // protected sections, otherwise it can reveal them alongside the active page.
+  if(!isAdmin) {
+    $("location-access").hidden=true;
+    $("agent-credentials").hidden=true;
+  }
   $("access-admin-content").hidden=!isAdmin; $("access-role-notice").hidden=!signedIn||isAdmin;
   if(signedIn&&!isAdmin)$("access-role-notice").textContent=`Вы вошли как «${userRoleLabel(state.currentUser.role)}». Создавать учётные записи и назначать доступы может администратор школы.`;
 }
@@ -1142,13 +1152,13 @@ function renderAgentReenrolments() {
 function syncRoleControls() {
   const user=state.currentUser, isAdmin=user?.role==="ADMIN", editableRooms=new Set(user?.editable_room_ids||[]), canEditAssets=isAdmin||editableRooms.size>0;
   $("room-edit-action").hidden=!isAdmin||!state.roomWorkspace;$("room-vision-action").hidden=!isAdmin||!state.roomWorkspace;$("room-inspection-action").hidden=!state.roomWorkspace||!canEditRoom(state.roomWorkspace.room.id)||!state.roomWorkspace.inventory.assets.length;
+  $("room-tools").hidden=!state.roomWorkspace||["room-qr-action","room-vision-action","room-edit-action"].every(id=>$(id).hidden); if($("room-tools").hidden)$("room-tools").open=false;
   $("show-create").hidden=!canEditAssets;
   if(!canEditAssets)$("create-asset").hidden=true;
-  ["export-assets","export-assets-pdf","import-assets","import-assets-pdf","create-building","vision-upload","vision-baseline"].forEach((id)=>$(id).hidden=!isAdmin);
+  ["export-assets","export-assets-pdf","import-assets","import-assets-pdf","show-building-create","vision-upload","vision-baseline"].forEach((id)=>$(id).hidden=!isAdmin);
   $("import-assets-file").hidden=true;
   $("import-assets-pdf-file").hidden=true;
-  $("data-exchange-nav").hidden=!isAdmin;
-  $("data-exchange-shortcut").hidden=!isAdmin;
+  $("registry-tools").hidden=!isAdmin;
   const assetOrganizationId=user?.organization_id||state.organizations[0]?.id;
   const rooms=state.locations.filter((building)=>!assetOrganizationId||building.organization_id===assetOrganizationId).flatMap((building)=>building.floors.flatMap((floor)=>floor.rooms.map((room)=>({id:room.id,label:`${building.name} · этаж ${floor.name} · кабинет ${room.name}`})))).filter((room)=>isAdmin||editableRooms.has(room.id));
   const roomSelect=$("create-asset-room");
@@ -1220,11 +1230,16 @@ function renderAgentFleet() {
   const endpoints=state.endpoints.filter((item)=>(!status||agentConnection(item)===status)&&[item.hostname,item.asset?.name,item.asset?.inventory_number].filter(Boolean).join(" ").toLocaleLowerCase("ru").includes(query));
   const pages=Math.max(1,Math.ceil(endpoints.length/20));state.agentPage=Math.min(state.agentPage,pages);
   $("agent-fleet-summary").textContent=`Найдено ${endpoints.length} из ${state.endpoints.length} · страница ${state.agentPage} из ${pages}`;
+  const emptyFleet = state.endpoints.length
+    ? '<div class="empty-state"><strong>Компьютеры не найдены</strong><p>Измените запрос или состояние.</p><button type="button" class="button-secondary clear-agent-filters">Сбросить фильтры</button></div>'
+    : '<div class="empty-state"><strong>Компьютеры Agent ещё не подключены</strong><p>Создайте отдельный ключ и установите Agent на первый компьютер.</p><button type="button" class="open-agent-connect">Подключить компьютер</button></div>';
   $("agent-fleet-list").innerHTML=endpoints.slice((state.agentPage-1)*20,state.agentPage*20).map((item)=>{
     const status=agentConnection(item), label=agentConnectionLabels[status]||status;
     const reason=status==="STALE"?"Нет свежей инвентаризации: проверьте компьютер, сеть и службу Agent.":status==="IDENTITY_CONFLICT"?"Сверьте аппаратные идентификаторы; не восстанавливайте ключ до проверки.":status==="OFFLINE"?"Компьютер отмечен как недоступный.":status==="REQUIRES_VERIFICATION"?"Нужна проверка идентификации компьютера.":"Свежий отчёт получен.";
     return `<div class="admin-record"><div><strong>${escapeHtml(item.hostname||"Без имени")}</strong><small>Последняя связь: ${escapeHtml(dateTime(item.last_seen_at))} · ${escapeHtml(relativeTime(item.last_seen_at))}</small><small>${escapeHtml(reason)}</small><small>${escapeHtml(hardwareBrief(item))}</small></div><span class="status-pill ${status==="ONLINE"?"ok":status==="IDENTITY_CONFLICT"?"danger":"warning"}">${escapeHtml(label)}</span>${item.asset_id?`<a class="button-anchor button-secondary" href="#asset=${item.asset_id}">Карточка имущества</a>`:'<span class="meta">Не связан с имуществом</span>'}</div>`;
-  }).join("")||'<p class="empty">Компьютеры с такими условиями не найдены.</p>';
+  }).join("")||emptyFleet;
+  $("agent-fleet-list").querySelector(".clear-agent-filters")?.addEventListener("click",()=>{$("agent-search").value="";$("agent-status-filter").value="";state.agentPage=1;renderAgentFleet();});
+  $("agent-fleet-list").querySelector(".open-agent-connect")?.addEventListener("click",()=>setAdminView("connect",true));
   $("agent-fleet-pagination").innerHTML=pages>1?`<button type="button" id="agent-page-prev" class="button-secondary" ${state.agentPage===1?"disabled":""}>Назад</button><span>${state.agentPage} / ${pages}</span><button type="button" id="agent-page-next" class="button-secondary" ${state.agentPage===pages?"disabled":""}>Далее</button>`:"";
   if($("agent-page-prev"))$("agent-page-prev").onclick=()=>{state.agentPage--;renderAgentFleet();};
   if($("agent-page-next"))$("agent-page-next").onclick=()=>{state.agentPage++;renderAgentFleet();};
@@ -1232,7 +1247,9 @@ function renderAgentFleet() {
 const deliveryLabels={PENDING:"Ожидает отправки",RETRYING:"Повтор",SENT:"Принято Telegram"};
 function renderNotifications(data) {
   $("notification-summary").textContent=`Ожидают: ${data.summary.pending} · повтор: ${data.summary.retrying} · принято Telegram: ${data.summary.sent}`;
-  $("notification-list").innerHTML=data.items.map((item)=>`<div class="admin-record"><div><strong>${escapeHtml(dateTime(item.created_at))}</strong><small>Попыток: ${item.attempts}${item.sent_at?` · принято ${escapeHtml(dateTime(item.sent_at))}`:` · следующая попытка ${escapeHtml(dateTime(item.next_attempt_at))}`}</small>${item.last_error_code?`<small>Причина: ${escapeHtml(item.last_error_code)}</small>`:""}</div><span class="status-pill ${item.status==="SENT"?"ok":item.status==="RETRYING"?"warning":"neutral"}">${deliveryLabels[item.status]}</span>${item.route?`<a href="${escapeHtml(item.route)}" class="button-anchor button-secondary">Открыть источник</a>`:'<span class="meta">Служебное событие</span>'}</div>`).join("")||'<p class="empty">Уведомлений с таким состоянием пока нет. Новые события появятся после создания инцидента имущества.</p>';
+  const filtered = Boolean($("notification-status-filter").value);
+  $("notification-list").innerHTML=data.items.map((item)=>`<div class="admin-record"><div><strong>${escapeHtml(dateTime(item.created_at))}</strong><small>Попыток: ${item.attempts}${item.sent_at?` · принято ${escapeHtml(dateTime(item.sent_at))}`:` · следующая попытка ${escapeHtml(dateTime(item.next_attempt_at))}`}</small>${item.last_error_code?`<small>Причина: ${escapeHtml(item.last_error_code)}</small>`:""}</div><span class="status-pill ${item.status==="SENT"?"ok":item.status==="RETRYING"?"warning":"neutral"}">${deliveryLabels[item.status]}</span>${item.route?`<a href="${escapeHtml(item.route)}" class="button-anchor button-secondary">Открыть источник</a>`:'<span class="meta">Служебное событие</span>'}</div>`).join("")||`<div class="empty-state"><strong>${filtered?"Уведомления не найдены":"Очередь уведомлений пуста"}</strong><p>${filtered?"Для выбранного состояния записей нет.":"Новые записи появятся после создания инцидента имущества."}</p>${filtered?'<button type="button" class="button-secondary clear-notification-filter">Показать все</button>':""}</div>`;
+  $("notification-list").querySelector(".clear-notification-filter")?.addEventListener("click",()=>{$("notification-status-filter").value="";notificationOffset=0;loadNotifications();});
   $("notification-pagination").innerHTML=data.total?`<button id="notification-prev" type="button" class="button-secondary" ${data.offset===0?"disabled":""}>Назад</button><span>${Math.min(data.offset+1,data.total)}–${Math.min(data.offset+data.limit,data.total)} из ${data.total}</span><button id="notification-next" type="button" class="button-secondary" ${data.offset+data.limit>=data.total?"disabled":""}>Далее</button>`:"";
   if($("notification-prev"))$("notification-prev").onclick=()=>{notificationOffset=Math.max(0,notificationOffset-20);loadNotifications();};
   if($("notification-next"))$("notification-next").onclick=()=>{notificationOffset+=20;loadNotifications();};
@@ -1240,7 +1257,7 @@ function renderNotifications(data) {
 async function loadNotifications() {
   if(state.currentUser?.role!=="ADMIN")return;
   const request=++notificationGeneration, generation=sessionGeneration, status=$("notification-status-filter").value;
-  $("notification-load-error").hidden=true;$("notification-list").innerHTML='<p class="empty">Загрузка доставки…</p>';$("notification-pagination").replaceChildren();
+  $("notification-load-error").hidden=true;$("notification-list").innerHTML='<div class="notification-loading" aria-hidden="true"><div class="skeleton"></div><div class="skeleton"></div></div><p class="sr-only" role="status">Загружаем доставку уведомлений</p>';$("notification-pagination").replaceChildren();
   $("refresh-notifications").disabled=true;
   try {
     const data=await api(`/admin/notifications?limit=20&offset=${notificationOffset}${status?`&status=${status}`:""}`);
@@ -1252,9 +1269,31 @@ async function loadNotifications() {
     $("notification-load-error").textContent=`${error.message}. Нажмите «Обновить доставку».`;$("notification-load-error").hidden=false;
   } finally { if(request===notificationGeneration)$("refresh-notifications").disabled=false; }
 }
-document.querySelectorAll("[data-admin-panel]").forEach((button)=>button.onclick=()=>{
-  const panel=$(button.dataset.adminPanel);panel.tabIndex=-1;panel.scrollIntoView({block:"start",behavior:"instant"});panel.focus({preventScroll:true});
+function setAdminView(view, focus = false) {
+  const allowed = new Set(["fleet", "connect", "recovery", "notifications"]);
+  adminView = allowed.has(view) ? view : "fleet";
+  document.querySelectorAll("[data-admin-view-panel]").forEach((panel) => {
+    panel.setAttribute("aria-labelledby", `admin-view-${panel.dataset.adminViewPanel}`);
+    panel.hidden = panel.dataset.adminViewPanel !== adminView;
+  });
+  document.querySelectorAll("[data-admin-view]").forEach((button) => {
+    const selected = button.dataset.adminView === adminView;
+    button.setAttribute("aria-selected", String(selected));
+    button.tabIndex = selected ? 0 : -1;
+    if (selected && focus) button.focus();
+  });
+}
+const adminViewButtons = [...document.querySelectorAll("[data-admin-view]")];
+adminViewButtons.forEach((button, index) => {
+  button.onclick = () => setAdminView(button.dataset.adminView);
+  button.onkeydown = (event) => {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+    event.preventDefault();
+    const targetIndex = event.key === "Home" ? 0 : event.key === "End" ? adminViewButtons.length - 1 : (index + (event.key === "ArrowRight" ? 1 : -1) + adminViewButtons.length) % adminViewButtons.length;
+    setAdminView(adminViewButtons[targetIndex].dataset.adminView, true);
+  };
 });
+setAdminView(adminView);
 $("agent-search").addEventListener("input",()=>{state.agentPage=1;renderAgentFleet();});
 $("agent-status-filter").addEventListener("change",()=>{state.agentPage=1;renderAgentFleet();});
 $("refresh-agent-fleet").onclick=async()=>{if(await load(false)){renderAgentFleet();await openRouteFromHash();}};
@@ -1287,14 +1326,14 @@ function renderDevices() {
   renderListPagination("device-pagination", state.devicePage, devices.length, page => {state.devicePage = page; renderDevices();});
   const activeFilters = renderSelectedFilters("device-selected-filters", [["device-search"], ["device-status-filter"], ["device-category-filter"], ["device-room-filter"], ["device-change-filter"], ["device-sort", "recent"]], clearDeviceFilters);
   $("device-active-filter-count").hidden = !activeFilters; $("device-active-filter-count").textContent = activeFilters || "";
-  const empty = state.devices.length ? `<div class="empty-state"><strong>Ничего не найдено</strong><p>Измените запрос или сбросьте фильтры.</p><button id="empty-reset" class="button-secondary" type="button">Сбросить фильтры</button></div>` : `<div class="empty-state"><strong>Здесь будет ваше имущество</strong><p>${state.currentUser?.role === "ADMIN" ? "Добавьте первую запись или загрузите ведомость." : "Попросите администратора проверить назначение кабинетов."}</p>${state.currentUser?.role === "ADMIN" ? '<button id="empty-add" type="button">Добавить имущество</button> <a class="button-anchor button-secondary" href="#data-exchange">Импорт</a>' : ''}</div>`;
+  const empty = state.devices.length ? `<div class="empty-state"><strong>Ничего не найдено</strong><p>Измените запрос или сбросьте фильтры.</p><button id="empty-reset" class="button-secondary" type="button">Сбросить фильтры</button></div>` : `<div class="empty-state"><strong>Здесь будет ваше имущество</strong><p>${state.currentUser?.role === "ADMIN" ? "Добавьте первую запись вручную или загрузите ведомость через меню «Ещё»." : "Попросите администратора проверить назначение кабинетов."}</p>${state.currentUser?.role === "ADMIN" ? '<button id="empty-add" type="button">Добавить имущество</button>' : ''}</div>`;
   $("assets").innerHTML = devices.length ? pageDevices.map(item => {
     const lastCheck = item.endpoint ? relativeTime(item.endpoint.last_seen_at) : "По обходу";
     const type = item.kind === "endpoint" ? "Обнаружен Agent" : `${assetTypeLabels[item.assetType] || item.assetType || categoryLabels[item.category] || "Имущество"}${item.trackingMode === "GROUPED" ? ` · ${item.quantity} ${item.unit || "шт."}` : ""}`;
     const relation = item.kind === "endpoint" && state.currentUser?.role === "ADMIN" ? `<button class="link-endpoint button-secondary" data-id="${item.endpointId}" data-name="${escapeHtml(item.hostname || "")}">Связать с имуществом</button>` : item.kind === "endpoint" ? '<span class="relation-label">Не связан</span>' : item.endpoint ? '<span class="relation-label linked">Связан с Agent</span>' : item.category === "IT" ? '<span class="relation-label">Без Agent</span>' : '<span class="relation-label" title="Компьютер для этого имущества не требуется">Не требуется</span>';
-    return `<tr class="device-row" data-asset-id="${item.assetId || ""}"><td data-label="Название"><div class="device-name">${item.assetId ? `<a class="device-open-link open-device" href="#asset=${item.assetId}" data-id="${item.assetId}">${escapeHtml(item.name)}</a>` : `<a class="device-open-link open-computer" href="#computer=${item.endpointId}" data-id="${item.endpointId}">${escapeHtml(item.name)}</a>`}<small>${escapeHtml(type)}</small></div></td><td data-label="Инв. номер"><span class="inventory-number" title="${escapeHtml(item.inventoryNumber || "Нет учётной записи")}">${escapeHtml(item.inventoryNumber || "—")}</span></td><td data-label="Кабинет"><span title="${escapeHtml(locationLabel(item) || "Размещение не указано")}">${item.room ? `Каб. ${escapeHtml(item.room)}` : "Не назначен"}</span></td><td data-label="Состояние">${pill(item.status)}</td><td data-label="Проверка"><span title="${escapeHtml(item.endpoint ? dateTime(item.endpoint.last_seen_at) : "Проверяется физическим обходом")}">${escapeHtml(lastCheck)}</span></td><td data-label="Связь с компьютером">${relation}</td></tr>`;
+    return `<tr class="device-row" data-asset-id="${item.assetId || ""}"><td data-label="Название"><div class="device-name">${item.assetId ? `<a class="device-open-link open-device" href="#asset=${item.assetId}" data-id="${item.assetId}">${escapeHtml(item.name)}</a>` : `<a class="device-open-link open-computer" href="#computer=${item.endpointId}" data-id="${item.endpointId}">${escapeHtml(item.name)}</a>`}<small>${escapeHtml(type)}</small></div></td><td data-label="Инв. номер"><span class="inventory-number" title="${escapeHtml(item.inventoryNumber || "Нет учётной записи")}">${escapeHtml(item.inventoryNumber || "—")}</span></td><td data-label="Кабинет"><span title="${escapeHtml(locationLabel(item) || "Размещение не указано")}">${item.room ? `Каб. ${escapeHtml(item.room)}` : "Не назначен"}</span></td><td data-label="Состояние">${pill(item.status)}</td><td data-label="Последняя проверка"><span title="${escapeHtml(item.endpoint ? dateTime(item.endpoint.last_seen_at) : "Проверяется физическим обходом")}">${escapeHtml(lastCheck)}</span></td><td data-label="Связь">${relation}</td></tr>`;
   }).join("") : `<tr><td colspan="6">${empty}</td></tr>`;
-  $("registry-count").textContent = `${devices.length} записей${activeFilters || state.registryView !== "all" ? " по выбранным условиям" : " в реестре"}`;
+  $("registry-count").textContent = activeFilters || state.registryView !== "all" ? `Найдено: ${devices.length}` : `Всего записей: ${devices.length}`;
   $("device-result-count").textContent = `Показано ${devices.length ? (state.devicePage-1)*listPageSize+1 : 0}–${Math.min(state.devicePage*listPageSize,devices.length)} из ${devices.length}`;
   bindDynamicActions();
   $("empty-add")?.addEventListener("click", openAssetCreateForm);
@@ -1767,9 +1806,11 @@ $("logout").onclick = async () => {
 };
 $("show-create").onclick = openAssetCreateForm;
 $("cancel-create").onclick=()=>$("asset-create-dialog").close();
+$("show-building-create").onclick=()=>{$("create-building").hidden=false;clearFormError($("create-building"));openDialog("building-create-dialog",$("create-building").querySelector('[name="name"]'));};
+$("cancel-building-create").onclick=()=>$("building-create-dialog").close();
 $("create-building").addEventListener("submit", event => submitFormAction(event,"building-create-submit",async form => {
   await api("/admin/locations/buildings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(Object.fromEntries(new FormData(form).entries()))});
-  form.reset(); showToast("Корпус создан"); await load(false);
+  form.reset(); $("building-create-dialog").close(); showToast("Корпус создан"); await load(false);
 }));
 $("location-create-form").addEventListener("submit", event => submitFormAction(event,"location-create-submit",async () => {
   if (!locationDialogTarget) return;
@@ -1994,10 +2035,10 @@ $("confirmation-form").addEventListener("submit",async(event)=>{
 });
 $("room-tabs").addEventListener("click",(event)=>{const button=event.target.closest("[data-room-tab]");if(!button)return;state.roomTab=button.dataset.roomTab;renderRoomTab();});
 $("room-detail-back").onclick=()=>{state.roomWorkspace=null;$("room-detail").hidden=true;location.hash="locations";};
-$("room-edit-action").onclick=openRoomEditDialog;
-$("room-vision-action").onclick=()=>launchRoomVision(state.roomWorkspace?.room.id);
+$("room-edit-action").onclick=()=>{$("room-tools").open=false;openRoomEditDialog();};
+$("room-vision-action").onclick=()=>{$("room-tools").open=false;launchRoomVision(state.roomWorkspace?.room.id);};
 $("room-inspection-action").onclick=openRoomInspectionDialog;
-$("room-qr-action").onclick=openRoomQrDialog;
+$("room-qr-action").onclick=()=>{$("room-tools").open=false;openRoomQrDialog();};
 $("room-edit-cancel").onclick=()=>$("room-edit-dialog").close();
 $("room-edit-form").addEventListener("submit", event => submitFormAction(event,"room-edit-submit",async () => {
   const roomId=state.roomWorkspace?.room.id; if (!roomId) return;
@@ -2047,6 +2088,7 @@ $("registry-views").addEventListener("click", event => {
   if (!button) return;
   state.registryView = button.dataset.registryView; state.devicePage = 1; renderDevices();
 });
+$("data-exchange-shortcut").addEventListener("click", () => { $("registry-tools").open=false; });
 $("overview-unlinked").onclick = () => { state.registryView="unlinked"; clearDeviceFilters(); location.hash="devices"; };
 $("setup-help").onclick = () => { state.guideExpanded = !state.guideExpanded; renderSetupGuide(); };
 $("link-asset").addEventListener('change', renderLinkChoice);

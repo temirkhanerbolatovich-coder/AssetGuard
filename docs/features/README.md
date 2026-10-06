@@ -18,4 +18,4 @@
 | Encrypted R2 backup, restore rehearsal и Telegram monitoring | [Production runbook](../operations/production-deployment.md), [observability](../operations/observability.md) |
 | Уведомления о новых технических/физических инцидентах | [Telegram queue](telegram-notifications.md), [ADR-007](../decisions/ADR-007-telegram-outbox.md) |
 
-Текущий статус и незавершённые продуктовые задачи ведутся в [project checklist](../product/current-project-checklist.md); технические ограничения — в [technical debt](../technical-debt.md). Installer `0.1.7`, managed update/rollback и fleet validation разделяются намеренно: наличие кода re-enrolment не означает завершённую приёмку на реальных ПК.
+Текущий статус и незавершённые продуктовые задачи ведутся в [project checklist](../product/current-project-checklist.md); технические ограничения — в [technical debt](../technical-debt.md). Installer `0.1.8`, managed update/rollback и fleet validation разделяются намеренно: наличие кода re-enrolment не означает завершённую приёмку на реальных ПК.
