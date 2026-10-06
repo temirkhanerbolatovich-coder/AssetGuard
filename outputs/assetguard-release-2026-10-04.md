@@ -1,5 +1,7 @@
 # AssetGuard — publication and production acceptance, 2026-10-04
 
+> **Исторический документ.** Даты, SHA, измерения и исходные требования ниже относятся к описанному этапу. Сверка указателя выполнена 2026-10-06; текущее состояние и оставшаяся работа — в [checklist](../docs/product/current-project-checklist.md) и [аудите](../docs/quality/project-audit-2026-10-06.md).
+
 Application commit: `93ff8ed704635c26571d7866766e010eb42e29c6`, `main`.
 
 This record continues the [local stabilization report](assetguard-stage-1-2026-10-04.md). The original specification and Vision detector/model were not changed by this release.

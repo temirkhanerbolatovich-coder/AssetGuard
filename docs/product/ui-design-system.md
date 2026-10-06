@@ -1,6 +1,10 @@
 # AssetGuard — дизайн-система Ledger
 
-Действующая система полного редизайна 2026-10-05. [Исследование, сценарии и ограничения](../features/ui-ledger-redesign.md), [ТЗ](ui-ux-modernization-spec.md), [проверка](../testing/ui-acceptance.md).
+> **Сверено 2026-10-06.** Текущий статус и границы проверки: [checklist](current-project-checklist.md), [аудит](../quality/project-audit-2026-10-06.md). Датированные результаты отдельных этапов сохранены с исходными датами.
+
+Последняя сверка 2026-10-06: application `f4f56e7`, docs checkout `dca5a86`, 145 свежих локальных cases (124 backend + 21 E2E). Предыдущие stage-specific counts/SHA ниже сохранены с датами. Текущие production/backup факты и открытая ручная приёмка: [аудит](../quality/project-audit-2026-10-06.md).
+
+Действующая система Ledger с упрощением рабочих сценариев 2026-10-06 (application `f4f56e7`). [Исследование, сценарии и ограничения](../features/ui-ledger-redesign.md), [ТЗ](ui-ux-modernization-spec.md), [проверка](../testing/ui-acceptance.md).
 
 ## Принцип композиции
 

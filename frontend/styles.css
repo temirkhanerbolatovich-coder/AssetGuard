@@ -1004,6 +1004,7 @@ label small { font-weight: 400; }
 .priority-panel .eyebrow { display: none; }
 .overview-focus-grid { display: grid; grid-template-columns: minmax(0,1.35fr) minmax(300px,.65fr); gap: 20px; align-items: start; }
 .overview-focus-grid>.panel { margin: 0; min-width: 0; }
+.agent-setup-links { display: flex; flex-wrap: wrap; gap: 8px 20px; }
 .activity-panel .section-heading { align-items: flex-start; }
 .activity-panel #last-activity { max-width: 18ch; text-align: right; }
 .attention-item,.room-incident,.credential-row,.access-row { border-bottom: 1px solid var(--line); padding-block: 14px; background: transparent; border-radius: 0; }

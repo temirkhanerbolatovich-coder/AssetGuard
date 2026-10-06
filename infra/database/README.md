@@ -1,5 +1,7 @@
 # PostgreSQL for AssetGuard
 
+> **Сверено 2026-10-06.** Текущий статус и границы проверки: [checklist](../../docs/product/current-project-checklist.md), [аудит](../../docs/quality/project-audit-2026-10-06.md). Датированные результаты отдельных этапов сохранены с исходными датами.
+
 PostgreSQL является единственной operational database AssetGuard. В production порт БД не должен быть опубликован наружу; Compose для локальной разработки привязывает его только к `127.0.0.1`.
 
 Перед запуском создайте локальный `.env` из корневого `.env.example` и добавьте:
@@ -17,7 +19,7 @@ ASSETGUARD_POSTGRES_PORT=5432
 docker compose --env-file .env -f infra/containers/docker-compose.yml up -d postgres
 ```
 
-Alembic — единственный поддерживаемый механизм изменения схемы. Текущий `head` — `0025_agent_reenrolment`; schema creation через `Base.metadata.create_all()` в runtime приложения не допускается.
+Alembic — единственный поддерживаемый механизм изменения схемы. Текущий `head` — `0026_telegram_notifications` (26 migrations); schema creation через `Base.metadata.create_all()` в runtime приложения не допускается.
 
 Проверка и применение выполняются из `backend`:
 

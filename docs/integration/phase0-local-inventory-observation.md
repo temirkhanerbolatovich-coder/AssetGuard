@@ -1,5 +1,7 @@
 # Phase 0: наблюдение локального GLPI Agent inventory
 
+> **Исторический документ.** Даты, SHA, измерения и исходные требования ниже относятся к описанному этапу. Сверка указателя выполнена 2026-10-06; текущее состояние и оставшаяся работа — в [checklist](../product/current-project-checklist.md) и [аудите](../quality/project-audit-2026-10-06.md).
+
 - **Дата:** 2026-09-23
 - **Agent:** GLPI Agent 1.19, upstream Windows x64
 - **Режим:** локальный `glpi-inventory --json`, без server URL и без сетевой отправки

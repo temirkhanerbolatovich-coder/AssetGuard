@@ -1,6 +1,12 @@
 # AssetGuard — roadmap до полноценного production
 
+> **Сверено 2026-10-06.** Текущий статус и границы проверки: [checklist](current-project-checklist.md), [аудит](../quality/project-audit-2026-10-06.md). Датированные результаты отдельных этапов сохранены с исходными датами.
+
 Этот документ отделяет готовый pilot MVP от требований к системе, которой могут пользоваться несколько школ с реальными данными.
+
+## Подтверждённая точка и следующий шаг
+
+6 октября: application `f4f56e7`, checkout `dca5a86`, schema `0026`, 145 свежих локальных tests (124 backend + 21 E2E), production read-only/backup-status checks проходят. QR кабинета, scanning/manual fallback, session draft, Ledger, Telegram и Agent 0.1.8 уже реализованы; последний Agent принят ограниченно на одном PC. Следующий шаг — 3–5-PC fleet acceptance и secure release, вместе с governance, двумя организациями, ручной UI-приёмкой и staging. [Текущий checklist](current-project-checklist.md), [полный аудит](../quality/project-audit-2026-10-06.md).
 
 ## Этап 1: изоляция доступа
 
@@ -21,6 +27,7 @@
 - [x] Server monitor проверяет readiness, Compose services, disk, backup age/job failures, Agent last-seen, failed ingest и identity conflicts.
 - [x] Telegram server alerting принят 2026-09-27: test alert принят API, второй одинаковый запуск подавлен, normal run healthy; неизменившаяся проблема повторяется через 4 часа.
 - [x] Application `93ff8ed` опубликован и развёрнут 2026-10-04: CI, schema/UI/API, encrypted R2 restore на `0025` и controlled Telegram acceptance/dedup прошли; [протокол](../../outputs/assetguard-release-2026-10-04.md).
+- [x] Application `f4f56e7` принят 2026-10-06 на schema `0026`: CI, public UI hashes, readiness/auth и R2 isolated restore; checkout `dca5a86`. Read-only аудит подтвердил четыре активных server timers и успешные последние jobs. [Последний протокол](../../outputs/assetguard-ui-release-2026-10-06.md), [сверка аудита](../quality/project-audit-2026-10-06.md).
 - [x] Recovery runbook и upgrade/downgrade/re-upgrade на свежей pre-release копии, с запуском старого и нового API. Поздний downgrade требует решения по новым re-enrolment данным.
 - [ ] Staging environment, настоящий failover и безопасная rollback automation.
 
@@ -36,7 +43,8 @@
 
 ## Этап 4: fleet validation
 
-- [ ] Тест на нескольких реальных PC: cold boot, offline/retry, reimage, replacement hardware, service recovery и agent update.
+- [x] Agent 0.1.8: один реальный PC и controlled offline/FIFO/lost-ACK lab с production ingest; privacy/ACK/quota/retry tests.
+- [ ] Тест на 3–5 реальных PC: cold boot, offline/retry, reimage, replacement hardware, service recovery и agent update.
 - [ ] Нагрузочный тест ingest и dashboard на целевом количестве endpoints.
 - [ ] Contract test для каждого нового GLPI Agent release.
 
@@ -46,6 +54,8 @@
 - [ ] Согласованный legal/security review для школ и выбранного места хранения данных.
 - [x] Нормализованная hierarchy `organisation → building → floor → room`; основные location grants enforced на сервере.
 - [x] QR-коды имущества и кабинета, прямой запуск mobile audit, сканирование позиций с ручным fallback, восстановление черновика, location reports и полный физический обход доступны.
+- [x] Telegram incident outbox, minute worker и delivery UI; живое acceptance/штатное подавление повтора подтверждены протоколом.
+- [x] Ledger и упрощение рабочих сценариев, 21 browser E2E, Chromium zoom 200%; ручная Firefox/Safari/screen-reader/400%/usability часть остаётся открытой.
 - [ ] In-app notifications и 1C/AD/helpdesk integrations ещё нужны.
 - [ ] Vision production track: object storage, quality gate, multi-frame/RTSP, evaluation dataset и human confirmation.
 

@@ -1,5 +1,7 @@
 # Бесплатный deployment AssetGuard
 
+> **Сверено 2026-10-06.** Текущий статус и границы проверки: [checklist](../product/current-project-checklist.md), [аудит](../quality/project-audit-2026-10-06.md). Датированные результаты отдельных этапов сохранены с исходными датами.
+
 ## Рекомендуемый контур для хакатона
 
 AssetGuard, PostgreSQL и Grounding DINO работают на существующем Windows-компьютере в Docker. `cloudflared` создаёт исходящее соединение и выдаёт временный публичный HTTPS URL, поэтому не нужны домен, публичный IP или настройка роутера.
@@ -67,7 +69,7 @@ pwsh -File .\scripts\windows\verify-backup-restore.ps1 `
   -CompareWithCurrentDatabase
 ```
 
-## Бесплатные CI и E2E
+## CI и E2E
 
 Workflow GitHub Actions запускает API/integration tests, Chromium E2E через Playwright и проверку обоих Compose-файлов. Standard runners бесплатны для публичного репозитория. Локальный браузерный тест:
 
@@ -75,7 +77,10 @@ Workflow GitHub Actions запускает API/integration tests, Chromium E2E �
 backend\.venv\Scripts\python.exe -m pip install -e 'backend[dev,e2e]'
 backend\.venv\Scripts\python.exe -m playwright install chromium
 $env:ASSETGUARD_RUN_BROWSER_E2E='1'
-backend\.venv\Scripts\python.exe -m pytest -q backend\tests\e2e
+Push-Location backend
+.\.venv\Scripts\python.exe -m pytest -q tests/e2e
+Pop-Location
+Remove-Item Env:ASSETGUARD_RUN_BROWSER_E2E
 ```
 
-Перед локальным E2E API должен работать на `http://127.0.0.1:8000` с текущим `.env`.
+Нужна доступная локальная PostgreSQL из `ASSETGUARD_DATABASE_URL` и право CREATE DATABASE. Fixture сама создаёт disposable БД, применяет migrations и запускает тестовый HTTP server на свободном порту. Отдельно запускать operational API на :8000 не требуется. [Полная методика](../testing/testing-strategy.md).

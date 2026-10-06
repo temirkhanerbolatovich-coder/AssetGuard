@@ -1,5 +1,7 @@
 # Vision demo images
 
+> **Справочный сценарий, сверка 2026-10-06.** Для текущего интерфейса, production и ограничений используйте [checklist](../../docs/product/current-project-checklist.md) и [аудит](../../docs/quality/project-audit-2026-10-06.md); демонстрационные результаты не являются fleet/quality acceptance.
+
 1. Upload `room-305-baseline.png` for a new room and save the resulting scan as baseline.
 2. Upload `room-305-warning.png` for the same room.
 3. The second image has no printer. The comparison should include `printer: expected 1, detected 0` and the scan status should be `WARNING`.

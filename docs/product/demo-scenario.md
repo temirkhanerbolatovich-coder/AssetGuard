@@ -1,6 +1,6 @@
 # Демонстрационный сценарий MVP
 
-> **Справочный сценарий.** Он демонстрирует базовый inventory flow и не покрывает весь текущий продукт. Полный статус находится в [current project checklist](current-project-checklist.md).
+> **Справочный сценарий, сверка 2026-10-06.** Для текущего интерфейса, production и ограничений используйте [checklist](current-project-checklist.md) и [аудит](../quality/project-audit-2026-10-06.md); демонстрационные результаты не являются fleet/quality acceptance.
 
 1. PC-001 сообщает RAM A123, RAM B456 и SSD S991.
 2. Система сохраняет immutable RawInventory и создаёт Snapshot #1.

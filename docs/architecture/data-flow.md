@@ -1,5 +1,7 @@
 # Потоки данных
 
+> **Сверено 2026-10-06.** Текущий статус и границы проверки: [checklist](../product/current-project-checklist.md), [аудит](../quality/project-audit-2026-10-06.md). Датированные результаты отдельных этапов сохранены с исходными датами.
+
 ## Инвентаризация оборудования
 
 ```mermaid
@@ -96,15 +98,21 @@ sequenceDiagram
 
 UUID используется для сопоставления, но не считается секретом или самостоятельным доказательством владения устройством. Публичный create-response не раскрывает, найден ли endpoint. Claim token остаётся в памяти installer и хранится сервером только как SHA-256/PBKDF2 hashes. Неизвестный, чужой, отклонённый или просроченный запрос не меняет credentials. Одобрение сохраняет прежний endpoint и историю инвентаризации.
 
+## Telegram
+
+Технический или физический incident и tenant-bound outbox фиксируются атомарно. Отдельный minute worker доставляет сообщения с retry и acceptance check, а `/admin/notifications` отдаёт только scoped metadata. Отправка at-least-once: авария между внешним acceptance и commit может дать дубль. [Настройка и границы](../features/telegram-notifications.md).
+
 ## Backup и восстановление
 
 Windows- и Linux-скрипты формируют PostgreSQL dump, шифруют его контейнером AGBK1 (AES-256-GCM) и отправляют в Cloudflare R2. Restore rehearsal скачивает последнюю off-site копию, расшифровывает её и проверяет восстановление в отдельной базе. R2 upload/download/restore cycle успешно проверен 2026-09-27 через Windows Task Scheduler и постоянный Linux server; server rehearsal вернул `0024`, `assets=211`, `endpoints=1`. Vision image volume в этот backup не входит и требует отдельного решения до production-сбора фотографий.
 
 После выкладки application `93ff8ed` 2026-10-04 свежая server R2-копия восстановлена отдельно на `0025`, assets=216/endpoints=11, PASS. Перед выкладкой изолированная копия `0024` прошла upgrade/downgrade/re-upgrade с проверкой row fingerprints всех прежних таблиц и запуском старого/нового API. Downgrade удаляет re-enrolment requests и отвязывает revoked credential history; поздний откат требует отдельного решения по новым данным. [Протокол](../../outputs/assetguard-release-2026-10-04.md).
 
+Последний проверенный срез восстановления — 6 октября: schema `0026`, assets=220, endpoints=11; server backup/restore jobs success. Даты `0024`/`0025` выше сохранены как история проверок. Current application `f4f56e7`; downgrade до `0025` удаляет Telegram outbox и требует отдельного решения по ожидающим сообщениям. [Текущий аудит](../quality/project-audit-2026-10-06.md).
+
 ## Инварианты
 
-- Raw evidence не изменяется после приёма.
+- Исходный raw evidence не изменяется после приёма; processing metadata обновляется явно по workflow.
 - Baseline меняется только явной операцией.
 - События изменений имеют dedup key.
 - Tenant-scoped запросы фильтруются по `organization_id`; доступ к помещениям дополнительно ограничивается grants.

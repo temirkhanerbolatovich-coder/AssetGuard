@@ -1,5 +1,7 @@
 # Модель безопасности
 
+> **Сверено 2026-10-06.** Текущий статус и границы проверки: [checklist](../product/current-project-checklist.md), [аудит](../quality/project-audit-2026-10-06.md). Датированные результаты отдельных этапов сохранены с исходными датами.
+
 ## Область действия
 
 Документ описывает меры, подтверждённые текущим backend, migrations, Compose, Caddy и тестами. Это модель MVP, а не заявление о пройденном внешнем аудите или соответствии стандарту.
@@ -40,7 +42,7 @@ MFA и SSO в коде отсутствуют. Re-enrolment восстанавл
 
 В коде используются роли `ADMIN`, `VIEWER`, `LOCATION_MANAGER` и `INVENTORY_CLERK`. Named principal содержит `organization_id`; tenant-scoped ресурсы фильтруются по нему. Для помещений предусмотрены grants `VIEWER` и `EDITOR`.
 
-Смысл ролей подтверждается route dependencies, исполняемой allow/deny-матрицей всех 63 защищённых operations и tenant/location integration tests. Актуальная матрица находится в [admin-route-access-matrix.md](admin-route-access-matrix.md).
+Смысл ролей подтверждается route dependencies, исполняемой allow/deny-матрицей всех 64 защищённых operations и tenant/location integration tests. Актуальная матрица находится в [admin-route-access-matrix.md](admin-route-access-matrix.md).
 
 `GET /admin/notifications` доступен только ADMIN в scope его организации. UI/API возвращают метаданные доставки без payload, event key, chat ID и bot token. Worker отправляет сообщение только в явно настроенный чат этой организации; приватная конфигурация не передаётся браузеру. [Контракт Telegram](../features/telegram-notifications.md).
 

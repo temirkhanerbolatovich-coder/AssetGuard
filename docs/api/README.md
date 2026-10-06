@@ -1,8 +1,14 @@
 # Границы API
 
+> **Сверено 2026-10-06.** Текущий статус и границы проверки: [checklist](../product/current-project-checklist.md), [аудит](../quality/project-audit-2026-10-06.md). Датированные результаты отдельных этапов сохранены с исходными датами.
+
 Доступны две transport boundaries. `POST /internal/inventories` принимает JSON от доверенного bridge по rotating shared secret и idempotency key. `POST /glpi-agent` реализует наблюдаемый GLPI Agent 1.19/1.20 XML flow `PROLOG → SEND → INVENTORY` с HTTP Basic authentication. `TrustedJsonBridgeAdapter` и `DirectGlpiAgentAdapter` преобразуют transport payload в общий canonical envelope, сохраняют immutable RawInventory и запускают один snapshot/change/incident workflow.
 
+На 6 октября OpenAPI содержит **73 HTTP operations на 66 путях**; `/admin` — **64 операции на 57 путях**, 29 ADMIN-only и 35 Viewer-level. [Полный method/path реестр](route-reference.md) сверен с OpenAPI и executable registry; [resource/role scope](../security/admin-route-access-matrix.md) применяется дополнительно. `GET /glpi-agent` не объявлен: ожидаемый browser 404; unauthenticated XML POST — 401.
+
 Реализованные resource boundaries:
+
+В локальном исправлении 2026-10-06 добавлено read-only поле `connection_status` в endpoint summaries (`GET /admin/endpoints`, `GET /admin/assets` и `GET /admin/assets/{id}`), `GET /admin/endpoints/{id}` и `agents[]` в `GET /admin/locations/rooms/{id}/workspace`. Оно вычисляется по `last_seen_at` и серверному порогу; `IDENTITY_CONFLICT`/`OFFLINE` имеют приоритет, затем `STALE`, иначе сохранённый статус. Исходное поле `status` сохраняется, GET не меняет БД/историю. Контракты доступа и число маршрутов не меняются. [Политика и обратная совместимость](../features/agent-administration-and-delivery.md), [регрессия](../../outputs/assetguard-agent-status-fixes-2026-10-06/report.md).
 
 | Resource | Операции MVP |
 | --- | --- |
@@ -22,6 +28,8 @@
 | Physical incidents | tenant/location-scoped list and original inspection evidence/detail reads; automatic incident for every missing/damaged inspection item; ADMIN/EDITOR can investigate or resolve it as move, repair, write-off or false positive |
 | Vision rooms | list, scan history, get/save baseline |
 | Vision scans | multipart upload/detect, get details, original/annotated image |
+| Notifications | ADMIN-only tenant delivery metadata; фильтры PENDING/RETRYING/SENT, pagination; чтение не отправляет сообщения |
+| Room QR | Tenant/location-scoped SVG со ссылкой `#room-audit=UUID`; создаёт ссылку, а не акт обхода |
 | Asset import/export | Excel and PDF export; Excel/PDF preview and confirmed selective apply |
 
 Admin actions, изменяющие baseline или incident, обязаны оставлять audit/history. Actor incident decision определяется по аутентифицированной сессии, а не доверяется полю запроса. Inventory ingest не является публичным admin API.

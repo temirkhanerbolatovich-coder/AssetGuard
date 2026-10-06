@@ -1,5 +1,7 @@
 # GLPI Agent minimal profile — configuration spike
 
+> **Исторический документ.** Даты, SHA, измерения и исходные требования ниже относятся к описанному этапу. Сверка указателя выполнена 2026-10-06; текущее состояние и оставшаяся работа — в [checklist](../product/current-project-checklist.md) и [аудите](../quality/project-audit-2026-10-06.md).
+
 Дата проверки: 2026-09-23  
 Версия агента: GLPI Agent 1.19 for Windows x64
 

@@ -1,6 +1,6 @@
 # Dashboard data audit
 
-> **Исторический аудит.** Замечания использовались при реализации текущего Dashboard. Актуальное поведение описано в [UX workflow](ux-workflow.md), а автоматическая проверка находится в browser E2E.
+> **Исторический документ.** Даты, SHA, измерения и исходные требования ниже относятся к описанному этапу. Сверка указателя выполнена 2026-10-06; текущее состояние и оставшаяся работа — в [checklist](current-project-checklist.md) и [аудите](../quality/project-audit-2026-10-06.md).
 
 Дата проверки: 2026-09-23. Источники: GLPI Agent 1.19, сохранённые raw inventories, SQLAlchemy models, REST handlers и browser Dashboard.
 

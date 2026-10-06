@@ -1,5 +1,7 @@
 # AssetGuard — UI/UX этап 5: техническая приёмка
 
+> **Исторический документ.** Даты, SHA, измерения и исходные требования ниже относятся к описанному этапу. Сверка указателя выполнена 2026-10-06; текущее состояние и оставшаяся работа — в [checklist](../docs/product/current-project-checklist.md) и [аудите](../docs/quality/project-audit-2026-10-06.md).
+
 Дата: 2026-10-05. Статус: автоматическая browser/API приёмка пройдена на production, application `18d6238`. Полная приёмка этапа 5 не заявлена: ручной zoom/screen reader, representative performance и usability с сотрудниками ещё не проведены.
 
 ## Точка продолжения

@@ -268,7 +268,7 @@ const bytes = (value) => {
 const storageSize = (value) => value == null ? "—" : `${(Number(value) / 1024).toFixed(Number(value) % 1024 ? 1 : 0)} ГБ`;
 // Match the existing transport compatibility rule: Agent MiB and legacy byte values.
 const memoryCapacityBytes = (value) => value == null ? null : (Number(value) < 1048576 ? Number(value) * 1048576 : Number(value));
-const statusLabels = {OK:"В норме",ATTENTION:"Требует внимания",ANOMALY:"Обнаружено расхождение",OFFLINE:"Не в сети",UNCHECKED:"Нет данных Agent",MANUAL:"Ручной учёт",WARNING:"Требует внимания",NOT_CHECKED:"Не проверено",ONLINE:"В норме",REQUIRES_VERIFICATION:"Требует проверки",IDENTITY_CONFLICT:"Конфликт идентификации",OPEN:"Открыто",UNDER_REVIEW:"На проверке",RESOLVED:"Закрыто",DISMISSED:"Не подтверждено",ACTIVE:"Активен",WRITTEN_OFF:"Списан",REVOKED:"Отозван",PENDING:"Ожидает решения",APPROVED:"Подтверждён",REJECTED:"Отклонён",EXPIRED:"Истёк"};
+const statusLabels = {OK:"В норме",ATTENTION:"Требует внимания",ANOMALY:"Обнаружено расхождение",OFFLINE:"Не в сети",STALE:"Давно нет данных",AGENT_NOT_CONNECTED:"Agent не подключён",AWAITING_INVENTORY:"Ожидается первый отчёт",UNCHECKED:"Нет свежих данных",MANUAL:"Ручной учёт",WARNING:"Требует внимания",NOT_CHECKED:"Не проверено",ONLINE:"В норме",REQUIRES_VERIFICATION:"Требует проверки",IDENTITY_CONFLICT:"Конфликт идентификации",OPEN:"Открыто",UNDER_REVIEW:"На проверке",RESOLVED:"Закрыто",DISMISSED:"Не подтверждено",ACTIVE:"Активен",WRITTEN_OFF:"Списан",REVOKED:"Отозван",PENDING:"Ожидает решения",APPROVED:"Подтверждён",REJECTED:"Отклонён",EXPIRED:"Истёк"};
 const assetTypeLabels = {Desktop:"Стационарный компьютер",Laptop:"Ноутбук",Printer:"Принтер",Projector:"Проектор",Network:"Сетевое оборудование",Furniture:"Мебель",Sports:"Спортинвентарь",Educational:"Учебное оборудование",Other:"Другое имущество"};
 const categoryLabels = {IT:"IT-оборудование",FURNITURE:"Мебель",SPORTS:"Спортинвентарь",EDUCATIONAL:"Учебное оборудование",OTHER:"Другое имущество"};
 const identifierLabels = {SMBIOS_UUID:"Аппаратный UUID",CHASSIS_SERIAL:"Серийный номер корпуса",MOTHERBOARD_SERIAL:"Серийный номер платы",BIOS_SERIAL:"Серийный номер BIOS",AGENT_DEVICE_ID:"ID Agent",MAC:"MAC-адрес"};
@@ -277,8 +277,8 @@ const eventLabels = {COMPONENT_ADDED:"Компонент добавлен",COMPO
 const inspectionLabels = {PRESENT:"На месте",MISSING:"Отсутствует",DAMAGED:"Повреждено"};
 const physicalActionLabels = {INVESTIGATE:"Дополнительная проверка",MOVE:"Перемещение",REPAIR:"Ремонт",WRITE_OFF:"Списание",FALSE_POSITIVE:"Расхождение не подтвердилось"};
 const incidentClassificationLabels = {PLANNED_MAINTENANCE:"Плановое обслуживание",UPGRADE:"Модернизация",REPAIR:"Ремонт",AUTHORIZED_CHANGE:"Разрешённое изменение",COMPONENT_TRANSFER:"Перемещение компонента",UNKNOWN:"Причина не установлена",REQUIRES_INVESTIGATION:"Требуется дополнительная проверка",FALSE_POSITIVE:"Расхождение не подтвердилось"};
-const classForStatus = (value) => ({OK:"ok",ONLINE:"ok",ACTIVE:"ok",RESOLVED:"ok",ATTENTION:"attention",WARNING:"warning",OPEN:"warning",UNDER_REVIEW:"warning",ANOMALY:"anomaly",IDENTITY_CONFLICT:"danger",REVOKED:"danger",OFFLINE:"offline",UNCHECKED:"unchecked",NOT_CHECKED:"unchecked",REQUIRES_VERIFICATION:"unchecked"}[value] || "neutral");
-const pill = (value) => `<span class="status-pill ${classForStatus(value)}">${escapeHtml(statusLabels[value] || value || "Не проверено")}</span>`;
+const classForStatus = (value) => ({OK:"ok",ONLINE:"ok",ACTIVE:"ok",RESOLVED:"ok",ATTENTION:"attention",WARNING:"warning",STALE:"warning",OPEN:"warning",UNDER_REVIEW:"warning",ANOMALY:"anomaly",IDENTITY_CONFLICT:"danger",REVOKED:"danger",OFFLINE:"offline",UNCHECKED:"unchecked",AWAITING_INVENTORY:"unchecked",NOT_CHECKED:"unchecked",REQUIRES_VERIFICATION:"unchecked"}[value] || "neutral");
+const pill = (value, label = statusLabels[value]) => `<span class="status-pill ${classForStatus(value)}">${escapeHtml(label || value || "Не проверено")}</span>`;
 
 function showToast(message, error = false) {
   const toast = $("toast"); toast.textContent = message; toast.className = `toast${error ? " error" : ""}`; toast.hidden = false;
@@ -474,10 +474,13 @@ async function copyAgentCredential(fieldId) {
 }
 function deviceStatus(endpoint, asset = null) {
   if (asset?.status === "WRITTEN_OFF") return "WRITTEN_OFF";
-  if (!endpoint && asset && !["Desktop", "Laptop"].includes(asset.asset_type)) return "MANUAL";
-  if (!endpoint?.current_snapshot) return "UNCHECKED";
-  if (endpoint.status === "IDENTITY_CONFLICT") return "ANOMALY";
-  if (agentConnection(endpoint) !== "ONLINE") return "UNCHECKED";
+  if (!endpoint) return asset && !["Desktop", "Laptop"].includes(asset.asset_type) ? "MANUAL" : "AGENT_NOT_CONNECTED";
+  const connection = agentConnection(endpoint);
+  if (connection === "IDENTITY_CONFLICT") return "ANOMALY";
+  if (connection === "OFFLINE") return "OFFLINE";
+  if (!endpoint.current_snapshot) return "AWAITING_INVENTORY";
+  if (connection === "STALE") return "STALE";
+  if (connection !== "ONLINE") return "REQUIRES_VERIFICATION";
   if (endpoint.open_changes > 0 || endpoint.open_incidents > 0) return "ATTENTION";
   return "OK";
 }
@@ -513,21 +516,29 @@ function renderDashboard() {
   const devices = state.devices;
   renderSetupGuide();
   const attention = devices.filter((item) => ["ATTENTION","ANOMALY"].includes(item.status));
-  const unchecked = devices.filter((item) => item.status === "UNCHECKED");
+  const verification = devices.filter((item) => item.status === "REQUIRES_VERIFICATION");
+  const unchecked = devices.filter((item) => ["STALE","OFFLINE"].includes(item.status));
+  const notConnected = devices.filter((item) => item.status === "AGENT_NOT_CONNECTED").length;
+  const awaiting = devices.filter((item) => item.status === "AWAITING_INVENTORY").length;
+  $("agent-setup-summary").hidden = !notConnected && !awaiting;
+  $("overview-agent-not-connected").hidden = !notConnected;
+  $("overview-agent-not-connected").textContent = `Agent не подключён: ${notConnected} →`;
+  $("overview-agent-awaiting").hidden = !awaiting;
+  $("overview-agent-awaiting").textContent = `Ожидается первый отчёт: ${awaiting} →`;
   const openIncidents = incidentItems().filter((item) => ["OPEN","UNDER_REVIEW"].includes(item.status));
   $("devices-count").textContent = state.assets.length; $("attention-count").textContent = attention.length; $("unchecked-count").textContent = unchecked.length; $("open-incidents-count").textContent = openIncidents.length;
   $("nav-incident-count").textContent = openIncidents.length; $("nav-incident-count").hidden = !openIncidents.length;
   const banner = $("attention-banner");
   if (!devices.length) {
     banner.className = "attention-banner is-loading"; banner.innerHTML = '<span class="attention-icon">1</span><div><strong>Начните с настройки школы</strong><p>Создайте кабинеты и добавьте имущество. Agent подключайте, если нужно автоматически следить за компьютерами.</p></div>';
-  } else if (!attention.length && !unchecked.length && !openIncidents.length) {
+  } else if (!attention.length && !verification.length && !unchecked.length && !openIncidents.length) {
     banner.className = "attention-banner ok"; banner.innerHTML = '<span class="attention-icon">✓</span><div><strong>Новых проблем не обнаружено</strong><p>У компьютеров с Agent нет открытых изменений. Остальное имущество учитывается в реестре вручную.</p></div>';
   } else {
-    banner.className = "attention-banner"; banner.innerHTML = `<span class="attention-icon">!</span><div><strong>${openIncidents.length ? `Открытых инцидентов: ${openIncidents.length}` : attention.length ? `Компьютеров с проблемами: ${attention.length}` : "Есть компьютеры без свежих данных Agent"}</strong><p>${unchecked.length ? `Без свежих данных Agent: ${unchecked.length}. ` : ""}Проверьте задачи в списке ниже.</p></div>`;
+    banner.className = "attention-banner"; banner.innerHTML = `<span class="attention-icon">!</span><div><strong>${openIncidents.length ? `Открытых инцидентов: ${openIncidents.length}` : attention.length ? `Компьютеров с проблемами: ${attention.length}` : verification.length ? "Есть компьютеры, требующие проверки Agent" : "Есть компьютеры без свежих данных Agent"}</strong><p>${unchecked.length ? `Без свежих данных Agent: ${unchecked.length}. ` : ""}Проверьте задачи в списке ниже.</p></div>`;
   }
   const priorityIncidents = incidentItems().filter(item => ["OPEN","UNDER_REVIEW"].includes(item.status)).sort((a,b) => ["HIGH","MEDIUM","LOW"].indexOf(a.severity)-["HIGH","MEDIUM","LOW"].indexOf(b.severity) || new Date(b.created_at)-new Date(a.created_at)).slice(0,6);
   const unlinked = devices.filter(item => item.kind === "endpoint");
-  const priorityCandidates = [...new Map([...attention,...unchecked,...unlinked].map(item => [item.endpointId || item.assetId,item])).values()];
+  const priorityCandidates = [...new Map([...attention,...verification,...unchecked,...unlinked].map(item => [item.endpointId || item.assetId,item])).values()];
   const priority = priorityCandidates.filter(item => !priorityIncidents.some(incident => incident.endpoint_id && incident.endpoint_id === item.endpointId)).slice(0, Math.max(0,6-priorityIncidents.length));
   const priorityRows = priorityIncidents.map(incident => `<div class="attention-item"><span class="attention-dot"></span><div><strong>${escapeHtml(incident.kind === "PHYSICAL" ? `${incident.asset_name} · ${inspectionLabels[incident.issue_type] || "Расхождение обхода"}` : incidentLabel(incident,state.changes.find(change => change.id === incident.change_event_id)))}</strong><small>${escapeHtml(incident.kind === "PHYSICAL" ? "Обход" : deviceForEndpoint(incident.endpoint_id)?.name || "Компьютер")} · ${escapeHtml(statusLabels[incident.status])} · ${relativeTime(incident.created_at)}</small></div><a class="button-anchor button-secondary" href="#${incident.kind === "PHYSICAL" ? "physical-incident" : "incident"}=${incident.id}">Открыть</a></div>`).join("");
   $("attention-badge").textContent = priority.length+priorityIncidents.length ? String(priority.length+priorityIncidents.length) : "Всё спокойно"; $("attention-badge").className = `status-pill ${priority.length+priorityIncidents.length ? "warning" : "ok"}`;
@@ -715,9 +726,9 @@ function renderRoomTab() {
   let html="";
   if(tab==="overview") {
     const ready=workspace.baseline.agent_ready+(workspace.baseline.vision_ready?1:0), total=workspace.baseline.agent_total+1;
-    html=`<div class="metrics room-metrics">${roomMetric("Позиций",inventory.positions,"записей в реестре")}${roomMetric("Количество",inventory.quantity,"единиц имущества")}${roomMetric("Agent",`${agents.filter((item)=>item.status==="ONLINE").length} из ${agents.length}`,"компьютеров на связи")}${roomMetric("Эталоны",`${ready} из ${total}`,"Agent и фото помещения")}</div><div class="room-overview-grid"><section><span class="eyebrow">Ответственный</span><h3>${escapeHtml(workspace.room.responsible_name||"Не назначен")}</h3><p class="meta">${escapeHtml(workspace.room.responsible_contact||"Контакт не указан")}</p><p>${escapeHtml(workspace.room.purpose||"Назначение кабинета не указано")}</p></section><section><span class="eyebrow">Состав</span><div class="summary-lines">${inventory.categories.map((item)=>`<div class="summary-line"><span>${escapeHtml(categoryLabels[item.category]||item.category)}</span><strong>${item.quantity}</strong></div>`).join("")||'<p class="empty">Имущество ещё не добавлено.</p>'}</div></section></div>`;
+    html=`<div class="metrics room-metrics">${roomMetric("Позиций",inventory.positions,"записей в реестре")}${roomMetric("Количество",inventory.quantity,"единиц имущества")}${roomMetric("Agent",`${agents.filter((item)=>agentConnection(item)==="ONLINE").length} из ${agents.length}`,"компьютеров на связи")}${roomMetric("Эталоны",`${ready} из ${total}`,"Agent и фото помещения")}</div><div class="room-overview-grid"><section><span class="eyebrow">Ответственный</span><h3>${escapeHtml(workspace.room.responsible_name||"Не назначен")}</h3><p class="meta">${escapeHtml(workspace.room.responsible_contact||"Контакт не указан")}</p><p>${escapeHtml(workspace.room.purpose||"Назначение кабинета не указано")}</p></section><section><span class="eyebrow">Состав</span><div class="summary-lines">${inventory.categories.map((item)=>`<div class="summary-line"><span>${escapeHtml(categoryLabels[item.category]||item.category)}</span><strong>${item.quantity}</strong></div>`).join("")||'<p class="empty">Имущество ещё не добавлено.</p>'}</div></section></div>`;
   } else if(tab==="checks") {
-    const agentRows=agents.length?agents.map((item)=>`<div class="room-status-row"><div><strong>${escapeHtml(item.hostname||"Компьютер")}</strong><small>${item.has_baseline?"Эталон подтверждён":"Эталон не подтверждён"} · отчёт ${escapeHtml(relativeTime(item.last_seen_at))}</small></div>${pill(item.status)}</div>`).join(""):'<p class="empty">В кабинете нет связанных компьютеров Agent.</p>';
+    const agentRows=agents.length?agents.map((item)=>`<div class="room-status-row"><div><strong>${escapeHtml(item.hostname||"Компьютер")}</strong><small>${item.has_baseline?"Эталон подтверждён":"Эталон не подтверждён"} · отчёт ${escapeHtml(relativeTime(item.last_seen_at))}</small></div>${pill(agentConnection(item),agentConnectionLabels[agentConnection(item)])}</div>`).join(""):'<p class="empty">В кабинете нет связанных компьютеров Agent.</p>';
     const visionState=vision?.latest_scan?`<div class="room-check-summary">${pill(vision.latest_scan.status)}<p class="meta">Последняя проверка: ${dateTime(vision.latest_scan.created_at)}</p><div class="summary-lines">${roomCountRows(vision.latest_scan.counts)}</div></div>`:'<p class="empty">Проверок по фото пока нет.</p>';
     html=`<div class="room-two-columns"><section><span class="eyebrow">Agent</span><h3>Компьютеры и эталоны</h3>${agentRows}</section><section><span class="eyebrow">Эксперимент</span><h3>Проверка по фото</h3><p class="form-intro">Распознавание может быть неполным. Результат нужно сверить вручную.</p><p class="meta">Фото-эталон: ${workspace.baseline.vision_ready?"подтверждён":"не создан"}</p>${visionState}${state.currentUser?.role==="ADMIN"?'<button type="button" class="button-secondary room-vision-launch">Открыть проверку по фото</button>':""}</section></div>`;
   } else if(tab==="inventory") {
@@ -760,7 +771,7 @@ async function openRoomWorkspace(roomId, scroll = true) {
     $("room-detail-title").textContent=`Кабинет ${workspace.room.name}`; $("room-detail-path").textContent=[workspace.path.building,workspace.path.floor&&`этаж ${workspace.path.floor}`,workspace.room.purpose].filter(Boolean).join(" · ");
     $("room-edit-action").hidden=state.currentUser?.role!=="ADMIN"; $("room-vision-action").hidden=state.currentUser?.role!=="ADMIN"; $("room-inspection-action").hidden=!canEditRoom(workspace.room.id)||!workspace.inventory.assets.length; $("room-qr-action").hidden=!canEditRoom(workspace.room.id)||!workspace.inventory.assets.length;
     $("room-tools").hidden=["room-qr-action","room-vision-action","room-edit-action"].every(id=>$(id).hidden); $("room-tools").open=false;
-    const attention=workspace.incidents.length||(workspace.physical_incidents||[]).some((item)=>["OPEN","UNDER_REVIEW"].includes(item.status))||workspace.agents.some((item)=>item.status!=="ONLINE")||workspace.vision?.latest_scan?.status==="WARNING"; $("room-detail-state").textContent=attention?"Требует внимания":"В норме"; $("room-detail-state").className=`status-pill ${attention?"warning":"ok"}`;
+    const attention=workspace.incidents.length||(workspace.physical_incidents||[]).some((item)=>["OPEN","UNDER_REVIEW"].includes(item.status))||workspace.agents.some((item)=>agentConnection(item)!=="ONLINE")||workspace.vision?.latest_scan?.status==="WARNING"; $("room-detail-state").textContent=attention?"Требует внимания":"В норме"; $("room-detail-state").className=`status-pill ${attention?"warning":"ok"}`;
     renderRoomTab(); if(scroll)window.scrollTo({top:0,behavior:"smooth"});
   } catch(error) {
     if (requestView !== viewGeneration || error.stale) return;
@@ -1216,6 +1227,7 @@ function hardwareBrief(endpoint) {
 }
 
 function agentConnection(endpoint) {
+  if(endpoint.connection_status)return endpoint.connection_status;
   if(["IDENTITY_CONFLICT","OFFLINE"].includes(endpoint.status))return endpoint.status;
   const hours=state.operations?.agents?.stale_after_hours;
   if(hours && endpoint.last_seen_at && Date.now()-new Date(endpoint.last_seen_at).getTime()>hours*3600000)return "STALE";
@@ -1235,7 +1247,7 @@ function renderAgentFleet() {
     : '<div class="empty-state"><strong>Компьютеры Agent ещё не подключены</strong><p>Создайте отдельный ключ и установите Agent на первый компьютер.</p><button type="button" class="open-agent-connect">Подключить компьютер</button></div>';
   $("agent-fleet-list").innerHTML=endpoints.slice((state.agentPage-1)*20,state.agentPage*20).map((item)=>{
     const status=agentConnection(item), label=agentConnectionLabels[status]||status;
-    const reason=status==="STALE"?"Нет свежей инвентаризации: проверьте компьютер, сеть и службу Agent.":status==="IDENTITY_CONFLICT"?"Сверьте аппаратные идентификаторы; не восстанавливайте ключ до проверки.":status==="OFFLINE"?"Компьютер отмечен как недоступный.":status==="REQUIRES_VERIFICATION"?"Нужна проверка идентификации компьютера.":"Свежий отчёт получен.";
+    const reason=status==="STALE"?"Нет свежей инвентаризации: проверьте компьютер, сеть и задание AssetGuardInventory.":status==="IDENTITY_CONFLICT"?"Сверьте аппаратные идентификаторы; не восстанавливайте ключ до проверки.":status==="OFFLINE"?"Компьютер отмечен как недоступный.":status==="REQUIRES_VERIFICATION"?"Нужна проверка идентификации компьютера.":"Свежий отчёт получен.";
     return `<div class="admin-record"><div><strong>${escapeHtml(item.hostname||"Без имени")}</strong><small>Последняя связь: ${escapeHtml(dateTime(item.last_seen_at))} · ${escapeHtml(relativeTime(item.last_seen_at))}</small><small>${escapeHtml(reason)}</small><small>${escapeHtml(hardwareBrief(item))}</small></div><span class="status-pill ${status==="ONLINE"?"ok":status==="IDENTITY_CONFLICT"?"danger":"warning"}">${escapeHtml(label)}</span>${item.asset_id?`<a class="button-anchor button-secondary" href="#asset=${item.asset_id}">Карточка имущества</a>`:'<span class="meta">Не связан с имуществом</span>'}</div>`;
   }).join("")||emptyFleet;
   $("agent-fleet-list").querySelector(".clear-agent-filters")?.addEventListener("click",()=>{$("agent-search").value="";$("agent-status-filter").value="";state.agentPage=1;renderAgentFleet();});
@@ -1307,11 +1319,12 @@ function filteredDevices() {
     if (view === "computers" && !item.endpointId && !["Desktop","Laptop"].includes(item.assetType)) return false;
     if (view === "unlinked" && item.kind !== "endpoint") return false;
     const haystack = [item.name,item.inventoryNumber,item.hostname,item.building,item.floor,item.room,item.organization].filter(Boolean).join(" ").toLocaleLowerCase("ru");
-    const matchesStatus = !status || item.status === status || (status === "ATTENTION" && item.status === "ANOMALY");
+    const matchesStatus = !status || item.status === status || (status === "ATTENTION" && item.status === "ANOMALY") || (status === "UNCHECKED" && ["STALE","OFFLINE"].includes(item.status));
     return (!query || haystack.includes(query)) && matchesStatus && (!category || item.category === category) && (!room || item.roomId === room) && (!changed || (item.endpoint?.open_changes || 0) > 0);
   });
   const sort = $("device-sort").value;
-  return result.sort((a,b) => sort === "name" ? a.name.localeCompare(b.name,"ru") : sort === "attention" ? (["ANOMALY","ATTENTION","UNCHECKED","OK","MANUAL","WRITTEN_OFF"].indexOf(a.status) - ["ANOMALY","ATTENTION","UNCHECKED","OK","MANUAL","WRITTEN_OFF"].indexOf(b.status)) : (new Date(b.endpoint?.last_seen_at || 0) - new Date(a.endpoint?.last_seen_at || 0)));
+  const statusOrder = ["ANOMALY","ATTENTION","REQUIRES_VERIFICATION","STALE","OFFLINE","AWAITING_INVENTORY","AGENT_NOT_CONNECTED","OK","MANUAL","WRITTEN_OFF"];
+  return result.sort((a,b) => sort === "name" ? a.name.localeCompare(b.name,"ru") : sort === "attention" ? (statusOrder.indexOf(a.status) - statusOrder.indexOf(b.status)) : (new Date(b.endpoint?.last_seen_at || 0) - new Date(a.endpoint?.last_seen_at || 0)));
 }
 function renderDevices() {
   const rooms = availableRoomOptions(), selectedRoom = $("device-room-filter").value;
@@ -1328,7 +1341,7 @@ function renderDevices() {
   $("device-active-filter-count").hidden = !activeFilters; $("device-active-filter-count").textContent = activeFilters || "";
   const empty = state.devices.length ? `<div class="empty-state"><strong>Ничего не найдено</strong><p>Измените запрос или сбросьте фильтры.</p><button id="empty-reset" class="button-secondary" type="button">Сбросить фильтры</button></div>` : `<div class="empty-state"><strong>Здесь будет ваше имущество</strong><p>${state.currentUser?.role === "ADMIN" ? "Добавьте первую запись вручную или загрузите ведомость через меню «Ещё»." : "Попросите администратора проверить назначение кабинетов."}</p>${state.currentUser?.role === "ADMIN" ? '<button id="empty-add" type="button">Добавить имущество</button>' : ''}</div>`;
   $("assets").innerHTML = devices.length ? pageDevices.map(item => {
-    const lastCheck = item.endpoint ? relativeTime(item.endpoint.last_seen_at) : "По обходу";
+    const lastCheck = item.endpoint ? relativeTime(item.endpoint.last_seen_at) : item.status === "AGENT_NOT_CONNECTED" ? "Ожидает подключения" : "По обходу";
     const type = item.kind === "endpoint" ? "Обнаружен Agent" : `${assetTypeLabels[item.assetType] || item.assetType || categoryLabels[item.category] || "Имущество"}${item.trackingMode === "GROUPED" ? ` · ${item.quantity} ${item.unit || "шт."}` : ""}`;
     const relation = item.kind === "endpoint" && state.currentUser?.role === "ADMIN" ? `<button class="link-endpoint button-secondary" data-id="${item.endpointId}" data-name="${escapeHtml(item.hostname || "")}">Связать с имуществом</button>` : item.kind === "endpoint" ? '<span class="relation-label">Не связан</span>' : item.endpoint ? '<span class="relation-label linked">Связан с Agent</span>' : item.category === "IT" ? '<span class="relation-label">Без Agent</span>' : '<span class="relation-label" title="Компьютер для этого имущества не требуется">Не требуется</span>';
     return `<tr class="device-row" data-asset-id="${item.assetId || ""}"><td data-label="Название"><div class="device-name">${item.assetId ? `<a class="device-open-link open-device" href="#asset=${item.assetId}" data-id="${item.assetId}">${escapeHtml(item.name)}</a>` : `<a class="device-open-link open-computer" href="#computer=${item.endpointId}" data-id="${item.endpointId}">${escapeHtml(item.name)}</a>`}<small>${escapeHtml(type)}</small></div></td><td data-label="Инв. номер"><span class="inventory-number" title="${escapeHtml(item.inventoryNumber || "Нет учётной записи")}">${escapeHtml(item.inventoryNumber || "—")}</span></td><td data-label="Кабинет"><span title="${escapeHtml(locationLabel(item) || "Размещение не указано")}">${item.room ? `Каб. ${escapeHtml(item.room)}` : "Не назначен"}</span></td><td data-label="Состояние">${pill(item.status)}</td><td data-label="Последняя проверка"><span title="${escapeHtml(item.endpoint ? dateTime(item.endpoint.last_seen_at) : "Проверяется физическим обходом")}">${escapeHtml(lastCheck)}</span></td><td data-label="Связь">${relation}</td></tr>`;

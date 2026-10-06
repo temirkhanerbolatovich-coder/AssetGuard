@@ -1,5 +1,7 @@
 # GLPI Agent: privacy-профиль AssetGuard MVP
 
+> **Сверено 2026-10-06.** Текущий статус и границы проверки: [checklist](../product/current-project-checklist.md), [аудит](../quality/project-audit-2026-10-06.md). Датированные результаты отдельных этапов сохранены с исходными датами.
+
 ## Цель
 
 До первой отправки inventory на AssetGuard Gateway collector должен передавать только технические категории, необходимые для контроля актива и hardware changes.

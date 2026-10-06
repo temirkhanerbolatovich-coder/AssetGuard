@@ -1,6 +1,6 @@
 # AssetGuard — Technical Research Report
 
-> **Историческое исследование.** Документ фиксирует выбор foundation до реализации. Текущую архитектуру определяют [architecture overview](docs/architecture/overview.md), принятые [ADR](docs/decisions/README.md) и executable tests.
+> **Исторический документ.** Даты, SHA, измерения и исходные требования ниже относятся к описанному этапу. Сверка указателя выполнена 2026-10-06; текущее состояние и оставшаяся работа — в [checklist](docs/product/current-project-checklist.md) и [аудите](docs/quality/project-audit-2026-10-06.md).
 
 **Дата исследования:** 23 сентября 2026 г.  
 **Область:** Windows-first MVP; open-source collection layer; continuous asset control.  

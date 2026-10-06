@@ -1,29 +1,35 @@
 # Наблюдаемость и аудит
 
-С версии схемы `0026` новые инциденты отправляются отдельным worker через [durable Telegram queue](../features/telegram-notifications.md). `/admin/operations/status` показывает scoped `notifications.pending/retrying`. Monitor также проверяет failed notification job и ожидающие повтор сообщения; сообщения на русском, со временем UTC+5 и ссылкой. Сводная дедупликация не заменяет индивидуальные события Agent. Приёмка 2026-10-04 ниже относится к предыдущей версии; новая проверка записывается отдельно.
+> **Сверено 2026-10-06.** Текущий статус и границы проверки: [checklist](../product/current-project-checklist.md), [аудит](../quality/project-audit-2026-10-06.md). Датированные результаты отдельных этапов сохранены с исходными датами.
 
-## Логируемые факты
+## Текущий контур
 
-- received/rejected inventory без секретов;
-- normalizer errors и identity conflicts;
-- snapshot creation;
-- diff, event и incident creation;
-- baseline acceptance/supersede;
-- incident decision и resolve.
-- Vision model load, scan start/completion, detection count и runtime errors без содержимого изображения.
+Сверка 2026-10-06: schema `0026`, application `f4f56e7`. Server monitor выполняется раз в 5 минут, Telegram incident worker — раз в минуту. Monitor, notifications, backup и restore-rehearsal timers активны; последние jobs — success/0. [Аудит и dated snapshot](../quality/project-audit-2026-10-06.md).
 
-## Не является диагностикой
+`/health` подтверждает доступность процесса. `/health/ready` выполняет SQL `SELECT 1` и возвращает 503 при недоступной БД. Эти ответы не идентифицируют deployed Git SHA, актуальность всех инцидентов или готовность fleet. Защищённый `/admin/operations/status` возвращает scoped Agent/ingest/notification aggregates и database/storage metadata.
 
-Отсутствие telemetry по `LastSeenAt` может переводить endpoint в `REQUIRES_VERIFICATION` согласно настроенной policy. Оно не доказывает кражу, пропажу устройства или отсутствие железа. Аналогично Vision `WARNING` означает только расхождение counts с baseline.
+## Agent freshness
 
-На 2026-10-04 `/admin/operations/status` вычисляет freshness при чтении по `ASSETGUARD_ENDPOINT_STALE_AFTER_HOURS` (24 часа по умолчанию). Старые `ONLINE` и `REQUIRES_VERIFICATION` попадают в `agents.stale` без вызова maintenance и без записи в БД. `OFFLINE` и `IDENTITY_CONFLICT` считаются отдельно; агрегаты ограничены организацией и разрешёнными кабинетами.
+`agents.stale` вычисляется при чтении по `last_seen_at` и `ASSETGUARD_ENDPOINT_STALE_AFTER_HOURS` (24 часа по умолчанию). Старые ONLINE/REQUIRES_VERIFICATION учитываются как stale; OFFLINE/IDENTITY_CONFLICT отдельно. Tenant/location filters применяются до агрегации; чтение не запускает maintenance и не изменяет endpoint. Отсутствие данных не доказывает пропажу/кражу.
 
-Monitor суммирует offline/stale, подавляет одинаковые проблемы на 4 часа и очищает fingerprint после здорового запуска. Если та же проблема возвращается после восстановления, alert отправляется сразу. Fingerprint сохраняется только после ответа Telegram `ok=true` с `message_id`; отказ не подавляет следующую попытку. Некорректные JSON metrics создают отдельную проблему. `--state-dir` позволяет использовать отдельное состояние в тестовом окружении; production default — `/var/lib/assetguard-monitor`.
+Read-only срез 6 октября **17:29:16 UTC+5**: 11 endpoints, **6 online / 5 stale**, 0 identity conflicts и failed ingests. Пять stale PC требуют проверки по месту. Inventory/snapshot counts растут; числа среза не объявляются постоянными.
 
-Локальный тест `test_server_monitor.py` выполняет настоящий Bash script с подставными health/metrics/delivery и отдельными файлами состояния: stale → acceptance → dedup → recovery → recurrence → отказ → retry, а также malformed metrics. Версия из application commit `93ff8ed` установлена на production 2026-10-04; byte comparison с repository source прошёл. С разрешения пользователя отправлен один настоящий test alert: Telegram подтвердил `ok=true` с `message_id`, немедленный повтор подавлен. Проверка использовала отдельный `--state-dir`, сохранив текущее состояние обычных уведомлений. Production timer активен; recovery/refusal/retry проверены автоматическим тестом, реальный сбой API намеренно не создавался.
+Agent 0.1.8 ведёт protected `runtime.jsonl`, pending/rejected и delivery deadlines. `COLLECTED` отличается от `DELIVERED`; очередь сохраняет данные при network/auth/quota errors. [Диагностика и границы](../features/agent-continuous-inventory.md). Server snapshot timestamp пока receipt time, даже для offline captures.
 
-Read-only production acceptance 2026-10-04 показала: 11 endpoints, 1 online, 10 stale, 0 offline, 0 identity conflicts и 0 failed ingests. Stale отражает отсутствие свежей телеметрии тестовых ПК; успешная выкладка API не означает, что эти ПК прошли fleet acceptance. Точные результаты — в [release record](../../outputs/assetguard-release-2026-10-04.md).
+## Telegram и monitor
 
-## Операционные документы
+Новые technical/physical incidents создают outbox в одной транзакции с evidence. Minute worker выбирает только явно настроенный tenant, проверяет acceptance/chat/message id и сохраняет SENT. `/admin/notifications` доступен ADMIN и отдаёт metadata без recipient/payload/token. SENT не подтверждает прочтение. [Контракт](../features/telegram-notifications.md), [панель](../features/agent-administration-and-delivery.md).
 
-Локальный запуск описан в `local-demo-guide.md`, PDF/OCR — в `pdf-import-ocr.md`, а HTTPS deployment, backup и restore — в `production-deployment.md`. Изолированная локальная репетиция восстановления прошла 2026-09-24. Windows daily backup и weekly rehearsal завершились с кодом `0` 2026-09-27. В тот же день постоянный сервер создал новую encrypted R2-копию и восстановил её в disposable PostgreSQL с результатом `PASS`: revision `0024_physical_asset_operations`, `assets=211`, `endpoints=1`. Server monitor запускается каждые 5 минут и проверяет readiness, Compose services, disk, возраст и failed jobs backup/restore, Agent last-seen, failed ingest и identity conflicts. Контролируемый test alert был принят Telegram, повторный запуск подавлен дедупликацией, normal run завершился без проблем. Неизменившийся alert повторяется через 4 часа; формальная on-call escalation остаётся организационной задачей.
+Monitor проверяет readiness, Compose, disk, backup age/job failures, Agent freshness, failed ingest/conflicts, notification job и retry aggregates. State default — `/var/lib/assetguard-monitor`; `--state-dir` позволяет отделить controlled checks.
+
+Одинаковые проблемы подавляются на 4 часа только после Telegram `ok=true` с message_id. Здоровый run очищает fingerprint; возвращение проблемы вызывает новый alert. Отказ доставки сохраняет возможность retry. Aggregated fingerprint не описывает индивидуальные переходы Agent; отдельного recovery message пока нет.
+
+На read-only срезе 6 октября: 3 SENT, ожидающих сообщений нет. Новое тестовое сообщение в этом аудите не отправлялось. Реальное acceptance и подтверждение пользователя сохранены в [протоколе Telegram 5 октября](../../outputs/assetguard-telegram-2026-10-05.md); повтор/отказ/recovery проверены автоматическими tests. Настоящий API outage/failover drill остаётся staging-задачей.
+
+## Логи и recovery
+
+Application фиксирует request/status/duration, received/rejected inventory, normalization/conflicts, snapshots/changes/incidents, baseline и решения. Domain history append-only, но отдельный полный журнал users/grants/credentials/settings и audit UI ещё нужны. Caddy удаляет admin token, Authorization и Cookie из access logs. Не сохраняйте hardware XML, passwords/tokens и фотографии в публичный report.
+
+Текущая последняя R2-копия: `assetguard-production-20261006-075950.sql.agbackup`. Status и journal подтверждают upload/isolated restore на `0026`, 220 assets/11 endpoints; backup/restore services success. Копия PostgreSQL не восстанавливает Vision image volume. Новый restore в этом аудите не запускался.
+
+[Production runbook](production-deployment.md), [PDF/OCR](pdf-import-ocr.md), [локальный demo](local-demo-guide.md), [fleet](agent-fleet-pilot.md), [technical debt](../technical-debt.md). Исторические результаты `0024`/`0025` находятся в датированных release records.

@@ -1,6 +1,8 @@
 # Документация AssetGuard
 
-Дата сверки: **27 сентября 2026 года**. Каноническое описание строится от текущего кода, migrations, tests и deployment configuration. При противоречии приоритет имеют executable tests и документы из раздела «Актуальные».
+> **Сверено 2026-10-06.** Текущий статус и границы проверки: [checklist](product/current-project-checklist.md), [аудит](quality/project-audit-2026-10-06.md). Датированные результаты отдельных этапов сохранены с исходными датами.
+
+Дата сверки: **6 октября 2026 года**. Каноническое описание строится от текущего кода, migrations, tests и deployment configuration. При противоречии приоритет имеют executable tests и документы из раздела «Актуальные».
 
 ## Начать отсюда
 
@@ -11,7 +13,9 @@
 5. [Стратегия тестирования](testing/testing-strategy.md)
 6. [Развёртывание](deployment/README.md) и [production recovery](operations/production-deployment.md)
 7. [Production roadmap](product/production-readiness-roadmap.md) и [технический долг](technical-debt.md)
-8. [Changelog](../CHANGELOG.md)
+8. [Полный аудит 6 октября](quality/project-audit-2026-10-06.md), [реестр документов](../outputs/assetguard-documentation-audit-2026-10-06/documentation-register.md) и [файловый inventory](../outputs/assetguard-documentation-audit-2026-10-06/file-inventory.md)
+9. [Полный реестр HTTP API](api/route-reference.md)
+10. [Changelog](../CHANGELOG.md)
 
 ## Актуальные документы
 
@@ -20,6 +24,7 @@
 | Architecture | [overview](architecture/overview.md), [data flow](architecture/data-flow.md), [module boundaries](architecture/module-boundaries.md), [source layout](architecture/source-layout.md) | Компоненты, зависимости, данные и структура кода |
 | API | [API README](api/README.md) | Реализованные HTTP boundaries и важные контракты |
 | Domain | [glossary](domain/glossary.md), [inventory operating model](product/inventory-operating-model.md) | Термины и правила учёта |
+| Audit | [project audit](quality/project-audit-2026-10-06.md), [documentation register](../outputs/assetguard-documentation-audit-2026-10-06/documentation-register.md) | Срез состояния, проверки, история чатов, расхождения и охват актуализации |
 | Features | [features](features/README.md) | Карта подтверждённых возможностей |
 | Security | [security model](security/security-model.md), [route matrix](security/admin-route-access-matrix.md), [Agent profile](security/agent-collection-profile.md) | Authentication, authorization, данные Agent и известные риски |
 | Testing | [testing strategy](testing/testing-strategy.md) | Локальные и CI-проверки |

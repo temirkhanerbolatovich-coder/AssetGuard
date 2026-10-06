@@ -1,6 +1,6 @@
 # AssetGuard Vision — минимальная интеграция
 
-> **Историческая фиксация.** Документ объясняет первоначальный выбор Vision vertical slice. После него добавлены каноническая иерархия помещений, tenant/location scope и физические обходы. Актуальные границы описаны в [architecture overview](overview.md) и [project checklist](../product/current-project-checklist.md).
+> **Исторический документ.** Даты, SHA, измерения и исходные требования ниже относятся к описанному этапу. Сверка указателя выполнена 2026-10-06; текущее состояние и оставшаяся работа — в [checklist](../product/current-project-checklist.md) и [аудите](../quality/project-audit-2026-10-06.md).
 
 ## Решение
 

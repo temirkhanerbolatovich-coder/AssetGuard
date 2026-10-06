@@ -17,7 +17,7 @@ from openpyxl import Workbook
 from assetguard.app import app
 from assetguard.infrastructure.config import get_settings
 from assetguard.infrastructure.database import get_session_factory
-from assetguard.modules.assets.models import OrganizationRecord
+from assetguard.modules.assets.models import AssetRecord, OrganizationRecord
 from assetguard.modules.notifications.models import TelegramNotificationRecord
 from assetguard.modules.snapshots.models import ManagedEndpointRecord
 
@@ -1244,5 +1244,105 @@ def test_import_to_room_inspection_preserves_selection_and_reviews_before_save(l
         page.set_viewport_size({"width": 390, "height": 900})
         assert_no_page_overflow(page, 390)
         capture("inspection-result-mobile.png")
+        assert failures == [], failures
+        browser.close()
+
+
+def test_agent_freshness_setup_states_and_glpi_version_across_screens(live_server):
+    playwright = pytest.importorskip("playwright.sync_api")
+    settings = get_settings()
+    headers = {"X-AssetGuard-Admin-Token": settings.admin_shared_secret}
+    with playwright.sync_playwright() as runtime:
+        browser = runtime.chromium.launch()
+        page = browser.new_page(viewport={"width": 1366, "height": 900})
+        failures = []
+        page.on("pageerror", lambda error: failures.append(str(error)))
+
+        def post(path, payload):
+            response = page.request.post(live_server + path, headers=headers, data=payload)
+            assert response.ok, response.text()
+            return response.json()
+
+        building = post("/admin/locations/buildings", {"name": "Статусы Agent"})
+        floor = post(f"/admin/locations/buildings/{building['id']}/floors", {"name": "1"})
+        room = post(f"/admin/locations/floors/{floor['id']}/rooms", {"name": "101"})
+        assets = {}
+        endpoints = {}
+        for name in ("Свежий компьютер", "Просроченный компьютер"):
+            unique = uuid4().hex
+            inventory = json.loads((FIXTURES / "glpi-agent-minimal-sanitized.json").read_text(encoding="utf-8"))
+            inventory["deviceid"] = unique
+            inventory["content"]["hardware"]["uuid"] = unique
+            inventory["content"]["hardware"]["name"] = name
+            inventory["content"]["networks"][0]["macaddr"] = f"02:00:{unique[:2]}:{unique[2:4]}:{unique[4:6]}:{unique[6:8]}"
+            response = page.request.post(live_server + "/internal/inventories", data=inventory, headers={
+                "X-AssetGuard-Ingest-Token": settings.inventory_shared_secret,
+                "X-AssetGuard-Idempotency-Key": unique, "X-AssetGuard-Source": "GLPI_AGENT",
+                "X-AssetGuard-Source-Version": "GLPI-Agent_v1.20", "X-AssetGuard-Inventory-Type": "FULL",
+            })
+            assert response.ok, response.text()
+            snapshot = page.request.get(f"{live_server}/admin/snapshots/{response.json()['snapshot_id']}", headers=headers).json()
+            endpoint_id = snapshot["endpoint_id"]
+            asset = post("/admin/assets", {"inventory_number": unique, "name": name, "asset_type": "Desktop", "room_id": room["id"]})
+            post(f"/admin/endpoints/{endpoint_id}/asset/{asset['id']}", {})
+            assets[name], endpoints[name] = asset["id"], endpoint_id
+        waiting = post("/admin/assets", {"inventory_number": "WAITING", "name": "Первый отчёт", "asset_type": "Desktop"})
+        post("/admin/assets", {"inventory_number": "NO-AGENT", "name": "Без Agent", "asset_type": "Desktop", "room_id": room["id"]})
+        post("/admin/assets", {"inventory_number": "DESK", "name": "Школьная парта", "asset_type": "Furniture"})
+        now = datetime.now(UTC)
+        with get_session_factory()() as session:
+            stale = session.get(ManagedEndpointRecord, endpoints["Просроченный компьютер"])
+            stale.last_seen_at = now - timedelta(days=5)
+            waiting_asset = session.get(AssetRecord, waiting["id"])
+            session.add(ManagedEndpointRecord(source="TEST", hostname="Первый отчёт", asset_id=waiting_asset.id,
+                organization_id=waiting_asset.organization_id, status="ONLINE", last_seen_at=now, created_at=now, updated_at=now))
+            session.commit()
+        detail = page.request.get(f"{live_server}/admin/assets/{assets['Свежий компьютер']}", headers=headers).json()
+        assert detail["latest_inventory"]["source_version"] == "GLPI-Agent_v1.20"
+        assert detail["latest_inventory"]["agent_version_status"] == "SUPPORTED"
+
+        page.goto(live_server)
+        page.locator("#login-mode").click()
+        page.locator("#token").fill(settings.admin_shared_secret)
+        page.get_by_role("button", name="Войти", exact=True).click()
+        page.locator("#status").filter(has_text="Данные актуальны").wait_for()
+        playwright.expect(page.locator("#unchecked-count")).to_have_text("1")
+        assert "Без Agent" not in page.locator("#attention-list").inner_text()
+        assert "Просроченный компьютер" in page.locator("#attention-list").inner_text()
+        playwright.expect(page.locator("#overview-agent-not-connected")).to_have_text("Agent не подключён: 1 →")
+        playwright.expect(page.locator("#overview-agent-awaiting")).to_have_text("Ожидается первый отчёт: 1 →")
+        capture_redesign_preview(page, "agent-status-overview-desktop.png")
+        page.locator('[data-device-filter="UNCHECKED"]').click()
+        playwright.expect(page.locator("#assets tr")).to_have_count(1)
+        assert "Просроченный компьютер" in page.locator("#assets").inner_text()
+        assert "Давно нет данных" in page.locator("#assets").inner_text()
+        page.locator("#main-nav a[href='#overview']").click()
+        page.locator("#overview-agent-not-connected").click()
+        playwright.expect(page.locator("#assets tr")).to_have_count(1)
+        assert "Agent не подключён" in page.locator("#assets").inner_text()
+        assert "Проверок ещё не было" not in page.locator("#assets").inner_text()
+        page.locator("#main-nav a[href='#overview']").click()
+        page.locator("#overview-agent-awaiting").click()
+        playwright.expect(page.locator("#assets tr")).to_have_count(1)
+        assert "Ожидается первый отчёт" in page.locator("#assets").inner_text()
+        page.goto(f"{live_server}/#room={room['id']}")
+        page.locator("#room-detail-title").filter(has_text="101").wait_for()
+        assert "1 из 2" in page.locator("#room-tab-content").inner_text()
+        playwright.expect(page.locator("#room-detail-state")).to_have_text("Требует внимания")
+        page.locator('[data-room-tab="checks"]').click()
+        rows = page.locator(".room-status-row")
+        assert rows.filter(has_text="Просроченный компьютер").get_by_text("Давно нет данных", exact=True).is_visible()
+        assert rows.filter(has_text="Свежий компьютер").get_by_text("На связи", exact=True).is_visible()
+        capture_redesign_preview(page, "agent-status-room-desktop.png")
+        page.goto(f"{live_server}/#asset={assets['Свежий компьютер']}")
+        page.locator("#detail-title").filter(has_text="Свежий компьютер").wait_for()
+        assert "не поддерживается" not in page.locator("#detail-agent-guidance").inner_text()
+        for width in (390, 320):
+            page.set_viewport_size({"width": width, "height": 900})
+            page.goto(live_server + "/#overview")
+            page.locator("#overview-agent-not-connected").wait_for(state="visible")
+            assert_no_page_overflow(page, width)
+            if width == 390:
+                capture_redesign_preview(page, "agent-status-overview-mobile.png")
         assert failures == [], failures
         browser.close()

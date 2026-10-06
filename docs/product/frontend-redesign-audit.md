@@ -1,6 +1,6 @@
 # AssetGuard — UX/UI audit and frontend redesign plan
 
-> **Исторический аудит завершённого этапа.** Текущее устройство интерфейса описано в [UX workflow](ux-workflow.md) и [UI design system](ui-design-system.md); незакрытые задачи ведутся в [project checklist](current-project-checklist.md).
+> **Исторический документ.** Даты, SHA, измерения и исходные требования ниже относятся к описанному этапу. Сверка указателя выполнена 2026-10-06; текущее состояние и оставшаяся работа — в [checklist](current-project-checklist.md) и [аудите](../quality/project-audit-2026-10-06.md).
 
 Дата аудита: **25 сентября 2026 года**
 Область: browser UI, используемые им admin API, модели и browser E2E.

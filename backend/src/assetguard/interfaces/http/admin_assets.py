@@ -32,7 +32,7 @@ from assetguard.modules.assets.models import AssetRecord, OrganizationRecord, Ro
 from assetguard.modules.baselines.models import BaselineRecord
 from assetguard.modules.changes.models import ChangeEventRecord
 from assetguard.modules.history.service import append_asset_history
-from assetguard.modules.endpoints.service import evaluate_last_seen
+from assetguard.modules.endpoints.service import endpoint_connection_status, evaluate_last_seen
 from assetguard.modules.incidents.models import (
     AssetHistoryEntryRecord, IncidentRecord, PhysicalIncidentDecisionRecord, PhysicalIncidentRecord,
 )
@@ -261,7 +261,8 @@ def _endpoint_summary_view(
         "id": str(endpoint.id), "asset_id": str(endpoint.asset_id) if endpoint.asset_id else None,
         "source": endpoint.source, "source_agent_id": endpoint.source_agent_id,
         "hostname": endpoint.hostname, "last_seen_at": endpoint.last_seen_at,
-        "status": endpoint.status, "open_changes": open_changes,
+        "status": endpoint.status, "connection_status": endpoint_connection_status(endpoint),
+        "open_changes": open_changes,
         "open_incidents": open_incidents,
         "current_snapshot": None if not snapshot else {
             "id": str(snapshot.id), "captured_at": snapshot.captured_at,
@@ -995,7 +996,7 @@ def endpoint_detail(endpoint_id: UUID, session: Annotated[Session, Depends(get_s
         "id": str(endpoint.id), "asset_id": str(endpoint.asset_id) if endpoint.asset_id else None,
         "source": endpoint.source, "source_agent_id": endpoint.source_agent_id,
         "hostname": endpoint.hostname, "last_seen_at": endpoint.last_seen_at,
-        "status": endpoint.status,
+        "status": endpoint.status, "connection_status": endpoint_connection_status(endpoint),
         "identifiers": [{
             "type": item.identifier_type, "value": item.raw_value,
             "confidence": item.confidence, "first_seen_at": item.first_seen_at,
@@ -1081,7 +1082,9 @@ def _installer_version(content: dict) -> str | None:
 def _agent_version_status(version: str | None) -> str:
     if not version:
         return "UNKNOWN"
-    return "SUPPORTED" if version in SUPPORTED_AGENT_VERSIONS else "UNSUPPORTED"
+    # GLPI XML reports VERSIONCLIENT with this prefix; raw evidence stays unchanged.
+    match = re.fullmatch(r"(?:GLPI-Agent_v)?(\d+\.\d+)", version.strip())
+    return "SUPPORTED" if match and match.group(1) in SUPPORTED_AGENT_VERSIONS else "UNSUPPORTED"
 
 
 def _system_sections(

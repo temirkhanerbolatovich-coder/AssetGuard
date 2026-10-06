@@ -1,5 +1,7 @@
 # Стратегия тестирования
 
+> **Сверено 2026-10-06.** Текущий статус и границы проверки: [checklist](../product/current-project-checklist.md), [аудит](../quality/project-audit-2026-10-06.md). Датированные результаты отдельных этапов сохранены с исходными датами.
+
 ## Цель
 
 Тесты защищают основной поток `inventory → evidence → snapshot → baseline → incident → decision → history`, tenant/location isolation, authentication, физический учёт, импорт документов и Vision workflow. Проверяется поведение через публичные функции и HTTP API, а не внутренняя структура реализации.
@@ -15,7 +17,15 @@
 | Static/config checks | JavaScript, PowerShell, shell, Python scripts и Compose config | `.github/workflows/ci.yml` |
 | Security checks | Gitleaks, `pip check`, `pip-audit` | `.github/workflows/ci.yml` |
 
-В текущем наборе **122 unit/integration и 16 browser E2E tests** (Agent 0.1.8, 2026-10-05). Число является снимком состояния репозитория и должно обновляться вместе с изменением набора. Browser сценарии включают login/session/read races, совместные фильтры и возврат в реестр, физический инцидент/акт, импорт → canonical кабинет → обход с итогом, ошибки сохранения и защиту от двойного submit. [Контракт проверки обхода и импорта](../features/rooms-inspection-and-import.md). Дополнительно проверяются Agent/admin forms и доставка, измеренный контраст, reflow/keyboard, четыре роли с двумя tenant и реестр на 216/1000 synthetic assets. [Методика UI-приёмки и её ограничения](ui-acceptance.md).
+В текущем наборе **148 unit/integration и 22 browser E2E cases** (Ledger/QR/Agent 0.1.8, сверка 2026-10-06). Число является снимком состояния репозитория и должно обновляться вместе с изменением набора. Browser сценарии включают login/session/read races, совместные фильтры и возврат в реестр, физический инцидент/акт, импорт → canonical кабинет → обход с итогом, ошибки сохранения и защиту от двойного submit. [Контракт проверки обхода и импорта](../features/rooms-inspection-and-import.md). Дополнительно проверяются Agent/admin forms и доставка, измеренный контраст, reflow/keyboard, четыре роли с двумя tenant и реестр на 216/1000 synthetic assets. [Методика UI-приёмки и её ограничения](ui-acceptance.md).
+
+Регрессия свежести Agent дополнительно проверяет configured threshold и границу, приоритет конфликтов/OFFLINE, неизменность status/history при GET, согласованность API для четырёх ролей и tenant isolation. Chromium проходит обзор/фильтры/кабинет/карточку версии на синтетических данных и reflow при 390/320 px. [Протокол исправления](../../outputs/assetguard-agent-status-fixes-2026-10-06/report.md).
+
+## Свежая сверка 6 октября 2026
+
+Полный локальный набор с `ASSETGUARD_RUN_BROWSER_E2E=1`: **170 passed in 125.79s** — 148 backend cases и 22 browser E2E. Изолированный PostgreSQL 17 доступен на loopback; fixture применяет все 26 migrations до `0026_telegram_notifications`. Parametrization увеличивает число cases: оно отличается от числа `test_*` functions. Application/docs CI опубликованного `f4f56e7`/`dca5a86` также success. Подробности окружения и проверок: [аудит](../quality/project-audit-2026-10-06.md).
+
+Первый audit-запуск был остановлен без результата при недоступной штатной локальной test DB; успешный результат получен только после запуска отдельной disposable PostgreSQL. Production и локальный Vision для этого не переключались.
 
 ## Тестовое окружение
 
@@ -90,9 +100,10 @@ Smoke job задаёт обязательные `ASSETGUARD_DATABASE_URL`, `ASSE
 - Изменение frontend workflow требует E2E только для критичного пользовательского пути; детали отображения лучше проверять на более низком уровне.
 - Изменение Vision detector не считается проверенным только на mock: нужен scheduled/manual real-model smoke.
 
-## Подтверждённые пробелы
+## Эксплуатационные проверки и пробелы
 
 - Нет нагрузочных и длительных soak tests.
+- Текущий server checkpoint 6 октября: R2 object `assetguard-production-20261006-075950.sql.agbackup`, schema `0026`, assets=220/endpoints=11, backup/restore success. Это read-only перепроверка записанного rehearsal; новый restore в этом аудите не запускался.
 - R2 restore rehearsal реализован как эксплуатационный скрипт: Windows Task Scheduler и постоянный Linux server прошли 2026-09-27. Server rehearsal вернул revision `0024_physical_asset_operations`, `assets=211`, `endpoints=1`. Monitor test mode подтвердил Telegram acceptance и дедупликацию без остановки production.
 - Agent re-enrolment integration tests применяют миграцию `0025`, проверяют отсутствие plaintext claim token, tenant isolation, expiry, approve/reject, отзыв прежнего credential и сохранение endpoint.
 - Native Agent regression tests проверяют bound mismatch, foreign/unowned organization, mixed identifiers, duplicate, existing active credential и повторную доставку FAILED raw правильным Agent с одним change/incident.

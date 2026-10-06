@@ -1,11 +1,13 @@
 # Минимальная security baseline MVP
 
+> **Сверено 2026-10-06.** Текущий статус и границы проверки: [checklist](../product/current-project-checklist.md), [аудит](../quality/project-audit-2026-10-06.md). Датированные результаты отдельных этапов сохранены с исходными датами.
+
 ## Обязательные меры
 
 - HTTPS и нормальная проверка сертификата для GLPI Agent;
 - аутентификация и авторизация admin API/UI;
 - secrets вне исходного кода и логов;
-- единый лимит входящего payload 10 MB на Caddy и API, schema validation и basic rate limiting;
+- внешний body limit Caddy 10 MB; отдельные API limits: inventory 2 MiB, Excel 5 MiB, PDF/Vision 10 MiB по умолчанию; schema validation и basic rate limiting;
 - audit важных административных действий;
 - отсутствие публичного доступа к PostgreSQL.
 
@@ -20,7 +22,7 @@
 - ingest отделён в `/internal` boundary с отдельным rotating shared secret;
 - Named `ADMIN`, `VIEWER`, `LOCATION_MANAGER` и `INVENTORY_CLERK` users используют revocable 12-hour sessions;
 - Каждый новый Agent получает отдельный credential; одобряемое re-enrolment хранит claim token только как hashes и отзывает прежний активный ключ;
-- Location grants на корпус/этаж/кабинет разграничивают чтение и редактирование на API boundary; allow/deny-матрица покрывает все 60 admin operations, а перед multi-school rollout остаётся реальная приёмка двух организаций;
+- Location grants на корпус/этаж/кабинет разграничивают чтение и редактирование на API boundary; allow/deny-матрица покрывает все 64 admin operations, а перед multi-school rollout остаётся реальная приёмка двух организаций;
 - logout, административный revoke, disable user и password rotation отзывают активные sessions;
 - actor административного incident decision выводится из authenticated principal;
 - `/auth/login`, `/admin` и `/internal` защищены базовым rate limit;

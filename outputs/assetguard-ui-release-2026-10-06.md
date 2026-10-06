@@ -1,5 +1,7 @@
 # AssetGuard — UI simplification publication and production acceptance
 
+> **Исторический документ.** Даты, SHA, измерения и исходные требования ниже относятся к описанному этапу. Сверка указателя выполнена 2026-10-06; текущее состояние и оставшаяся работа — в [checklist](../docs/product/current-project-checklist.md) и [аудите](../docs/quality/project-audit-2026-10-06.md).
+
 Date: 2026-10-06. Application commit:
 `f4f56e7816035e01703305808dd0862a37de402e`, branch `main`.
 

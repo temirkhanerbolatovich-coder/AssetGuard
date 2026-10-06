@@ -1,6 +1,21 @@
 # Changelog
 
+> **Сверено 2026-10-06.** Текущий статус и границы проверки: [checklist](docs/product/current-project-checklist.md), [аудит](docs/quality/project-audit-2026-10-06.md). Датированные результаты отдельных этапов сохранены с исходными датами.
+
 Здесь фиксируются пользовательские, security и эксплуатационные изменения AssetGuard. Незначительные внутренние рефакторинги перечисляются в Git history, но не дублируются в этом файле.
+
+## 2026-10-06 — исправление свежести и состояний Agent (локально)
+
+- Обзор, реестр, кабинет и администрирование используют вычисляемый сервером `connection_status`; старый сохранённый ONLINE больше не скрывает просроченный отчёт. GET сохраняет БД и историю без изменений.
+- Компьютеры без Agent и ожидание первого отчёта получили отдельные состояния/фильтры. Счётчик отсутствия свежих данных включает только STALE/OFFLINE.
+- XML-представление `GLPI-Agent_v1.20` распознаётся как поддержанная 1.20; исходная версия evidence сохраняется, неизвестные версии остаются неподдержанными.
+- Полная локальная проверка: **170 passed** (148 backend + 22 E2E), JS/diff checks; API/feature/version contracts, README и checklist обновлены. Миграции и зависимости не добавлялись. [Протокол](outputs/assetguard-agent-status-fixes-2026-10-06/report.md). Публикация и production deployment ещё не выполнены.
+
+## 2026-10-06 — полный аудит и актуализация документации
+
+- Сверены Git/local/GitHub/server SHA, production image/frontend, schema 0026, health/auth, operational jobs и R2 restore evidence; изучена история связанных чатов.
+- Актуализированы README, checklist, architecture/API/security/deployment/testing, UX, Agent/fleet и техдолг; добавлены полный 73-operation API reference, audit report и coverage inventories. QR/mobile audit, Ledger, Agent 0.1.8 и Telegram больше не описываются как будущие этапы.
+- Свежая локальная проверка: 145 passed (124 backend + 21 E2E), dependency audit без известных уязвимостей; JS/scripts/Compose проверены. Исторические результаты и восемь ADR сохранены; изменение касается документации и пока локально.
 
 ## 2026-10-06 — упрощение навигации и ролей
 
@@ -82,7 +97,7 @@
 - Исправлен перенос onboarding-ссылки на узком экране. Secret scan использует штатный GitHub token с прежними read-only permissions для устранения anonymous API rate-limit.
 - Application `d8f6a63`: 96 backend + 6 browser E2E, CI success, публичная browser/API проверка и backup/restore. [Протокол](outputs/assetguard-ui-stage1-2026-10-05.md).
 
-## Unreleased — installer 0.1.7 candidate
+## Исторический этап — installer 0.1.7 candidate
 
 ### Added
 
@@ -121,7 +136,7 @@
 
 Application commit `93ff8ed` опубликован в `main` и развёрнут 2026-10-04: production schema `0025`, публичный UI, защищённые re-enrolment routes и monitor проверены. Push/manual GitHub CI прошли, включая 80 backend tests, 2 browser E2E и реальную модель. Перед выкладкой выполнены encrypted R2 restore и изолированный upgrade/downgrade/re-upgrade с запуском прежнего API; Telegram подтвердил test alert, повтор подавлен. Подробности и ограничения отката — в [протоколе выкладки](outputs/assetguard-release-2026-10-04.md).
 
-Installer `0.1.7` остаётся неподписанным и неопубликованным pilot candidate, ещё не принятым на третьем ПК. Исправления стабилизации не добавляют миграций: выкладка применяет уже существующую `0025_agent_reenrolment`.
+На этом этапе installer `0.1.7` был неподписанным и неопубликованным pilot candidate, ещё не принятым на третьем ПК. Исправления стабилизации не добавляли миграций: выкладка применяла уже существующую `0025_agent_reenrolment`. Текущий candidate `0.1.8` и schema `0026` описаны в записях 5–6 октября и основном checklist.
 
 ## [v0.1.6] — 2026-09-27
 

@@ -1,19 +1,26 @@
 # AssetGuard backend
 
+> **Сверено 2026-10-06.** Текущий статус и границы проверки: [checklist](../docs/product/current-project-checklist.md), [аудит](../docs/quality/project-audit-2026-10-06.md). Датированные результаты отдельных этапов сохранены с исходными датами.
+
 Backend реализован как Python 3.12 modular monolith на FastAPI. Он объединяет защищённый inventory gateway, нормализацию hardware, baseline/change/incident workflow, административный API и изолированный AssetGuard Vision module. Gateway сохраняет payload в immutable `RawInventory` до любой нормализации.
 
+Backend package/API version остаётся `0.1.0`; schema head — `0026_telegram_notifications` (26 migrations). Актуальный application release определяется SHA в [checklist](../docs/product/current-project-checklist.md). OpenAPI содержит 73 operations, из них 64 admin: [route reference](../docs/api/route-reference.md).
+
 ## Локальный запуск
+
+Локальное исправление от 2026-10-06 добавляет отдельный read-only `connection_status` для согласованной свежести Agent в API и кабинете. XML-версия `GLPI-Agent_v1.20` распознаётся как проверенная `1.20` без изменения исходного evidence. [Контракт](../docs/features/agent-administration-and-delivery.md) и [проверка](../outputs/assetguard-agent-status-fixes-2026-10-06/report.md). Миграции и зависимости не добавлены. Публикация и выкладка отражаются в checklist отдельно.
 
 ```powershell
 cd backend
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
-python -m pip install -e ".[dev,vision]"
+python -m pip install -e ".[dev]"
+python -m alembic upgrade head
 python -m uvicorn assetguard.app:app --reload
 ```
 
-Проверка: `GET http://127.0.0.1:8000/health`.
+До команд создайте локальный `.env` из корневой инструкции и запустите PostgreSQL. Проверка процесса: `GET http://127.0.0.1:8000/health`; подключение к БД: `/health/ready`. Для Vision установите `.[dev,vision]` отдельно; для browser tests — `.[dev,e2e]` и Chromium.
 
 ## Internal inventory gateway
 
@@ -36,9 +43,9 @@ Endpoint принимает JSON object до 2 MiB по умолчанию, со
 
 `accept_snapshot_as_baseline()` — единственный путь к `ACTIVE` baseline. Normalizer создаёт только candidate snapshot. `detect_changes()` сравнивает active baseline с current snapshot для RAM и storage, записывает evidence и использует stable dedup key; absence в неполной категории не создаёт removal.
 
-### Текущая Windows-лаборатория
+### Windows-окружение и путь checkout
 
-Путь данного workspace содержит кириллицу. Установленный Python 3.12 editable-install создаёт `.pth`, который в этой code page не читается. Для текущей машины рабочая среда находится в `C:\AssetGuardDev\backend-venv`, а ASCII junction `C:\AssetGuardWorkspace` указывает на каталог `backend`. `scripts/windows/start-demo.ps1` запускает Python с `-S` и явно подключает исходники и `site-packages`, поэтому миграции и API стартуют без чтения проблемного `.pth`. Это локальная особенность окружения, не часть поставки приложения.
+Для нового editable install рекомендуется ASCII-путь checkout. Ранее кириллица и системная code page вызывали ошибку чтения `.pth`; обход использовал `C:\AssetGuardDev\backend-venv` и junction `C:\AssetGuardWorkspace` на `backend`. На сверке 2026-10-06 обычный `backend/.venv/Scripts/python.exe` (Python 3.12.3) в текущем checkout успешно импортировал пакет и выполнил полный pytest. `scripts/windows/start-demo.ps1` по-прежнему выбирает старый ASCII fallback, если оба пути существуют, и запускает Python с `-S`, явно добавляя исходники и `site-packages`. Это совместимость с локальным Windows-окружением; наличие fallback нельзя считать обязательным условием запуска.
 
 ## AssetGuard Vision
 
@@ -61,7 +68,8 @@ Production Docker image включает Tesseract и языковые паке�
 - Native endpoint подтверждён GLPI Agent 1.19 и 1.20 на двух реальных Windows-PC через production TLS endpoint; полный fleet lifecycle test на 3–5 ПК ещё не завершён.
 - Vision не поддерживает RTSP, quality gate, multi-frame aggregation и автоматический `ANOMALY`.
 - Иерархия корпус/этаж/кабинет и привязка Vision к кабинету реализованы; импорт не извлекает из PDF кабинет без явных данных.
-- Production HTTPS deployment, R2 upload/download и isolated PostgreSQL restore приняты 2026-09-27. Vision image volume в backup пока не входит.
-- Windows installer `0.1.7` остаётся неподписанным и не должен распространяться массово до code signing и проверки update/rollback.
+- Production HTTPS, R2 backup и isolated restore повторно подтверждены 2026-10-06 на schema `0026` (220 assets, 11 endpoints); [протокол](../docs/quality/project-audit-2026-10-06.md). Vision image volume в backup пока не входит.
+- Agent 0.1.8 отделяет hardware collector от SYSTEM delivery task/FIFO; один реальный PC и controlled offline/lost-ACK lab приняты, финальная readiness установка и fleet остаются открыты. [Контракт](../docs/features/agent-continuous-inventory.md).
+- Windows installer `0.1.8` остаётся неподписанным и не должен распространяться массово до code signing и проверки update/rollback.
 
 Эти границы предотвращают ситуацию, когда inventory принимается без неизменяемого RawInventory, payload limit и audit trail.

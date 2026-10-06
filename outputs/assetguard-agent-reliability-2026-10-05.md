@@ -1,5 +1,7 @@
 # Agent 0.1.8 — приёмка непрерывного сбора и offline очереди
 
+> **Исторический документ.** Даты, SHA, измерения и исходные требования ниже относятся к описанному этапу. Сверка указателя выполнена 2026-10-06; текущее состояние и оставшаяся работа — в [checklist](../docs/product/current-project-checklist.md) и [аудите](../docs/quality/project-audit-2026-10-06.md).
+
 Дата: 2026-10-05. Прежний production application `0f67995`, docs HEAD `99f41d3`, schema `0026_telegram_notifications`. Изменение не затрагивает Vision, схему БД или UI.
 
 ## Причина

@@ -1,5 +1,7 @@
 # Windows operations
 
+> **Сверено 2026-10-06.** Текущий статус и границы проверки: [checklist](../../docs/product/current-project-checklist.md), [аудит](../../docs/quality/project-audit-2026-10-06.md). Датированные результаты отдельных этапов сохранены с исходными датами.
+
 Upstream GLPI Agent устанавливается отдельно: AssetGuard не модифицирует и не форкает collector. Скрипты каталога покрывают локальную demo-эксплуатацию:
 
 - `new-local-env.ps1` — создаёт локальные secrets;
@@ -23,7 +25,7 @@ Upstream GLPI Agent устанавливается отдельно: AssetGuard 
 
 Скрипты не отключают TLS, не записывают secrets в исходники и не меняют baseline автоматически.
 
-Пример для каждого компьютера пилота (после копирования репозитория и `.env` с ограниченными правами):
+Пример для каждого компьютера пилота (для legacy JSON bridge после копирования репозитория и отдельной локальной `.env` с ограниченными правами; production server `.env` на ПК не копируют):
 
 ```powershell
 .\scripts\windows\install-pilot-agent-schedule.ps1 -RepositoryRoot 'C:\AssetGuard' -GatewayUri 'https://<временный-или-постоянный-host>/internal/inventories' -NetworkTarget '1.1.1.1' -EveryHours 4
@@ -32,6 +34,8 @@ Upstream GLPI Agent устанавливается отдельно: AssetGuard 
 `NetworkTarget` измеряет только четыре ICMP-пробы: адрес цели, число ответов, потери и среднюю задержку. Скорость канала, содержимое трафика, список посещений и учётные данные не собираются.
 
 Для primary native transport настройте поддерживаемый GLPI Agent 1.19 или 1.20 на `https://<host>/glpi-agent`, отдельный Basic username/secret устройства и profile `glpi-agent-minimal-profile.cfg`. Новые установки закреплены на версии 1.20; неизвестный будущий релиз установщик отклонит до отдельного contract test. Legacy user `assetguard` с общим rotating secret остаётся только migration fallback. Explicit `send-minimal-inventory.ps1` используется для автономного collection режима. Production credentials должны храниться в защищённой конфигурации агента с ограниченным ACL, а не в командном файле.
+
+Текущая проверка 6 октября: installer 0.1.8, 2 114 556 bytes, SHA-256 `BCD24D903FDB7C03EACB51E38F3BE653938DD905B0683F360A0BC8B412D3F50F`, Authenticode **NotSigned**. Последний опубликованный prerelease — 0.1.6; controlled installation одного PC не закрывает fleet/signing/rollback. [Общий статус](../../docs/product/current-project-checklist.md).
 
 ## Графический установщик для других компьютеров
 
@@ -125,7 +129,7 @@ $passphrase = Read-Host 'Backup passphrase' -AsSecureString
   -OffsiteTarget 'assetguard-r2:assetguard-backups/daily'
 ```
 
-Появятся две задачи: ежедневный `AssetGuard Daily Encrypted Backup` и воскресный `AssetGuard Weekly Restore Rehearsal`. Они запускаются лишь когда данный пользователь вошёл в Windows — это осознанное ограничение desktop-pilot, потому что и Docker Desktop, и DPAPI принадлежат интерактивному пользователю. Для постоянного сервера следующим шагом нужен отдельный service account и secret manager.
+Появятся две задачи: ежедневный `AssetGuard Daily Encrypted Backup` и воскресный `AssetGuard Weekly Restore Rehearsal`. Они запускаются лишь когда данный пользователь вошёл в Windows — это осознанное ограничение desktop-pilot, потому что и Docker Desktop, и DPAPI принадлежат интерактивному пользователю. Постоянный Oracle server уже использует отдельные root-owned systemd jobs и root-only configuration; Windows tasks остаются только desktop-контуром. Полноценный secret manager пока не внедрён. [Production runbook](../../docs/operations/production-deployment.md).
 
 При передаче `-OffsiteTarget` ежедневная задача хранит в R2 30 последних дней, а локально — 14 дней. Воскресная rehearsal скачивает последнюю копию именно из R2, восстанавливает её в изолированный контейнер без открытых портов и удаляет только временно скачанный зашифрованный файл.
 

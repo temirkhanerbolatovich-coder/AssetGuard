@@ -1,5 +1,7 @@
 # AssetGuard MVP v0.1 — аналитическая фиксация
 
+> **Исторический документ.** Даты, SHA, измерения и исходные требования ниже относятся к описанному этапу. Сверка указателя выполнена 2026-10-06; текущее состояние и оставшаяся работа — в [checklist](docs/product/current-project-checklist.md) и [аудите](docs/quality/project-audit-2026-10-06.md).
+
 ## Статус
 
 Документ сохраняет исходную аналитическую фиксацию до начала разработки. После неё реализованы backend/frontend, PostgreSQL migrations, GLPI privacy-profile/bridge, inventory workflow и Vision demo. Актуальный статус и оставшиеся ограничения ведутся в [current project checklist](docs/product/current-project-checklist.md).

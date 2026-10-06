@@ -1,6 +1,10 @@
 # GLPI Agent: version lock
 
+> **Сверено 2026-10-06.** Текущий статус и границы проверки: [checklist](../product/current-project-checklist.md), [аудит](../quality/project-audit-2026-10-06.md). Датированные результаты отдельных этапов сохранены с исходными датами.
+
 ## Выбранный артефакт для лабораторного стенда
+
+При отображении карточки версии `1.19`/`1.20` и XML-представления `GLPI-Agent_v1.19`/`GLPI-Agent_v1.20` считаются одним проверенным релизом. Исходное `source_version` в raw evidence и API сохраняется буквально; нормализация применяется только к проверке поддержки. Неизвестные версии, произвольные префиксы, patch-версии и дополнительные суффиксы остаются `UNSUPPORTED`, отсутствие версии — `UNKNOWN`. Это не расширяет список поддержанных релизов и не разрешает автоматическое принятие эталона. [Локальная проверка 2026-10-06](../../outputs/assetguard-agent-status-fixes-2026-10-06/report.md).
 
 | Параметр | Значение |
 | --- | --- |
@@ -27,4 +31,4 @@
 
 ## Текущее состояние
 
-На 23.09.2026 GLPI Agent 1.19 прошёл локальный payload и native transport spike. На 27.09.2026 неизменённый GLPI Agent 1.20, установленный WinGet на втором реальном Windows-PC, успешно выполнил authenticated native отправку в production: RawInventory получил `PROCESSED`, endpoint — `ONLINE`. Integration contract теперь прогоняется для метаданных версий 1.19 и 1.20. Это подтверждает используемый AssetGuard XML boundary, но не объявляет совместимость с будущими версиями.
+На 23.09.2026 GLPI Agent 1.19 прошёл локальный payload и native transport spike. На 27.09.2026 неизменённый GLPI Agent 1.20, установленный WinGet на втором реальном Windows-PC, успешно выполнил authenticated native отправку в production: RawInventory получил `PROCESSED`, endpoint — `ONLINE`. Integration contract теперь прогоняется для метаданных версий 1.19 и 1.20. 5 октября installer 0.1.8 с неизменённым collector 1.19 дополнительно прошёл continuous collection и controlled offline/lost-ACK delivery. Новые установки остаются pinned на 1.20; на 6 октября 0.1.8 не подписан и не опубликован как новый release. [Протокол и границы](../../outputs/assetguard-agent-reliability-2026-10-05.md). Это подтверждает используемый AssetGuard XML boundary, но не объявляет совместимость с будущими версиями.

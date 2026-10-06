@@ -1,148 +1,119 @@
 # AssetGuard
 
+> **Сверено 2026-10-06.** Текущий статус и границы проверки: [checklist](docs/product/current-project-checklist.md), [аудит](docs/quality/project-audit-2026-10-06.md). Датированные результаты отдельных этапов сохранены с исходными датами.
+
 [![CI](https://github.com/temirkhanerbolatovich-coder/AssetGuard/actions/workflows/ci.yml/badge.svg)](https://github.com/temirkhanerbolatovich-coder/AssetGuard/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/temirkhanerbolatovich-coder/AssetGuard?include_prereleases)](https://github.com/temirkhanerbolatovich-coder/AssetGuard/releases)
 
-AssetGuard — система учёта и контролируемой инвентаризации школьного имущества. Она объединяет реестр по организациям и кабинетам, технические данные Windows-компьютеров, явные эталоны оборудования, объяснимые инциденты, физические обходы, импорт/экспорт и экспериментальный Vision-контур.
+AssetGuard — система учёта и контролируемой инвентаризации школьного имущества. Она объединяет реестр по кабинетам, технические отчёты Windows-компьютеров, подтверждённые эталоны, объяснимые инциденты, физические обходы, импорт/экспорт и экспериментальную проверку по фото.
 
-Система принимает данные неизменённого GLPI Agent 1.19/1.20, сохраняет исходный payload как immutable evidence, строит нормализованный snapshot и сравнивает его только с явно подтверждённым baseline. Частичная инвентаризация не считается доказательством удаления компонента.
+GLPI Agent 1.19/1.20 остаётся внешним неизменённым сборщиком. AssetGuard сохраняет исходный payload, нормализует hardware snapshot и сравнивает его с явно принятым baseline. Частичный отчёт не считается доказательством удаления компонента; решение по расхождению принимает человек.
 
-## Текущий статус
+## Текущее состояние
 
-Статус проекта: **рабочий pilot MVP; не готов к массовому multi-school rollout**.
+На **6 октября 2026 года** это **рабочий pilot MVP**. Массовое внедрение в нескольких школах требует дополнительных проверок.
 
-Подтверждено кодом, тестами или выполненной эксплуатационной проверкой:
+| Область | Подтверждённое состояние |
+| --- | --- |
+| Git | До этой актуализации local `main`, GitHub `main` и server checkout совпадали на `dca5a86` |
+| Production | Oracle Cloud VM, Docker Compose + Caddy; application `f4f56e7`, HTTPS [публичный сервер](https://assetguard-temirkhan.duckdns.org/) |
+| БД | PostgreSQL 17; 26 Alembic migrations, head `0026_telegram_notifications` |
+| API | 73 HTTP operations на 66 путях; 64 защищённые admin operations на 57 путях |
+| Проверки | Свежий локальный прогон: **170 passed** — 148 backend + 22 browser E2E; JS, scripts и Compose проверены |
+| CI | Application и documentation CI на опубликованных SHA — success; изменения этого аудита пока локальные |
+| Agent | Последний опубликованный prerelease installer — `v0.1.6`; собранный `0.1.8` — неподписанный pilot candidate |
+| Восстановление | R2 backup и isolated restore на schema `0026` подтверждены протоколом 6 октября и текущим состоянием server jobs |
 
-- FastAPI, PostgreSQL 17, SQLAlchemy и Alembic migrations до `0026_telegram_notifications`;
-- browser dashboard Ledger с едиными компонентами, карточкой компьютера до связи и реестром по источникам; структура `организация → корпус → этаж → кабинет`;
-- native GLPI XML transport и JSON bridge;
-- raw inventory, snapshots, explicit baseline, changes, incidents и append-only history;
-- отдельные Agent credentials, отзыв ключа и подтверждаемое re-enrolment после переустановки Windows;
-- физический обход кабинета, перемещение, списание и PDF-акты;
-- Excel/PDF import/export, локальный OCR и QR карточки;
-- tenant/location authorization matrix для 63 защищённых admin operations;
-- production HTTPS deployment, encrypted PostgreSQL backup в Cloudflare R2 и isolated restore rehearsal;
-- CI, dependency audit, secret scanning и browser E2E.
+Работают:
 
-До реального масштабирования остаются fleet test на 3–5 ПК, подписанный Windows installer, управляемое обновление/rollback Agent, отключение legacy shared credentials, политика хранения данных, backup Vision-фотографий и дополнительная multi-school проверка.
+- Ledger UI: обзор, имущество, единый центр технических/физических инцидентов, кабинеты и контекстное администрирование;
+- индивидуальный и групповой учёт, структура `организация → корпус → этаж → кабинет`, named users, sessions и location grants;
+- native GLPI XML и JSON bridge, immutable raw evidence, snapshots, explicit baseline, changes и история решений;
+- отдельные Agent credentials, revoke и approved re-enrolment с сохранением endpoint;
+- физический обход с проверкой итога, перемещение/списание и PDF-акты;
+- Excel/PDF preview/apply, OCR, selective import и сохранение остатков после учётных актов;
+- QR имущества и кабинета, запуск обхода, camera scan при поддержке браузера, ручной ввод и черновик в текущей сессии;
+- транзакционная очередь Telegram-инцидентов, отдельный worker и monitor сервера/Agent;
+- encrypted PostgreSQL backup в Cloudflare R2, isolated restore и systemd timers;
+- локальный Vision photo workflow; тяжёлый inference на Oracle Free выключен.
 
-Актуальная точка правды: [полный чек-лист проекта](docs/product/current-project-checklist.md). Последний опубликованный pilot installer — [`v0.1.6`](https://github.com/temirkhanerbolatovich-coder/AssetGuard/releases/tag/v0.1.6); `0.1.8` добавляет независимый локальный сбор, offline очередь и randomized delivery, пока является неподписанным кандидатом для контролируемой проверки. [Установка и контракт](docs/features/agent-continuous-inventory.md).
+После просмотра сайта локально исправлены свежесть Agent во всех экранах, состояния без Agent/до первого отчёта и ложное предупреждение о `GLPI-Agent_v1.20`. Код и документация проверены; эти правки ещё не опубликованы и не выложены на production. [Протокол и снимки](outputs/assetguard-agent-status-fixes-2026-10-06/report.md).
 
-Стабилизация 2026-10-04 опубликована и развёрнута на production из application commit `93ff8ed`: 80 backend tests, 2 browser E2E и ручной GitHub real-model smoke (23 detections) прошли. Закрыты scope ошибки native Agent и Excel/PDF import, age-based stale counters, monitor recovery/retry и структурированный количественный импорт с сохранением остатков после актов. Серверные UI/API/schema согласованы на `0025`; backup, migration/recovery rehearsal и Telegram acceptance/dedup проверены. Подробности: [протокол выкладки](outputs/assetguard-release-2026-10-04.md). Следующий этап — fleet test на 3–5 реальных ПК; новый installer `0.1.8` пока не опубликован.
+Главные открытые задачи: Agent 0.1.8 на 3–5 реальных ПК, code signing и проверенный update/rollback, data governance/retention, onboarding и эксплуатационная изоляция двух организаций, отказ от legacy shared credentials, staging/failover и ручная UI-приёмка.
+
+Подробности: [актуальный чек-лист](docs/product/current-project-checklist.md), [полный аудит](docs/quality/project-audit-2026-10-06.md), [roadmap](docs/product/production-readiness-roadmap.md). Старые даты, SHA и тестовые числа в release records относятся к соответствующим этапам.
 
 ## Архитектура
 
-Telegram принят на production 2026-10-05: application commit `0b90607`, schema `0026`, 96 backend tests и 2 browser E2E, GitHub CI, pre/post R2 restore и изолированный rollback прошли. Пользователь получил тест; повторный и минутный запуск не создали дубль. [Протокол](outputs/assetguard-telegram-2026-10-05.md).
-
-Agent 0.1.8 принят на одном реальном PC, application `fa22015` развёрнут: offline очередь, частые локальные сборы и ограниченная доставка с jitter; реальные автоматические интервалы 304–366 s. **122 backend + 16 browser E2E**, CI и production API/projection прошли. Финальный EXE содержит исправление локализованного SYSTEM; его повторная установка отменена в UAC. Fleet на 3–5 PC, signing и публикация нового stable installer ещё открыты. [Протокол и ограничения](outputs/assetguard-agent-reliability-2026-10-05.md).
-
-Полный редизайн **Ledger** и последующее упрощение рабочих сценариев внедрены во всех экранах: единые Golos Text и компоненты, четыре основных раздела, компактный обзор и реестр, понятные карточки, инциденты, кабинеты и task tabs администрирования. **124 backend + 21 browser E2E, всего 145 тестов**, прошли локально и в GitHub CI. Application `f4f56e7` опубликован и принят на production 2026-10-06; public UI hashes, readiness, schema `0026`, pre-deploy R2 restore, monitor и Telegram worker проверены. [Реализация и шесть референсов](docs/features/ui-ledger-redesign.md), [финальная приёмка со снимками](outputs/assetguard-final-ui-acceptance-2026-10-06/report.md), [протокол выкладки](outputs/assetguard-ui-release-2026-10-06.md). NVDA, Safari/Firefox, zoom 400%, representative performance и usability сотрудников остаются открыты.
-
-QR-запуск обхода кабинета и сканирование QR имущества развёрнуты из application `1107389`: 145 тестов и GitHub CI прошли, production readiness и авторизованная генерация QR проверены. Черновик сохраняется в текущей сессии; для браузеров без camera `BarcodeDetector` доступен ручной ввод.
-
-Порядок работы по интерфейсу изложен в [ТЗ UI/UX](docs/product/ui-ux-modernization-spec.md). **Этапы 1–4 и автоматическая часть этапа 5 приняты на production**. Application commit `0f67995`: измеренный контраст/keyboard focus, именованные dialogs, reflow, общий registry JOIN и пакетное чтение аппаратных сводок. **109 backend + 16 browser E2E**, [GitHub CI](https://github.com/temirkhanerbolatovich-coder/AssetGuard/actions/runs/37256897869), read-only production UI/API и encrypted R2 restore прошли. На текущих данных assets/endpoints выполняют по 4 SELECT вместо 65/105 с неизменным ответом. [Оптимизация и замеры](outputs/assetguard-registry-performance-2026-10-05.md), [UI этап 5](outputs/assetguard-ui-stage5-2026-10-05.md), [методика и ручная приёмка](docs/testing/ui-acceptance.md).
-
-Предыдущие этапы: [4 — Agent и администрирование](outputs/assetguard-ui-stage4-2026-10-05.md), [3 — кабинеты, обход и импорт](outputs/assetguard-ui-stage3-2026-10-05.md), [2 — реестр и инциденты](outputs/assetguard-ui-stage2-2026-10-05.md), [1 — вход и каркас](outputs/assetguard-ui-stage1-2026-10-05.md). Полная приёмка этапа 5 остаётся открытой: zoom 400%, screen reader, representative performance и usability с сотрудниками ещё не проведены; zoom 200% закрыт Ledger. Fleet, оставшиеся stale PC и публикация/подпись installer 0.1.8 остаются отдельными задачами.
-
-Новые технические и физические инциденты помещаются в транзакционную Telegram-очередь; отдельный worker отправляет их в явно назначенный чат организации с retry и проверкой acceptance. Проблемы Agent и сервера отслеживает существующий monitor. [Настройка и гарантии доставки](docs/features/telegram-notifications.md), [план UI/UX](docs/product/ui-ux-modernization-spec.md).
-
 ```text
-GLPI Agent / JSON bridge
-          │ HTTPS
-          ▼
-       Caddy
-          ▼
-FastAPI modular monolith ─────► Vision files/model cache
-          │
-          ▼
-     PostgreSQL 17 ───────────► encrypted backup ─► Cloudflare R2
+GLPI local collector → Windows SYSTEM task / durable FIFO → HTTPS
+JSON bridge / browser                                  → Caddy
+                                                          ↓
+                                              FastAPI modular monolith
+                                                  ↓              ↓
+                                             PostgreSQL     Vision files/cache
+                                                  ↓          (local demo)
+                                      Telegram outbox → worker → Telegram
+                                                  ↓
+                                   encrypted SQL backup → Cloudflare R2
 ```
 
-Основной поток:
+Основной поток: `Inventory → Raw evidence → Snapshot → Explicit baseline → Change → Incident → Decision → History`.
 
-`Inventory → Raw evidence → Snapshot → Explicit baseline → Change → Incident → Decision → History`
-
-AssetGuard не является форком GLPI, custom collector, helpdesk, remote desktop или системой автоматического определения кражи. GLPI Agent остаётся внешним сборщиком; `WARNING` и `OFFLINE` означают необходимость проверки человеком.
+Состав модулей и границы: [архитектура](docs/architecture/overview.md), [потоки данных](docs/architecture/data-flow.md), [API](docs/api/README.md). Hardware collection, QR-обход и Vision являются разными источниками наблюдений.
 
 ## Быстрый локальный запуск
 
-Требования: Windows, Docker Desktop, PowerShell 7 и Python 3.12. Для Python рекомендуется путь без кириллицы.
+Требования: Windows, Docker Desktop, PowerShell 7 и Python **3.12**. Используйте ASCII-путь checkout для Python editable install. Локальный запуск на другом OS возможен через Compose; Windows Agent требует Windows x64 и прав администратора.
 
 ```powershell
 pwsh -File .\scripts\windows\new-local-env.ps1
 py -3.12 -m venv backend/.venv
-backend/.venv/Scripts/python.exe -m pip install -e 'backend[dev,vision]'
+backend/.venv/Scripts/python.exe -m pip install -e 'backend[dev]'
 pwsh -File .\scripts\windows\start-demo.ps1
 ```
 
-Откройте <http://127.0.0.1:8000>. Bootstrap token берётся из локального `.env`; после первого входа создайте именованного пользователя. Не используйте production credentials в локальной среде и не добавляйте `.env` в Git.
+Откройте [локальный интерфейс](http://127.0.0.1:8000). Bootstrap token берётся из локального `.env`; затем создайте named user и назначения. Секреты production для локального запуска не используются. Для Vision установите extras `backend[dev,vision]` либо используйте [изолированный локальный Vision demo](docs/operations/local-demo-guide.md).
 
-Для временной публичной демонстрации:
-
-```powershell
-pwsh -File .\scripts\windows\start-free-public-demo.ps1
-```
-
-Cloudflare Quick Tunnel предназначен только для демонстрации: URL меняется и не подходит для постоянной установки Agent.
+Для временного публичного показа: `pwsh -File .\scripts\windows\start-free-public-demo.ps1`. Quick Tunnel меняет URL и подходит только для демонстрации. Постоянный Agent использует стабильный HTTPS endpoint.
 
 ## Тестирование
 
-Backend-тесты запускаются из каталога `backend`, чтобы Alembic использовал правильную конфигурацию:
+Нужен доступный локальный PostgreSQL и пользователь с правом `CREATE DATABASE`. Fixture создаёт случайную отдельную БД, применяет migrations и удаляет её после тестов. Перед запуском проверьте локальную connection string. Полная инструкция: [testing strategy](docs/testing/testing-strategy.md).
 
 ```powershell
+backend/.venv/Scripts/python.exe -m pip install -e 'backend[dev,e2e]'
+backend/.venv/Scripts/python.exe -m playwright install chromium
+
 Push-Location backend
-.\.venv\Scripts\python.exe -m pytest -q
+.\.venv\Scripts\python.exe -m pytest -q tests/unit tests/integration
+$env:ASSETGUARD_RUN_BROWSER_E2E='1'
+.\.venv\Scripts\python.exe -m pytest -q tests/e2e
+Remove-Item Env:ASSETGUARD_RUN_BROWSER_E2E
 Pop-Location
 
 node --check frontend/app.js
 git diff --check
 ```
 
-Текущий подтверждённый набор: **103 unit/integration tests и 16 browser E2E**. Каждый backend-запуск создаёт отдельную PostgreSQL database, применяет migrations до `head`, очищает состояние между тестами и удаляет базу после завершения.
+Без `ASSETGUARD_RUN_BROWSER_E2E=1` browser tests пропускаются. Общий прогон с этим флагом 6 октября: **170 passed in 125.79s**. Он не заменяет реальный fleet test, ручной screen-reader/браузерный аудит и capacity acceptance.
 
 ## Windows Agent
 
-Новые установки закреплены на upstream GLPI Agent `1.20`. Installer:
+Installer `0.1.8` использует неизменённый GLPI Agent как локальный collector, SYSTEM task при загрузке/каждую минуту и защищённую bounded FIFO. Сбор назначается через 300 секунд + jitter 0–60 секунд и задержку scheduler; доставка — максимум три отчёта за цикл, с backoff и XML ACK. Native daemon выключен, чтобы оставался один uploader. Установленные upstream 1.19/1.20 совместимы; новые установки закреплены на 1.20.
 
-- устанавливает службу с автозапуском и recovery;
-- применяет privacy-limited profile;
-- использует отдельный username/secret для каждого компьютера;
-- сообщает версии installer и Agent;
-- пишет локальный lifecycle log без секретов;
-- поддерживает подтверждаемое восстановление после переустановки Windows по SMBIOS UUID.
+Локальный EXE `0.1.8`: **NotSigned**, 2 114 556 bytes, SHA-256 `BCD24D903FDB7C03EACB51E38F3BE653938DD905B0683F360A0BC8B412D3F50F`. Проверен один PC и controlled offline/lost-ACK lab; финальная установка исправленного readiness helper на этом PC ранее была отменена UAC. Полная fleet-приёмка не заявляется.
 
-Подробности: [Windows operations](scripts/windows/README.md) и [fleet test](docs/operations/agent-fleet-pilot.md). Неподписанный EXE допустим только для ограниченного внутреннего пилота.
+[Контракт и ограничения](docs/features/agent-continuous-inventory.md), [Windows operations](scripts/windows/README.md), [fleet protocol](docs/operations/agent-fleet-pilot.md), [опубликованный prerelease 0.1.6](https://github.com/temirkhanerbolatovich-coder/AssetGuard/releases/tag/v0.1.6).
 
-## Production и восстановление
+## Production и безопасность
 
-Production topology публикует только Caddy на 80/443; API и PostgreSQL находятся во внутренней Docker-сети. PostgreSQL backup шифруется AES-256-GCM, отправляется в R2 и проверяется восстановлением в disposable database. Vision volume пока не включён в этот backup.
+Production публикует Caddy на 80/443; API/PostgreSQL находятся во внутренней Docker-сети. `/health/ready` проверяет доступ к БД, но не подтверждает release SHA, актуальность backup или готовность парка. Поле version API/backend пока `0.1.0`; installer имеет отдельную версию. Release определяется SHA и протоколом приёмки.
 
-- [Deployment overview](docs/deployment/README.md)
-- [Production deployment and recovery](docs/operations/production-deployment.md)
-- [Observability](docs/operations/observability.md)
-- [Security model](docs/security/security-model.md)
+PostgreSQL backup шифруется AES-256-GCM и проверяется isolated restore из R2. Vision image volume в этот backup не входит. Staging/failover, общая retention policy, MFA/SSO, SAST/container scan/SBOM и внешний pentest остаются открытыми. Лицензия AssetGuard пока не оформлена отдельным `LICENSE`.
+
+Не публикуйте `.env`, Agent secrets, backup passphrase, R2 keys и Telegram token. Не отключайте TLS verification и не меняйте baseline автоматически. Производственная инструкция: [deployment/recovery](docs/operations/production-deployment.md), [security model](docs/security/security-model.md), [observability](docs/operations/observability.md).
 
 ## Документация
 
-Полная карта находится в [docs/README.md](docs/README.md). Основные документы:
-
-- [архитектура](docs/architecture/overview.md) и [потоки данных](docs/architecture/data-flow.md);
-- [API boundaries](docs/api/README.md);
-- [реализованные возможности](docs/features/README.md);
-- [ADR](docs/decisions/README.md);
-- [стратегия тестирования](docs/testing/testing-strategy.md);
-- [production roadmap](docs/product/production-readiness-roadmap.md);
-- [технический долг](docs/technical-debt.md);
-- [история релизов и unreleased changes](CHANGELOG.md).
-
-Исходные требования, исследования и старые планы сохранены как исторические документы. При расхождении приоритет имеют текущий код, executable tests, migrations и документы, помеченные как актуальные в карте документации.
-
-## Безопасность и ограничения
-
-- Не публикуйте `.env`, Agent secrets, backup passphrase, R2 keys или Telegram token.
-- Не отключайте TLS verification для постоянного Agent endpoint.
-- Не принимайте новый snapshot как baseline автоматически.
-- Не разворачивайте Vision production без retention policy и отдельного backup фотографий.
-- Не распространяйте installer массово до code signing и проверенного rollback.
-
-Лицензионная модель проекта пока не зафиксирована отдельным `LICENSE`; до её определения репозиторий нельзя считать разрешением на свободное переиспользование.
+[Карта документов](docs/README.md) содержит все актуальные руководства, feature contracts и восемь ADR. [Changelog](CHANGELOG.md) сохраняет историю изменений. Исходные требования, spikes и dated reports сохранены с историческими пометками; их измерения не переименованы в результаты сегодняшнего аудита.

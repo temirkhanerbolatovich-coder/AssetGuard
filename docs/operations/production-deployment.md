@@ -1,5 +1,7 @@
 # Production deployment and recovery
 
+> **Сверено 2026-10-06.** Текущий статус и границы проверки: [checklist](../product/current-project-checklist.md), [аудит](../quality/project-audit-2026-10-06.md). Датированные результаты отдельных этапов сохранены с исходными датами.
+
 ## HTTPS deployment
 
 `infra/containers/docker-compose.production.yml` runs PostgreSQL on a private Docker network, the AssetGuard API, and Caddy as the only public entry point. Set `ASSETGUARD_PUBLIC_HOST` to a DNS name pointing at the host, populate all secrets in `.env`, and run:
@@ -39,12 +41,18 @@ Configure `ASSETGUARD_VISION_MODEL_ID`, `ASSETGUARD_VISION_CONFIDENCE_THRESHOLD`
 
 - The bootstrap admin key can create named `ADMIN`, `VIEWER`, `LOCATION_MANAGER` and `INVENTORY_CLERK` users through `POST /admin/users`; assign a school/area grant before expecting a scoped user to see assets.
 - `POST /auth/login` returns a revocable 12-hour session token. The same token can be entered in the dashboard token field.
-- Viewer sessions can read data but cannot change assets, baselines or incidents.
+- Viewer-level routes admit ADMIN, VIEWER, LOCATION_MANAGER and INVENTORY_CLERK. Resource reads require tenant/location scope; asset/inspection/physical decisions require ADMIN or EDITOR grant. Hardware baseline and technical incident decisions remain ADMIN-only. Role name alone does not grant write access.
 - During key rotation, put the old value in `ASSETGUARD_PREVIOUS_ADMIN_SHARED_SECRET` or `ASSETGUARD_PREVIOUS_INVENTORY_SHARED_SECRET`, deploy the new primary key, update clients, then remove the previous key and restart.
+
+## Current production checkpoint
+
+Rechecked 2026-10-06: server checkout `dca5a86`, application `f4f56e7`, Alembic `0026`; public frontend hashes match the accepted image, health/ready return 200, four timers are active and their last jobs succeeded. The accepted R2 object `assetguard-production-20261006-075950.sql.agbackup` restored schema `0026`, 220 assets and 11 endpoints. No backup/restore or test notification was triggered by this documentation audit. [Evidence and limitations](../quality/project-audit-2026-10-06.md). The dated release sections below are historical checkpoints.
 
 ## Native GLPI Agent target
 
-Configure a supported upstream GLPI Agent 1.19 or 1.20 server target as `https://<ASSETGUARD_PUBLIC_HOST>/glpi-agent`, HTTP Basic user issued for that device, and its one-time inventory secret. New installer deployments are pinned to 1.20. Apply the repository minimal privacy profile and `no-compression = 1`; do not put credentials in source control or a world-readable script. The agent must trust the Caddy/public or organisation CA. Validate one `PROLOG` and one `INVENTORY` in logs, then confirm a single `PROCESSED` inventory and `ONLINE` endpoint through the admin API.
+For legacy native daemons, configure a supported upstream GLPI Agent 1.19 or 1.20 server target as `https://<ASSETGUARD_PUBLIC_HOST>/glpi-agent`, HTTP Basic user issued for that device, and its one-time inventory secret. New installer deployments are pinned to 1.20. Apply the repository minimal privacy profile and `no-compression = 1`; do not put credentials in source control or a world-readable script. The agent must trust the Caddy/public or organisation CA. Validate one `PROLOG` and one `INVENTORY` in logs, then confirm a single `PROCESSED` inventory and `ONLINE` endpoint through the admin API.
+
+Installer 0.1.8 uses local hardware collection plus a SYSTEM delivery task and protected durable FIFO. It disables the native daemon and reuses `/glpi-agent` authentication; configure only one uploader per PC. [Install/update/ACK/quota contract](../features/agent-continuous-inventory.md). Do not infer fleet acceptance from successful ingestion on one PC.
 
 ## Rate limiting and logging
 
@@ -175,7 +183,7 @@ The previous image runs `alembic upgrade head` before Uvicorn. Its migrations do
 
 Downgrade `0025` deletes the re-enrolment table and detaches revoked credential bindings before restoring the previous uniqueness constraint. The rehearsed copy had no re-enrolment requests and no bound revoked credentials. Before any later rollback, stop writes, take a fresh backup, inspect requests and credential history added since deployment, and choose between retaining the current schema with a compatible application or a reviewed downgrade/restore plan that accounts for those writes. Do not blindly run downgrade or restore against a live database. Retain the rollback image and pre/post-deployment R2 objects until the recovery window has closed.
 
-Final documentation can advance Git checkout HEAD after acceptance without rebuilding the image. The verified runtime application code is `93ff8ed`; installer `0.1.7` remains unsigned, unpublished and pending real-PC acceptance. Historical deployment notes above remain evidence of their original dates.
+Documentation can advance Git checkout HEAD after acceptance without rebuilding the image. At the 2026-10-04 checkpoint the verified application was `93ff8ed` and installer `0.1.7` was unsigned, unpublished and pending real-PC acceptance. The 2026-10-06 checkpoint below supersedes those versions; the earlier record remains evidence of its original date.
 
 ## Deployment record: 2026-10-06 UI simplification
 

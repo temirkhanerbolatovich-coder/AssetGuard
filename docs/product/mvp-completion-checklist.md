@@ -1,6 +1,6 @@
 # AssetGuard MVP v0.1 — чек-лист завершения
 
-> **Историческая фиксация demo MVP.** Документ сохраняет критерии завершённого этапа. Актуальные Agent lifecycle, schema `0025`, production readiness и следующие задачи ведутся в [current project checklist](current-project-checklist.md).
+> **Исторический документ.** Даты, SHA, измерения и исходные требования ниже относятся к описанному этапу. Сверка указателя выполнена 2026-10-06; текущее состояние и оставшаяся работа — в [checklist](current-project-checklist.md) и [аудите](../quality/project-audit-2026-10-06.md).
 
 Дата актуализации: 2026-09-27. Чек-лист включает computer inventory MVP, PDF/OCR импорт, демонстрационный AssetGuard Vision vertical slice и физический обход кабинета.
 

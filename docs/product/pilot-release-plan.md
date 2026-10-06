@@ -1,6 +1,6 @@
 # План пилотного релиза до Idea Battle
 
-> **Исторический план.** Целевой demo-релиз и постоянный HTTPS-контур уже созданы. Текущие риски пилота, Agent `0.1.7` и дальнейшие этапы находятся в [current project checklist](current-project-checklist.md) и [production roadmap](production-readiness-roadmap.md).
+> **Исторический документ.** Даты, SHA, измерения и исходные требования ниже относятся к описанному этапу. Сверка указателя выполнена 2026-10-06; текущее состояние и оставшаяся работа — в [checklist](current-project-checklist.md) и [аудите](../quality/project-audit-2026-10-06.md).
 
 ## Цель
 
