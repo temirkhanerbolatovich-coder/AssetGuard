@@ -176,3 +176,35 @@ The previous image runs `alembic upgrade head` before Uvicorn. Its migrations do
 Downgrade `0025` deletes the re-enrolment table and detaches revoked credential bindings before restoring the previous uniqueness constraint. The rehearsed copy had no re-enrolment requests and no bound revoked credentials. Before any later rollback, stop writes, take a fresh backup, inspect requests and credential history added since deployment, and choose between retaining the current schema with a compatible application or a reviewed downgrade/restore plan that accounts for those writes. Do not blindly run downgrade or restore against a live database. Retain the rollback image and pre/post-deployment R2 objects until the recovery window has closed.
 
 Final documentation can advance Git checkout HEAD after acceptance without rebuilding the image. The verified runtime application code is `93ff8ed`; installer `0.1.7` remains unsigned, unpublished and pending real-PC acceptance. Historical deployment notes above remain evidence of their original dates.
+
+## Deployment record: 2026-10-06 UI simplification
+
+Application commit `f4f56e7816035e01703305808dd0862a37de402e` was pushed to
+`main` and accepted on production at **08:21:52 UTC**. [Push CI
+37433147495](https://github.com/temirkhanerbolatovich-coder/AssetGuard/actions/runs/37433147495)
+completed successfully, including backend/browser tests, dependency audit,
+secret scan and static checks.
+
+Before the switch, the server created the encrypted R2 object
+`assetguard-production-20261006-075950.sql.agbackup`. Its isolated restore
+passed at revision `0026_telegram_notifications` with 220 assets and 11
+endpoints. The previous API image is retained as
+`assetguard-api:rollback-pref4f56e7-20261006`; the accepted image is retained as
+`assetguard-api:candidate-f4f56e7` with image id
+`sha256:29062bad2c906e1b80afea322d20ee0ef3fb10a1778a0cdf7b60e9a6082a1fd3`.
+Only the API container was recreated. PostgreSQL and Caddy containers retained
+their original creation times and persistent data.
+
+Post-deployment `/health` and `/health/ready` returned HTTP 200; Alembic stayed
+at `0026`. Public `index.html`, `app.js` and `styles.css` matched the exact
+Linux Git checkout. Unauthenticated admin access returned 401, browser GET to
+the machine endpoint returned the expected 404, and unauthenticated GLPI POST
+returned 401. Monitor and Telegram delivery services completed successfully,
+both timers resumed active, and systemd reported no failed units. Exact hashes
+and the scope of verification are recorded in [the release
+report](../../outputs/assetguard-ui-release-2026-10-06.md).
+
+The public host remains the established Oracle Cloud Docker Compose deployment.
+There is no Render Blueprint or Render service in this repository; no second
+production environment was created merely to satisfy an incorrect provider
+label.

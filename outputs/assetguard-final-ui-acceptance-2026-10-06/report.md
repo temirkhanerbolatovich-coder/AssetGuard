@@ -45,8 +45,9 @@ $env:ASSETGUARD_RUN_BROWSER_E2E='1'
 
 ## Ограничения
 
-- Приёмка локальная; этот набор изменений ещё не отправлен в GitHub и не
-  развёрнут на Render.
+- Application commit `f4f56e7` опубликован в GitHub и принят на действующем
+  Oracle Cloud production 2026-10-06. Отдельного Render deployment у проекта
+  нет; новый второй production-контур не создавался.
 - Автоматическая проверка не заменяет NVDA/VoiceOver, Firefox/Safari, zoom 400%
   и модерируемый usability-тест с сотрудниками школы.
 - Production Vision остаётся выключенным из-за ресурсов; его модель и pipeline
