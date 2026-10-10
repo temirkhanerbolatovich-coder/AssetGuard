@@ -1,5 +1,7 @@
 # Production deployment and recovery
 
+> **Production paused 2026-10-10 21:44:03 UTC+5.** Owner-requested shutdown removed the three AssetGuard containers and their network while retaining Docker volumes, images, checkout, configuration and backups. Five AssetGuard timers, including DuckDNS, and the Windows Telegram monitor are disabled; monitor and outbox delivery are stopped. TimScheduleBot remains active. [Shutdown evidence](../../outputs/assetguard-shutdown-2026-10-10.md). Do not restart AssetGuard or its notification timers without a new owner request.
+
 > **Сверено 2026-10-07.** Текущий статус и границы проверки: [checklist](../product/current-project-checklist.md), [аудит](../quality/project-audit-2026-10-06.md). Датированные результаты отдельных этапов сохранены с исходными датами.
 
 ## HTTPS deployment
@@ -44,7 +46,7 @@ Configure `ASSETGUARD_VISION_MODEL_ID`, `ASSETGUARD_VISION_CONFIDENCE_THRESHOLD`
 - Viewer-level routes admit ADMIN, VIEWER, LOCATION_MANAGER and INVENTORY_CLERK. Resource reads require tenant/location scope; asset/inspection/physical decisions require ADMIN or EDITOR grant. Hardware baseline and technical incident decisions remain ADMIN-only. Role name alone does not grant write access.
 - During key rotation, put the old value in `ASSETGUARD_PREVIOUS_ADMIN_SHARED_SECRET` or `ASSETGUARD_PREVIOUS_INVENTORY_SHARED_SECRET`, deploy the new primary key, update clients, then remove the previous key and restart.
 
-## Current production checkpoint
+## Last accepted application before the operational pause
 
 Rechecked 2026-10-06 19:07:22 UTC: accepted application `7c45435`, image `sha256:1a98957a3ef6829a3281d32c5e9130157a4e73feff730e2e4a165da7902beda1`, Alembic `0026`; public/frontend/API freshness and supported-version checks passed. Fresh R2 object `assetguard-production-20261006-183238.sql.agbackup` restored in isolation: assets=220, endpoints=11. PostgreSQL and Caddy containers/volumes were preserved; monitor/notifications timers resumed. [Release evidence](../../outputs/assetguard-agent-status-publication-2026-10-07.md). Documentation acceptance can advance checkout HEAD without changing application image; the dated records below remain historical.
 

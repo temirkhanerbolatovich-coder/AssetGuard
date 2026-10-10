@@ -1,5 +1,7 @@
 # Telegram: инциденты и эксплуатационные проблемы
 
+> **Production-отправка остановлена 2026-10-10 21:44:03 UTC+5.** `assetguard-monitor` и `assetguard-notifications` services остановлены, timers disabled. Локальная Windows task `AssetGuard Telegram operations monitor` также disabled. Очередь и история сохраняются в остановленной БД. Возобновление доставки требует отдельного запроса владельца. [Протокол](../../outputs/assetguard-shutdown-2026-10-10.md).
+
 > **Сверено 2026-10-06.** Текущий статус и границы проверки: [checklist](../product/current-project-checklist.md), [аудит](../quality/project-audit-2026-10-06.md). Датированные результаты отдельных этапов сохранены с исходными датами.
 
 Дата: 2026-10-05. Область: новые технические и физические инциденты, проблемы Agent и сервера.

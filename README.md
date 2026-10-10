@@ -1,5 +1,7 @@
 # AssetGuard
 
+> **Остановлен по запросу владельца 2026-10-10 21:44:03 UTC+5.** Production runtime и отправка Telegram отключены; данные сохранены. [Протокол остановки](outputs/assetguard-shutdown-2026-10-10.md).
+
 > **Сверено 2026-10-07.** Текущий статус и границы проверки: [checklist](docs/product/current-project-checklist.md), [аудит](docs/quality/project-audit-2026-10-06.md). Датированные результаты отдельных этапов сохранены с исходными датами.
 
 [![CI](https://github.com/temirkhanerbolatovich-coder/AssetGuard/actions/workflows/ci.yml/badge.svg)](https://github.com/temirkhanerbolatovich-coder/AssetGuard/actions/workflows/ci.yml)
@@ -16,15 +18,15 @@ GLPI Agent 1.19/1.20 остаётся внешним неизменённым с
 | Область | Подтверждённое состояние |
 | --- | --- |
 | Git | Исправления и актуализация документации опубликованы в `main`; application commit `7c45435`, приёмка — отдельный docs commit |
-| Production | Oracle Cloud VM, Docker Compose + Caddy; application `7c45435`, HTTPS [публичный сервер](https://assetguard-temirkhan.duckdns.org/) |
+| Production | Остановлен 2026-10-10: API/PostgreSQL/Caddy удалены без удаления volumes; пять server timers и локальный Telegram monitor отключены |
 | БД | PostgreSQL 17; 26 Alembic migrations, head `0026_telegram_notifications` |
 | API | 73 HTTP operations на 66 путях; 64 защищённые admin operations на 57 путях |
-| Проверки | Свежий локальный прогон: **170 passed** — 148 backend + 22 browser E2E; JS, scripts и Compose проверены |
+| Проверки | Последний полный локальный прогон (2026-10-06): **170 passed** — 148 backend + 22 browser E2E; JS, scripts и Compose проверены |
 | CI | [Application CI](https://github.com/temirkhanerbolatovich-coder/AssetGuard/actions/runs/37512336108): success; тесты, dependency audit, secret scan и static checks |
 | Agent | Последний опубликованный prerelease installer — `v0.1.6`; собранный `0.1.8` — неподписанный pilot candidate |
-| Восстановление | R2 backup и isolated restore на schema `0026` подтверждены протоколом 6 октября и текущим состоянием server jobs |
+| Восстановление | R2 backup и isolated restore на schema `0026` подтверждены протоколом 6 октября; автоматические server jobs остановлены 10 октября |
 
-Работают:
+Реализованы и ранее проверены:
 
 - Ledger UI: обзор, имущество, единый центр технических/физических инцидентов, кабинеты и контекстное администрирование;
 - индивидуальный и групповой учёт, структура `организация → корпус → этаж → кабинет`, named users, sessions и location grants;
@@ -108,7 +110,7 @@ Installer `0.1.8` использует неизменённый GLPI Agent ка�
 
 ## Production и безопасность
 
-Production публикует Caddy на 80/443; API/PostgreSQL находятся во внутренней Docker-сети. `/health/ready` проверяет доступ к БД, но не подтверждает release SHA, актуальность backup или готовность парка. Поле version API/backend пока `0.1.0`; installer имеет отдельную версию. Release определяется SHA и протоколом приёмки.
+При запуске production Caddy публикует 80/443; API/PostgreSQL находятся во внутренней Docker-сети. `/health/ready` проверяет доступ к БД, но не подтверждает release SHA, актуальность backup или готовность парка. Поле version API/backend пока `0.1.0`; installer имеет отдельную версию. Release определяется SHA и протоколом приёмки.
 
 PostgreSQL backup шифруется AES-256-GCM и проверяется isolated restore из R2. Vision image volume в этот backup не входит. Staging/failover, общая retention policy, MFA/SSO, SAST/container scan/SBOM и внешний pentest остаются открытыми. Лицензия AssetGuard пока не оформлена отдельным `LICENSE`.
 
